@@ -1,0 +1,81 @@
+/*
+ * Subtle LED blink and activity flicker animations for control and network equipment.
+ * Respects prefers-reduced-motion via the global rule in src/app/globals.css.
+ */
+
+.pw-led-blink {
+  animation: pw-led-blink 2.4s ease-in-out infinite;
+}
+
+.pw-led-blink-alt {
+  animation: pw-led-blink 2.4s ease-in-out 0.9s infinite;
+}
+
+@keyframes pw-led-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.32;
+  }
+}
+
+.pw-led-flicker-a {
+  animation: pw-led-flicker-a 1.7s linear infinite;
+}
+
+@keyframes pw-led-flicker-a {
+  0%,
+  36%,
+  46%,
+  74%,
+  86%,
+  100% {
+    opacity: 1;
+  }
+  40%,
+  79% {
+    opacity: 0.22;
+  }
+}
+
+.pw-led-flicker-b {
+  animation: pw-led-flicker-b 1.35s linear 0.35s infinite;
+}
+
+@keyframes pw-led-flicker-b {
+  0%,
+  24%,
+  34%,
+  62%,
+  72%,
+  100% {
+    opacity: 1;
+  }
+  28%,
+  67% {
+    opacity: 0.24;
+  }
+}
+
+.pw-led-flicker-c {
+  animation: pw-led-flicker-c 2.05s linear 0.6s infinite;
+}
+
+@keyframes pw-led-flicker-c {
+  0%,
+  18%,
+  28%,
+  52%,
+  60%,
+  88%,
+  100% {
+    opacity: 1;
+  }
+  23%,
+  56%,
+  93% {
+    opacity: 0.2;
+  }
+}
