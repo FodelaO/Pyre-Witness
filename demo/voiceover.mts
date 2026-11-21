@@ -9,15 +9,15 @@ import { MODEL_IDS } from "../src/gemini/models";
 const OUT = join(import.meta.dirname, "out");
 const VOICE = join(OUT, "voice");
 const RATE = 24_000;
-const STYLE = "Cinematic film-trailer narrator: deep, warm and steady, with weight on key words and short dramatic pauses between sentences. Not rushed.";
+const STYLE = "Confident, energetic tech-keynote narrator: crisp and brisk, clear emphasis on model names and numbers, short pauses between sentences.";
 
 // start: seconds into the cut; end: the narration must finish before this point.
 const SCENES = [
-  { id: "a-open", start: 0.4, end: 10.9, text: "Every week, something new walks onto the factory floor. Pyre Witness watches two fronts at once: the machines we bring in, and the threats we hear about." },
-  { id: "b-equipment", start: 11.1, end: 31.7, text: "One photo of a controller. Gemini 4 reads it, and the crew drops it into a living twin of the plant. The rules engine walks every path. Visitors could reach its ports: thirty-four thousand dollars, per event. So the crew moves it somewhere safer." },
-  { id: "c-information", start: 32.1, end: 45.2, text: "Meanwhile, the world keeps talking: advisories, recalls, new software. Each threat finds its machine. The crew answers with a fix." },
-  { id: "d-alerts", start: 45.6, end: 55.3, text: "When danger rises: a flag, a message, a call. A human decides." },
-  { id: "e-close", start: 55.6, end: 59.4, text: "Pyre Witness. Know the risk first." },
+  { id: "a-open", start: 0.4, end: 10.9, text: "Five Sigma. On seventy-one messy, real-world inputs, Pyre Witness beat a single Gemini call. Key-risk recall: seventy percent versus fifty-two." },
+  { id: "b-equipment", start: 11.1, end: 31.7, text: "Built today, running live. A real photo of a controller. Gemini 4 Hydrogen identifies it. Carbon reasons over a 3D digital twin of the plant. A deterministic rules engine checks every attack path, mapped to MITRE ATT&CK for ICS, and prices the loss: thirty-four thousand dollars per event. Then Carbon recommends a safer place." },
+  { id: "c-information", start: 32.1, end: 45.2, text: "At the same time, the Decisions API triages live advisories and recalls, a Google-hosted Managed Agent cross-checks them, and the crew proposes fixes with a computed risk drop." },
+  { id: "d-alerts", start: 45.6, end: 55.6, text: "Escalation is tiered: a flag, a message, then a call. The Decisions API recommends the action. Neon briefs. A human decides." },
+  { id: "e-close", start: 56.0, end: 59.8, text: "Slower than one call, still imperfect, measurably better." },
 ];
 
 async function speak(ai: GoogleGenAI, text: string): Promise<Buffer> {
