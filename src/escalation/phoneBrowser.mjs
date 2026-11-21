@@ -15,7 +15,8 @@ function attachPhone(page) {
   const keyName = `pw:escalation-pair:${code}`;
   const roleKey = `${keyName}:role`;
   let key = randomHex(16);
-  let phoneRole = null;
+  // Default to the dialing behaviour the team demos with; "Change" switches this phone to ring in the app.
+  let phoneRole = "helper";
   try {
     key = sessionStorage.getItem(keyName) ?? key;
     const savedRole = sessionStorage.getItem(roleKey);
