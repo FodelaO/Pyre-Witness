@@ -6,13 +6,15 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useEconomicTwin } from "@/econ/useEconomicTwin";
 import { useTwinStore } from "@/twin/store";
 import type { Twin } from "@/twin/types";
+import { missingWatchDrills } from "./drills";
 import type { WatchFeedStatus } from "./feedStatus";
 import { LIVE_SOURCE_LABELS, liveItemKey, type LiveItem, type LiveSourceResult } from "./liveTypes";
 import { rankWatchItems, type WatchRelevance } from "./relevance";
 import type { WatchReport } from "./types";
 import type { useWatchLive } from "./useWatchLive";
-import { WatchAlertCard, WatchAlertIcon } from "./WatchAlertCard";
+import { WatchAlertCard, WatchAlertIcon, WatchTypeLabel } from "./WatchAlertCard";
 import { useWatchLiveEstimate } from "./WatchLiveLoss";
+import { classifyVuln } from "./vulnType";
 import "./watchSignals.css";
 
 const sources = Object.keys(LIVE_SOURCE_LABELS) as LiveItem["source"][];
@@ -67,13 +69,13 @@ function SignalRow({ row, isNew, twin, highlight }: {
 
   return (
     <li className="pw-signal-row" data-watch-source={item.source} data-relevance={row.score} data-signal-asset={primary}
-      onPointerEnter={() => show(key, assetIds)}
+      onPointerEnter={() => { if (primary) show(key, assetIds); }}
       onPointerLeave={(event) => { if (!event.currentTarget.contains(document.activeElement)) clear(key); }}
-      onFocus={() => show(key, assetIds)}
+      onFocus={() => { if (primary) show(key, assetIds); }}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget) && !event.currentTarget.matches(":hover")) clear(key);
       }}>
-      <WatchAlertCard title={item.title} asset={asset} estimate={estimate} comparable={recall}
+      <WatchAlertCard title={item.title} type={classifyVuln(item)} asset={asset} estimate={estimate} comparable={recall}
         tone={row.knownExploited || (row.cvss ?? 0) >= 9 ? "alert" : "warn"}>
         <div className="pw-signal-row-meta">
           <span>{LIVE_SOURCE_LABELS[item.source]}</span><span aria-hidden>·</span><time dateTime={item.published}>{age}</time>
@@ -84,18 +86,18 @@ function SignalRow({ row, isNew, twin, highlight }: {
         <a className="pw-panel-link" href={item.url} target="_blank" rel="noopener noreferrer">
           {item.title}<ArrowUpRight size={12} aria-hidden />
         </a>
-        {recall && <div className="pw-signal-recall-note">Sector recall · modeled comparable event</div>}
+        {recall && primary && <div className="pw-signal-recall-note">Sector recall · modeled comparable event</div>}
         {recall && item.firm && <p>{item.firm}</p>}
         {item.summary && <p>{item.summary}</p>}
-        <div className="pw-signal-chips" aria-label="Match evidence and assets">
+        {(assetIds.length > 0 || reasons.length > 0) && <div className="pw-signal-chips" aria-label="Match evidence and assets">
           {assetIds.map((id, index) => {
             const label = (!recall && index === 0 ? reasons[0] : id) ?? id;
             const linked = twin.assets.find((entry) => entry.id === id);
             return <button key={id} type="button" className="pw-signal-chip" data-watch-select={id} title={`${label} · ${linked?.name ?? id}`}
               onClick={() => select(id)}>{label}</button>;
           })}
-          {reasons.slice(recall ? 0 : 1).map((reason) => <span className="pw-signal-chip" key={reason}>{reason}</span>)}
-        </div>
+          {reasons.slice(recall || !primary ? 0 : 1).map((reason) => <span className="pw-signal-chip" key={reason}>{reason}</span>)}
+        </div>}
       </WatchAlertCard>
     </li>
   );
@@ -116,6 +118,7 @@ function OtherItems({ rows, added }: { rows: WatchRelevance[]; added: Set<string
             <a className="pw-signal-title" href={item.url} target="_blank" rel="noopener noreferrer" title={item.title}>
               <span>{item.title}</span><ArrowUpRight size={12} aria-hidden />
             </a>
+            <WatchTypeLabel type={classifyVuln(item)} />
           </li>
         ))}
       </ul>
@@ -138,8 +141,22 @@ export function WatchSignalDesk({ live, feed, label, report, reviewing, onReview
   const check = feed === "pending" ? undefined : snapshot?.check;
   const checks = check?.sources;
   const rows = useMemo(() => check ? rankWatchItems(check.items, twin, check.checkedAt, report?.candidates) : [], [check, report?.candidates, twin]);
+  const drills = useMemo(() => check ? missingWatchDrills(check.items, twin) : [], [check, twin]);
   const matched = rows.filter(({ assetIds }) => assetIds.length);
-  const other = rows.filter(({ assetIds }) => !assetIds.length);
+  const shownTypes = new Set(matched.map(({ item }) => classifyVuln(item)));
+  // Keep one real representative visible when a type has news but no plant match.
+  const sector: WatchRelevance[] = [];
+  const other: WatchRelevance[] = [];
+  for (const row of rows) {
+    if (row.assetIds.length) continue;
+    const type = classifyVuln(row.item);
+    if (type === "advisory" || shownTypes.has(type)) {
+      other.push(row);
+      continue;
+    }
+    shownTypes.add(type);
+    sector.push(row);
+  }
   const headline = report?.stages.some(({ name, state }) => name === "reassessment" && state === "done") ? report.headline : undefined;
   const checked = check && (feed === "stale" ? shortClock : clock).format(check.checkedAt);
   const sourceCount = check && feed !== "stale" ? ` · ${check.sources.length} sources` : "";
@@ -156,9 +173,17 @@ export function WatchSignalDesk({ live, feed, label, report, reviewing, onReview
         </button>
       </div>
       {error && <div className="pw-signal-basis" role="status">{error}</div>}
-      {matched.length > 0 && <ul className="pw-signal-list" aria-label="Matched to this plant">
-        {matched.map((row) => <SignalRow key={liveItemKey(row.item)} row={row} twin={twin} highlight={highlight}
+      {(matched.length > 0 || sector.length > 0 || drills.length > 0) && <ul className="pw-signal-list" aria-label="Advisories and drills">
+        {[...matched, ...sector].map((row) => <SignalRow key={liveItemKey(row.item)} row={row} twin={twin} highlight={highlight}
           isNew={snapshot?.added.has(liveItemKey(row.item)) ?? false} />)}
+        {drills.map(({ type, title, asset, estimate }) => (
+          <li key={type} className="pw-signal-row">
+            <WatchAlertCard title={title} type={type} asset={asset} estimate={estimate} drill>
+              <p>{title}</p>
+              <p>Simulated scenario · estimated loss per event</p>
+            </WatchAlertCard>
+          </li>
+        ))}
       </ul>}
       {check && feed === "live" && !matched.length && <div className="pw-signal-empty">
         {!check.sources.some(({ error }) => Boolean(error)) && <WatchAlertIcon tone="ok" />}

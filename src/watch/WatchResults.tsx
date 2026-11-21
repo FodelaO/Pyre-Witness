@@ -7,6 +7,7 @@ import { threatKey, WATCH_SOURCES } from "./sources";
 import type { Candidate, ThreatItem, WatchFinding, WatchReport } from "./types";
 import { WatchAlertCard } from "./WatchAlertCard";
 import { useWatchAdvisoryEstimates } from "./WatchLiveLoss";
+import { classifyVuln } from "./vulnType";
 
 const chip = "rounded border border-pw-line-strong px-1.5 py-0.5 font-mono text-[10px]";
 const noAssets: readonly string[] = [];
@@ -41,7 +42,7 @@ function ThreatRow({ row }: { row: Row }) {
   const asset = twin.assets.find(({ id }) => id === estimate?.asset.id);
   return (
     <li className="min-w-0 space-y-1 border-t border-pw-line py-2" data-watch-source={threat.source}>
-      <WatchAlertCard title={threat.title} tone={threat.source === "cisa-kev" && triage !== "excluded" ? "alert" : "warn"}
+      <WatchAlertCard title={threat.title} type={classifyVuln(threat)} tone={threat.source === "cisa-kev" && triage !== "excluded" ? "alert" : "warn"}
         asset={asset} estimate={estimate}>
         <p className="pw-watch-evidence pw-mono">{evidence}</p>
         <a className="pw-panel-link" href={threat.url} target="_blank" rel="noopener noreferrer">{threat.title}</a>

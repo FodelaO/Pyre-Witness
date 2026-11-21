@@ -9,6 +9,7 @@ export interface ThreatItem {
   title: string;
   vendor?: string;
   product?: string;
+  ransomwareCampaign?: boolean;
   cves: string[];
   published: string;
   url: string;
