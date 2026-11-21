@@ -1,0 +1,102 @@
+/*
+ * Shared SVG animations for equipment symbols, pipes and overlays.
+ * All respect prefers-reduced-motion via the global rule in globals.css.
+ * Usage: add the class to an SVG element. Rotation classes need transform-box: fill-box.
+ */
+
+/* continuous rotation around the element's own centre (impellers, fans, carousels, agitators) */
+.pw-spin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pw-spin 2.4s linear infinite;
+}
+.pw-spin-slow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pw-spin 9s linear infinite;
+}
+.pw-spin-fast {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pw-spin 0.9s linear infinite;
+}
+@keyframes pw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* attention pulse for alarm rings and unsafe placement outlines */
+.pw-pulse {
+  animation: pw-pulse 1.3s ease-in-out infinite;
+}
+@keyframes pw-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.28;
+  }
+}
+
+/* moving dashes along a stroke (pipe flow, belts, data links). Set stroke-dasharray on the element. */
+.pw-flow {
+  animation: pw-flow 1.1s linear infinite;
+}
+.pw-flow-slow {
+  animation: pw-flow 2.6s linear infinite;
+}
+@keyframes pw-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+/* expanding radio wave rings (Wi-Fi APs, RF entry point) */
+.pw-wave {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pw-wave 2.2s ease-out infinite;
+}
+@keyframes pw-wave {
+  0% {
+    transform: scale(0.35);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* "placed" entrance for a newly added device */
+.pw-placed {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pw-placed 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+@keyframes pw-placed {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* gentle bob for crew avatars */
+.pw-bob {
+  animation: pw-bob 2.2s ease-in-out infinite;
+}
+@keyframes pw-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
