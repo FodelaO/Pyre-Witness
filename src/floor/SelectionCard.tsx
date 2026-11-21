@@ -1,8 +1,7 @@
 /** Fixed-size card for the selected asset's location and available telemetry. */
 import { memo } from "react";
 import type { Asset } from "@/twin/types";
-
-const readingFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
+import { formatTelemetry } from "./telemetryFormat";
 
 interface Reading {
   key: string;
@@ -17,12 +16,12 @@ function readingsFor(asset: Asset): Reading[] {
   const readings: Reading[] = telemetry.slice(0, 3).map(({ tag, label, value, unit, lo, hi }) => ({
     key: tag,
     label,
-    value: `${readingFormat.format(value)}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`,
+    value: formatTelemetry(value, unit),
     abnormal: (lo !== undefined && value < lo) || (hi !== undefined && value > hi),
   }));
 
   if (readings.length < 3 && process?.levelPct !== undefined && !telemetry.some((point) => point.unit === "%" && point.value === process.levelPct)) {
-    readings.push({ key: "level", label: "Level", value: `${readingFormat.format(process.levelPct)}%` });
+    readings.push({ key: "level", label: "Level", value: formatTelemetry(process.levelPct, "%") });
   }
   if (readings.length < 3 && process?.running !== undefined) {
     readings.push({ key: "operation", label: "Operation", value: process.running ? "Running" : "Stopped" });

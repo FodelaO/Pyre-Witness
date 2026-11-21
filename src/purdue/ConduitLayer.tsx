@@ -69,6 +69,7 @@ export function ConduitLayer({ layout, routes, inspected, detailsId, onInspect }
           data-firewall={enforcerKind === "firewall"}
           data-conduit={conduit.id}
           data-inspected={conduit.id === inspected}
+          title={conduit.name}
           aria-label={`${conduit.name} · ${conduit.enforcedBy ? `Enforced by ${conduit.enforcedBy}` : "Unenforced"}`}
           aria-describedby={conduit.id === inspected ? detailsId : undefined}
           onPointerEnter={() => onInspect(conduit.id, true)}

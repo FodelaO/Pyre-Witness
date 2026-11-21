@@ -9,14 +9,6 @@
   color: var(--pw-text);
 }
 
-.pw-sim-controls[data-mount="floor"] {
-  position: absolute;
-  z-index: 5;
-  bottom: 8px;
-  left: 12px;
-  max-width: calc(100% - 24px);
-}
-
 .pw-sim-rail { gap: 1px; flex: none; }
 .pw-sim-heading { padding: 0 5px; color: var(--pw-text-dim); font-size: 12px; font-weight: 550; }
 .pw-sim-rail .pw-tool-button { width: 34px; }
@@ -105,7 +97,6 @@
 
 @media (width < 560px) {
   .pw-sim-controls { min-height: 88px; align-items: start; justify-content: start; flex-direction: column; gap: 0; }
-  .pw-sim-controls[data-mount="floor"] { max-width: calc(100% - 24px); }
   .pw-sim-replay { flex: none; width: 100%; min-height: 38px; margin-top: 2px; }
   .pw-sim-transport .pw-tool-button { height: 28px; }
 }

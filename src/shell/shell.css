@@ -81,7 +81,6 @@
 .pw-stage-view { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
 .pw-stage-view + .pw-stage-view { border-inline-start: 1px solid var(--pw-line-strong); }
 .pw-stage .pw-floor-caption { display: none; }
-.pw-stage .pw-sim-comparison,
 .pw-stage .pw-crew-avatar[data-state="error"] .pw-crew-bubble { display: none; }
 
 .pw-stage-dock {
@@ -143,6 +142,34 @@
   background: var(--pw-panel);
 }
 .pw-rail-backdrop, .pw-rail-mobile-head { display: none; }
+
+@media (width >= 1280px) {
+  /* In Split, share a column between network and results so the wider schematic keeps its scale. */
+  .pw-shell-body[data-view="split"] {
+    --pw-split-side: clamp(490px, 34vw, 650px);
+    --pw-split-results: clamp(258px, 25dvh, 300px);
+    --pw-split-dock: 67px;
+  }
+  .pw-shell-body[data-view="split"] .pw-stage-views {
+    grid-template-columns: minmax(0, 1fr) var(--pw-split-side);
+    grid-template-rows: minmax(0, 1fr) var(--pw-split-results);
+  }
+  .pw-shell-body[data-view="split"] .pw-stage-view:first-child { grid-row: 1 / -1; }
+  .pw-shell-body[data-view="split"] .pw-stage-dock { height: var(--pw-split-dock); }
+  .pw-shell-body[data-view="split"] .pw-rail {
+    position: absolute;
+    inset: auto 0 var(--pw-split-dock) auto;
+    width: var(--pw-split-side);
+    height: var(--pw-split-results);
+    border-top: 1px solid var(--pw-line-strong);
+  }
+  .pw-shell-body[data-view="split"] .pw-panel-dial { padding-block: 8px 4px; gap: 2px; }
+  .pw-shell-body[data-view="split"] .pw-panel-dial-body { grid-template-columns: 82px minmax(0, 1fr) 76px; }
+  .pw-shell-body[data-view="split"] .pw-panel-gauge-value { font-size: 27px; inset-block-end: 8px; }
+  .pw-shell-body[data-view="split"] .pw-panel-feed { padding-block: 6px; }
+  .pw-shell-body[data-view="split"] .pw-panel-feed .pw-crew-feed { padding-block: 4px 0; }
+  .pw-shell-body[data-view="split"] .pw-crew-feed-list { max-block-size: 52px; }
+}
 
 @media (width < 1280px) {
   .pw-top-risk-desktop { display: none; }

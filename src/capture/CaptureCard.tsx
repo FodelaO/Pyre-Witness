@@ -18,7 +18,6 @@ import PhotoPane from "./PhotoPane";
 import PhonePairing from "./PhonePairing";
 import { usePhotoDraft } from "./usePhotoDraft";
 import { usePhoneHandoff } from "./usePhoneHandoff";
-import "./capture.css";
 
 const TABS = [
   { id: "photo", label: "Photo", Icon: Camera },

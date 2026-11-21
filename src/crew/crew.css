@@ -1,6 +1,4 @@
 /* Plant-floor crew symbols and the matching activity feed. */
-@import "../equipment/equipment.css";
-
 .pw-crew-layer {
   font-family: var(--font-geist-mono), ui-monospace, monospace;
 }
@@ -21,7 +19,7 @@
   stroke-dasharray: 8 4;
 }
 
-.pw-crew-avatar[data-state="working"] .pw-crew-ring {
+.pw-crew-avatar[data-status="working"] .pw-crew-ring {
   stroke-width: 2;
   animation: pw-crew-working 1.35s ease-in-out infinite;
 }
@@ -88,7 +86,8 @@
 .pw-crew-bubble[data-kind="patrol"] :is(rect, path) { stroke: var(--pw-line-strong); }
 .pw-crew-avatar[data-state="error"] .pw-crew-bubble :is(rect, path) { stroke: var(--pw-alarm); }
 .pw-crew-bubble-copy { fill: var(--pw-text); font-weight: 550; }
-.pw-crew-patrol-label { fill: var(--pw-text-dim); font-size: 11px; letter-spacing: .055em; }
+.pw-crew-bubble-heading { fill: var(--pw-text-dim); font-size: 11px; letter-spacing: .055em; }
+.pw-crew-bubble[data-kind="thought"] .pw-crew-bubble-heading { fill: var(--crew-color); }
 
 .pw-crew-desk { fill: var(--pw-eq-fill); stroke: var(--pw-line-strong); stroke-width: 1; }
 .pw-crew-chair { fill: var(--pw-floor); stroke: var(--pw-line-strong); stroke-width: 1; }
@@ -135,5 +134,5 @@
 .pw-crew-feed-empty { margin: 8px 0 0; color: var(--pw-text-dim); font-size: 11px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pw-crew-body, .pw-crew-avatar[data-state="working"] .pw-crew-ring { animation: none; }
+  .pw-crew-body, .pw-crew-avatar[data-status="working"] .pw-crew-ring { animation: none; }
 }

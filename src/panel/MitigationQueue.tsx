@@ -1,7 +1,9 @@
 /** Human approval queue and measured outcomes from applied mitigations. */
 "use client";
 
-import { Check, ClipboardList, Cpu, ShieldCheck, Wrench, X } from "lucide-react";
+import { Check, ClipboardList, Cpu, ShieldCheck, Timer, Wrench, X } from "lucide-react";
+import { formatSimTime } from "@/sim/Timeline";
+import type { SimulationMitigation } from "@/sim/types";
 import { useTwinStore } from "@/twin/store";
 import type { Mitigation } from "@/twin/types";
 import { formatDelta, PanelHeading, TextPreview } from "./PanelParts";
@@ -12,8 +14,26 @@ function Delta({ delta, measured }: { delta: number | undefined; measured: boole
   if (delta == null) return <span className="pw-panel-muted">{measured ? "Delta unavailable" : "Projection unavailable"}</span>;
   return (
     <span className="pw-panel-delta pw-mono" data-direction={Math.sign(delta)}>
-      {formatDelta(delta)} <span>{measured ? "measured" : "projected"}</span>
+      {formatDelta(delta)} <span>risk pts {measured ? "measured" : "projected"}</span>
     </span>
+  );
+}
+
+function ContainmentGain({ item }: { item: Mitigation }) {
+  const benefit = (item as Partial<SimulationMitigation>).simulationContainment;
+  if (!benefit) return null;
+  const { before, after, safeguard } = benefit;
+  const seconds = before === null ? 0 : before - after;
+  const gain = before === null ? "Containment gained" : seconds > 0 ? `${seconds} s earlier` : "Earlier safeguard";
+  const interval = `${before === null ? "Uncontained" : formatSimTime(before)} → ${formatSimTime(after)}`;
+  return (
+    <div className="pw-panel-containment">
+      <Timer size={14} aria-hidden />
+      <div>
+        <strong>{gain}</strong> <span className="pw-mono">{interval}</span>
+        <small>Simulated projection · {safeguard}</small>
+      </div>
+    </div>
   );
 }
 
@@ -39,6 +59,7 @@ function Proposal({ item }: { item: Mitigation }) {
         </div>
       )}
       {item.description && <TextPreview text={item.description} label="Mitigation details" />}
+      <ContainmentGain item={item} />
       <div className="pw-panel-proposal-action">
         <Delta delta={item.riskDelta} measured={false} />
         <div className="pw-panel-actions">
@@ -67,6 +88,7 @@ export function MitigationQueue({ items }: { items: Mitigation[] }) {
               <Icon size={13} aria-hidden />
               <span title={item.title}>{item.title}</span>
               {item.status === "applied" ? <Delta delta={item.riskDelta} measured /> : <span className="pw-panel-muted">{item.status === "rejected" ? "Rejected" : "Approved"}</span>}
+              {item.status === "applied" && <ContainmentGain item={item} />}
             </li>
           );
         })}

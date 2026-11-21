@@ -2,10 +2,11 @@
 "use client";
 
 import { Activity, Cloud, Crosshair, HardDrive, LockKeyhole, MapPin, Radio, Shield, ShieldAlert, Unplug } from "lucide-react";
+import { formatTelemetry, telemetryNumber, withTelemetryUnit } from "@/floor/telemetryFormat";
 import { areaById, assetById } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import type { Asset, RuleFinding, TelemetryPoint } from "@/twin/types";
-import { Disclosure, formatNumber, PanelHeading, PurdueBadge, readableId, TechniqueChip } from "./PanelParts";
+import { Disclosure, PanelHeading, PurdueBadge, readableId, TechniqueChip } from "./PanelParts";
 import { RISK_ICONS } from "./RiskList";
 
 function CyberFlags({ cyber }: { cyber: NonNullable<Asset["cyber"]> }) {
@@ -24,15 +25,16 @@ function CyberFlags({ cyber }: { cyber: NonNullable<Asset["cyber"]> }) {
 
 function TelemetryRow({ point: { tag, label, value, unit, lo, hi } }: { point: TelemetryPoint }) {
   const outside = (lo != null && value < lo) || (hi != null && value > hi);
-  const hasBand = lo != null || hi != null;
-  const band = lo != null && hi != null ? `${formatNumber(lo)}–${formatNumber(hi)}`
-    : lo != null ? `≥ ${formatNumber(lo)}` : hi != null ? `≤ ${formatNumber(hi)}` : null;
+  const hasBand = Number.isFinite(value) && (lo != null || hi != null);
+  const limits = lo != null && hi != null ? `${telemetryNumber(lo, unit)}–${telemetryNumber(hi, unit)}`
+    : lo != null ? `≥ ${telemetryNumber(lo, unit)}` : hi != null ? `≤ ${telemetryNumber(hi, unit)}` : null;
+  const band = limits && withTelemetryUnit(limits, unit);
   return (
     <li className="pw-panel-telemetry-row" data-band={hasBand ? outside ? "out" : "in" : undefined}>
       <div><span className="pw-mono">{tag}</span><span>{label}</span></div>
-      <div><strong className="pw-mono">{formatNumber(value)} {unit}</strong>
-        {band && <span title={`Normal ${band} ${unit}`}>
-          <i aria-hidden="true" />{outside ? "Out of band" : "In band"} · {band} {unit}
+      <div><strong className="pw-mono">{formatTelemetry(value, unit)}</strong>
+        {hasBand && band && <span title={`Normal ${band}`}>
+          <i aria-hidden="true" />{outside ? "Out of band" : "In band"} · {band}
         </span>}
       </div>
     </li>

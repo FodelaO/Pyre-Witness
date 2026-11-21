@@ -44,16 +44,17 @@ export function TopBar({ drawerOpen, watchOpen, onToggleDrawer, onToggleWatch }:
   const risk = useTwinStore((state) => state.risk);
   const baseline = useTwinStore((state) => state.baselineScore);
   const watch = useWatchStore((state) => watchStatus(state.local));
-  const delta = Math.round(risk.score - baseline);
+  const score = Math.round(risk.score);
+  const delta = score - Math.round(baseline);
 
   const riskReadout = (
     <>
       <span>Risk</span>
-      <strong className="pw-mono">{Math.round(risk.score)}</strong>
+      <strong className="pw-mono">{score}</strong>
       {delta !== 0 && <span className="pw-top-delta pw-mono" data-increased={delta > 0}>{delta > 0 ? "+" : ""}{delta}</span>}
     </>
   );
-  const band = "Plant risk " + Math.round(risk.score) + " of 100, " + risk.band;
+  const band = "Plant risk " + score + " of 100, " + risk.band;
 
   return (
     <header className="pw-top">

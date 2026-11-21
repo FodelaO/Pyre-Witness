@@ -5,7 +5,7 @@ import type { Twin } from "@/twin/types";
 import { causticPath } from "./floorGeometry";
 import type { SimEffects } from "./types";
 
-export function FloorTag({ text, x, y }: { text: string; x: number; y: number }) {
+function FloorTag({ text, x, y }: { text: string; x: number; y: number }) {
   const width = text.length * 7.6 + 16;
 
   return (

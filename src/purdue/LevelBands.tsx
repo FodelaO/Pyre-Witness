@@ -12,7 +12,7 @@ export function LevelBands({ bands, railWidth }: { bands: Band[]; railWidth: num
       </div>
       <ol className="pw-purdue-rail" style={{ width: railWidth }} aria-label="Purdue levels">
         {PURDUE_LEVELS.map(({ level, name, blurb }, index) => (
-          <li key={level} data-dmz={level === 3.5} style={{ height: bands[index].h }} title={blurb}>
+          <li key={level} data-dmz={level === 3.5} style={{ height: bands[index].h }} title={blurb} aria-label={`Level ${level}, ${name}. ${blurb}`}>
             <span className="pw-purdue-level">L{level}</span>
             <span className="pw-purdue-name">{name}</span>
             <span className="pw-purdue-blurb">{blurb}</span>

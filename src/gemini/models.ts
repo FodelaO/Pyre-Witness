@@ -30,14 +30,16 @@ export type ModelRole = keyof typeof MODEL_IDS;
 type CarbonThinking = "low" | "medium" | "high";
 
 /**
- * Carbon at "high" took more than 120 s on the full 92-asset twin (measured live 2026-11-21),
- * which is too slow for a live capture. Default is tuned for the demo; override per process with
- * PW_REASONING_THINKING=low|medium|high (server only).
+ * Measured live on 2026-11-21: Carbon at "high" exceeded 120 s per capture and "medium" took about
+ * 117 s; after the prompt and schema were compacted, "low" completes a capture in about 25-35 s and
+ * agreed with "medium" on room and Purdue level for 5 of 6 test devices and on every rules-engine
+ * verdict (docs/log/pipeline-speed.md). Default is "low" for live captures; override per process
+ * with PW_REASONING_THINKING=low|medium|high (server only).
  */
 const reasoningOverride = process.env.PW_REASONING_THINKING as CarbonThinking | undefined;
 
 export const THINKING: { perception: "low"; reasoning: CarbonThinking; chief: "low" } = {
   perception: "low",
-  reasoning: reasoningOverride ?? "medium",
+  reasoning: reasoningOverride ?? "low",
   chief: "low",
 };

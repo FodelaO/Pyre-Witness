@@ -1,5 +1,4 @@
 /** Drives playback and one-second plant ticks from the visible browser clock. */
-import { useTwinStore } from "@/twin/store";
 import { useSimStore } from "./simStore";
 
 const FRAME_MS = 80;
@@ -46,7 +45,6 @@ export function startSimRuntime(): () => void {
   }
   return () => {
     mounted -= 1;
-    // The floor unmounts in network-only view. Its plant still runs on the same page.
-    if (mounted === 0 && useTwinStore.getState().view !== "purdue") close?.();
+    if (mounted === 0) close?.();
   };
 }

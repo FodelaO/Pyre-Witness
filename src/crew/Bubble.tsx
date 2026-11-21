@@ -29,27 +29,30 @@ export default function Bubble({ point, canvas, speech }: {
 }) {
   const briefing = speech.kind === "briefing";
   const patrol = speech.kind === "patrol";
+  const thought = speech.kind === "thought";
+  const heading = patrol ? "idle patrol" : thought ? "Architect · working" : null;
   const fontSize = briefing ? 16 : 13;
   const lineHeight = briefing ? 22 : 17;
-  const lines = briefing ? briefingLines(speech.text) : wrap(speech.text, 34, 2);
+  const lines = briefing ? briefingLines(speech.text) : wrap(speech.text, thought ? 43 : 34, 2);
   if (!lines.length) return null;
-  const width = Math.max(patrol ? 128 : 91, ...lines.map((line) => line.length * fontSize * 0.62 + 24));
-  const height = lines.length * lineHeight + (patrol ? 27 : 15);
+  const width = Math.max(heading ? 148 : 91, ...lines.map((line) => line.length * fontSize * 0.62 + 24));
+  const height = lines.length * lineHeight + (heading ? 27 : 15);
   const x = Math.max(8, Math.min(canvas.w - width - 8, point.x - width / 2));
-  const above = point.y >= height + 30;
+  const canFitBelow = point.y + 23 + height <= canvas.h - 8;
+  const above = point.y >= height + 30 && !(speech.kind === "inspection" && canFitBelow);
   const y = above ? point.y - 23 - height : Math.min(point.y + 23, canvas.h - height - 8);
   const edge = above ? y + height : y;
   const tailX = Math.max(x + 13, Math.min(x + width - 13, point.x));
   const tailY = above ? point.y - 17 : point.y + 17;
 
   return (
-    <g className="pw-crew-bubble" data-kind={speech.kind} aria-label={patrol ? `idle patrol, ${speech.text}` : speech.text}>
+    <g className="pw-crew-bubble" data-kind={speech.kind} aria-label={heading ? `${heading}, ${speech.text}` : speech.text}>
       <rect x={x} y={y} width={width} height={height} rx={briefing ? 9 : 6} />
       <path d={`M ${tailX - 5} ${edge} L ${point.x} ${tailY} L ${tailX + 5} ${edge}`} />
-      {patrol && <text className="pw-crew-patrol-label" x={x + 12} y={y + 15}>idle patrol</text>}
+      {heading && <text className="pw-crew-bubble-heading" x={x + 12} y={y + 15}>{heading}</text>}
       <text className="pw-crew-bubble-copy" x={x + 12} fontSize={fontSize}>
         {lines.map((line, index) => (
-          <tspan key={index} x={x + 12} y={y + (patrol ? 32 : fontSize + 6) + index * lineHeight}>{line}</tspan>
+          <tspan key={index} x={x + 12} y={y + (heading ? 32 : fontSize + 6) + index * lineHeight}>{line}</tspan>
         ))}
       </text>
     </g>

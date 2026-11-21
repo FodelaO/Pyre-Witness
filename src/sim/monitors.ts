@@ -1,4 +1,5 @@
 /** Telemetry band checks and Line 3 permissive detections for the simulated plant. */
+import { formatTelemetry } from "@/floor/telemetryFormat";
 import { areasAt } from "@/twin/geometry";
 import type { AssetStatus, Area, Twin } from "@/twin/types";
 import type { SimAlert } from "./types";
@@ -43,13 +44,13 @@ export function readMonitors(twin: Twin): SimAlert[] {
 
   const gas = value("GT-401");
   if (gas?.hi !== undefined && gas.value > gas.hi) {
-    alert("interlock:ammonia-detector", `GT-401 detector high · ${display(gas.value)} ${gas.unit}`, "alarm", "GT-401");
+    alert("interlock:ammonia-detector", `GT-401 detector high · ${formatTelemetry(gas.value, gas.unit)}`, "alarm", "GT-401");
     coveredTags.add("band:GT-401:GT-401");
   }
 
   const cold = value("TT-301");
   if (filling && cold?.hi !== undefined && cold.value > cold.hi) {
-    alert("interlock:cola-outlet", `CC-301 outlet warm · ${display(cold.value)} ${cold.unit}`, "alarm", "CC-301", "TT-301", "FIL-3");
+    alert("interlock:cola-outlet", `CC-301 outlet warm · ${formatTelemetry(cold.value, cold.unit)}`, "alarm", "CC-301", "TT-301", "FIL-3");
     coveredTags.add("band:TT-301:TT-301");
   }
 
@@ -61,16 +62,12 @@ export function readMonitors(twin: Twin): SimAlert[] {
       const below = point.lo !== undefined && point.value < point.lo;
       const above = point.hi !== undefined && point.value > point.hi;
       if (below || above) {
-        alert(id, `${point.tag} ${below ? "low" : "high"} · ${display(point.value)} ${point.unit}`,
+        alert(id, `${point.tag} ${below ? "low" : "high"} · ${formatTelemetry(point.value, point.unit)}`,
           asset.safetyCritical ? "alarm" : "attention", asset.id);
       }
     }
   }
   return alerts;
-}
-
-function display(value: number): string {
-  return Number(value.toFixed(2)).toString();
 }
 
 /** Paints current detections over a canonical unpainted twin while preserving higher statuses. */

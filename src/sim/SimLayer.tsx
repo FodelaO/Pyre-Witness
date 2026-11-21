@@ -1,17 +1,13 @@
 /** Paints replay progress and temporary incident markers over the twin floor. */
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
+import { useSyncExternalStore } from "react";
 import { FOOTPRINT } from "@/equipment/types";
 import { assetById, type Point } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import type { Twin } from "@/twin/types";
 import { markerPosition, markerRoute, traceTo } from "./floorGeometry";
-import IncidentEffects, { FloorTag } from "./IncidentEffects";
-import { startSimRuntime } from "./runtime";
-import SimControls, { hasShellControls, subscribeShellControls } from "./SimControls";
-import SimFloorAdditions from "./SimFloorAdditions";
+import IncidentEffects from "./IncidentEffects";
 import { useSimStore } from "./simStore";
 import type { SimEffects, SimStage } from "./types";
 
@@ -64,13 +60,6 @@ function currentVisual(visual: SimEffects["visual"], stage: SimStage, next: SimS
 }
 
 export default function SimLayer() {
-  useEffect(startSimRuntime, []);
-
-  const [floor, setFloor] = useState<HTMLDivElement | null>(null);
-  const attach = useCallback((node: SVGGElement | null) => {
-    setFloor(node?.closest<HTMLDivElement>(".pw-plant-floor") ?? null);
-  }, []);
-  const shellControls = useSyncExternalStore(subscribeShellControls, hasShellControls, serverFalse);
   const reduced = useSyncExternalStore(subscribeMotion, reducedMotion, serverFalse);
   const twin = useTwinStore((state) => state.twin);
   const run = useSimStore((state) => state.run);
@@ -94,16 +83,9 @@ export default function SimLayer() {
   const affectedAssets = new Set(completed.flatMap((step) => Object.keys(step.effects?.assets ?? {})));
   const affectedAreas = new Set(completed.flatMap((step) => Object.keys(step.effects?.areas ?? {})));
   const visual = stage ? currentVisual(visualState, stage, next, progress) : undefined;
-  const tagAt = pulse ?? { x: twin.plant.canvas.w / 2, y: 40 };
-  const tagX = Math.max(72, Math.min(twin.plant.canvas.w - 72, tagAt.x));
-  const tagY = Math.max(18, tagAt.y - 48);
 
   return (
-    <g ref={attach} className="pw-sim-layer" aria-label={stage ? "Simulated incident overlay" : undefined}>
-      {floor && !shellControls && createPortal(
-        <div onPointerDown={(event) => event.stopPropagation()}><SimControls embedded /></div>, floor,
-      )}
-      {floor && !shellControls && <SimFloorAdditions floor={floor} />}
+    <g className="pw-sim-layer" aria-label={stage ? "Simulated incident overlay" : undefined}>
       {stage && (
         <>
           {visual && <IncidentEffects twin={twin} visual={visual} />}
@@ -123,7 +105,6 @@ export default function SimLayer() {
               <circle r={7} /><circle r={2.7} />
             </g>
           )}
-          <FloorTag text="SIMULATION" x={tagX} y={tagY} />
         </>
       )}
     </g>

@@ -2,12 +2,12 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { FOOTPRINT } from "@/equipment/types";
 import type { Point } from "@/twin/geometry";
-import type { Area, Asset, Twin } from "@/twin/types";
+import type { Area, Asset, Twin, ViewMode } from "@/twin/types";
 import { clientToStage, FIT, viewportFor, worldToLocal, zoomBetween, type Camera, type Viewport } from "./camera";
 import { fitDrawing, type Rect } from "./fit";
 import { CAPTURE_OVERLAY, observeViewportOverlays } from "./viewportOverlays";
 
-const FLOOR_CONTROLS = `${CAPTURE_OVERLAY}, .pw-floor-caption, .pw-floor-zoom, .pw-floor-legend, .pw-sim-controls`;
+const FLOOR_CONTROLS = `${CAPTURE_OVERLAY}, .pw-floor-caption, .pw-floor-zoom, .pw-floor-legend`;
 const coverage = (value: number) => Math.max(0, Math.min(1, value));
 
 export default function useFloorCamera(
@@ -16,6 +16,7 @@ export default function useFloorCamera(
   selection: Asset | undefined,
   selectedPoint: Point | undefined,
   selectedId: string | null,
+  viewMode: ViewMode,
 ) {
   const paneRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -139,6 +140,7 @@ export default function useFloorCamera(
   useLayoutEffect(() => {
     const pane = paneRef.current;
     if (!pane) return;
+    observedSize.current = undefined;
     const stop = observeViewportOverlays(pane, FLOOR_CONTROLS, (controls) => {
       const view = measure();
       if (!view || view.width <= 24 || view.height <= 24) return;
@@ -147,8 +149,11 @@ export default function useFloorCamera(
       overlays.current = controls.map((control) => control.getBoundingClientRect()).filter(({ width, height }) => width > 0 && height > 0);
       fit.current = fitDrawing(view, bounds, overlays.current);
       setFitPixelsPerUnit(fit.current.scale * view.pixelsPerUnit);
-      if (resized || fitted.current) setCamera(fit.current);
-      else paint(false);
+      if (resized || fitted.current) {
+        pose.current = fit.current;
+        fitted.current = true;
+      }
+      paint(false);
     });
     const resize = new ResizeObserver(() => {
       measureTag();
@@ -161,7 +166,7 @@ export default function useFloorCamera(
       if (frame.current !== undefined) cancelAnimationFrame(frame.current);
       frame.current = undefined;
     };
-  }, [bounds, measure, measureTag, paint, placeTag, setCamera]);
+  }, [bounds, measure, measureTag, paint, placeTag, viewMode]);
 
   useLayoutEffect(() => {
     const changed = previousSelection.current !== selectedId;

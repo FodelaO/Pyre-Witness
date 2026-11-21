@@ -14,7 +14,6 @@ import FloorStage from "./FloorStage";
 import Legend from "./Legend";
 import PipeLayer from "./PipeLayer";
 import { useTwinFocus } from "./twinFocus";
-import "./floor.css";
 
 export default function PlantFloor() {
   const twin = useTwinStore((state) => state.twin);

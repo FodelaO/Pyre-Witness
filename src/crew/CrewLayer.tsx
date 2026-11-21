@@ -5,13 +5,11 @@ import { useTwinStore } from "@/twin/store";
 import { areaById } from "@/twin/geometry";
 import Avatar from "./Avatar";
 import CrewOffice from "./CrewOffice";
-import { useCrewConnection, useCrewStore } from "./crewStore";
+import { useCrewStore } from "./crewStore";
 import { useIdlePatrol } from "./patrol";
 import { CREW, CREW_ORDER } from "./types";
-import "./crew.css";
 
 export default function CrewLayer() {
-  useCrewConnection();
   useIdlePatrol();
   const plant = useTwinStore((state) => state.twin.plant);
   const office = useTwinStore((state) => areaById(state.twin, "crew_office"));

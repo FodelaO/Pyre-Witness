@@ -17,7 +17,7 @@ import { timeWalk, walkPosition, walksConflict, type TimedWalk } from "./walkTim
 
 export interface Speech {
   text: string;
-  kind: "step" | "briefing" | "patrol";
+  kind: "step" | "inspection" | "thought" | "briefing" | "patrol";
 }
 
 export interface AvatarState {
@@ -30,8 +30,10 @@ export interface AvatarState {
 
 type Phase = "idle" | "running" | "finishing" | "returning" | "error";
 type Appearance = Pick<AvatarState, "status" | "speech" | "inspect">;
-type Job = Pick<CrewCue, "stops" | "holdMs"> & { appearance?: Appearance };
-type ActiveWalk = TimedWalk & { arrival?: Appearance };
+type Job = Pick<CrewCue, "stops" | "holdMs"> & { appearance?: Appearance; after?: Job; finished?: boolean };
+type ActiveWalk = TimedWalk & { arrival?: Appearance; job: Job };
+const INSPECTION_WALK_MS = 1350;
+const INSPECTION_STOP_MS = 160;
 
 function perCrew<T>(make: (crew: CrewId) => T): Record<CrewId, T> {
   return { scout: make("scout"), architect: make("architect"), inspector: make("inspector"), chief: make("chief") };
@@ -54,6 +56,9 @@ const queue = perCrew<Job[]>(() => []);
 const heldUntil = perCrew(() => 0);
 const seen = new WeakSet<PipelineEvent>();
 let director = INITIAL_DIRECTOR;
+let dropReview: Job | undefined;
+let latestProposal: Job | undefined;
+let recommendationReview: Job | undefined;
 let frame: number | null = null;
 let returnTimer: number | null = null;
 let preference: MediaQueryList | undefined;
@@ -75,7 +80,11 @@ function updatePositions(now: number, instant: boolean): boolean {
       point: walking ? walkPosition(walk, now) : walk.end.point,
     };
     if (!walking) {
-      if (!instant && avatars[crew].inspect) heldUntil[crew] = Math.max(heldUntil[crew], now + 500);
+      if (!instant && avatars[crew].inspect) {
+        const pause = avatars[crew].speech?.kind === "inspection" ? INSPECTION_STOP_MS : 500;
+        heldUntil[crew] = Math.max(heldUntil[crew], now + pause);
+      }
+      walk.job.finished = true;
       moving.delete(crew);
       arrived = true;
     }
@@ -91,6 +100,7 @@ function clearMotion(now: number): void {
   if (returnTimer !== null) window.clearTimeout(returnTimer);
   frame = null;
   returnTimer = null;
+  dropReview = latestProposal = recommendationReview = undefined;
   for (const crew of CREW_ORDER) {
     queue[crew].length = 0;
     heldUntil[crew] = 0;
@@ -102,6 +112,7 @@ function clearMotion(now: number): void {
 }
 
 function startJob(crew: CrewId, job: Job, now: number, instant: boolean, visit = false): boolean {
+  if (job.after && !job.after.finished) return false;
   const { avatars } = useCrewStore.getState();
   const from = avatars[crew].point;
   let walk: TimedWalk | undefined;
@@ -111,7 +122,8 @@ function startJob(crew: CrewId, job: Job, now: number, instant: boolean, visit =
     const route = planWalk(readTwin(), from, job.stops, occupied);
     if (!route && (moving.size || visit)) return false;
     if (route) {
-      walk = timeWalk(route, now, instant);
+      const quickReview = job.appearance?.speech?.kind === "inspection";
+      walk = timeWalk(route, now, instant, quickReview ? INSPECTION_WALK_MS : undefined);
       const candidate = walk;
       if ([...moving.values()].some((other) => walksConflict(candidate, other, now))) return false;
     }
@@ -119,19 +131,32 @@ function startJob(crew: CrewId, job: Job, now: number, instant: boolean, visit =
   const walking = !!walk && walk.end.at > now;
   const appearance = !walk && job.stops?.length && job.appearance ? { ...job.appearance, inspect: undefined } : job.appearance;
   const arrival = walking && appearance?.speech?.kind === "briefing" ? appearance : undefined;
-  if (walk && walking) moving.set(crew, { ...walk, arrival });
+  if (walk && walking) moving.set(crew, { ...walk, arrival, job });
+  else job.finished = true;
+  if (job === latestProposal && avatars.inspector.status === "done") setAvatar("inspector", { speech: null });
+  if (job === latestProposal && avatars.scout.status === "done") setAvatar("scout", { speech: null });
+  if (appearance?.speech?.kind === "briefing") {
+    for (const id of CREW_ORDER) {
+      if (id !== crew && avatars[id].speech) setAvatar(id, { speech: null });
+    }
+  }
   setAvatar(crew, { ...(arrival ? { speech: null } : appearance), ...(walk ? { point: walking ? from : walk.end.point, walking } : {}) });
   heldUntil[crew] = now + (instant ? 0 : job.holdMs ?? 0);
   return true;
 }
 
 function finishWalks(now: number, instant: boolean): void {
-  for (const crew of CREW_ORDER) {
-    while (queue[crew].length && !moving.has(crew) && (instant || heldUntil[crew] <= now)) {
-      if (!startJob(crew, queue[crew][0], now, instant)) break;
-      queue[crew].shift();
+  let progressed: boolean;
+  do {
+    progressed = false;
+    for (const crew of CREW_ORDER) {
+      while (queue[crew].length && !moving.has(crew) && (instant || heldUntil[crew] <= now)) {
+        if (!startJob(crew, queue[crew][0], now, instant)) break;
+        queue[crew].shift();
+        progressed = true;
+      }
     }
-  }
+  } while (progressed);
   if (moving.size || CREW_ORDER.some((crew) => queue[crew].length)) return;
   const { phase } = useCrewStore.getState();
   if (phase === "returning") useCrewStore.setState({ phase: "idle" });
@@ -157,10 +182,10 @@ function play(now: number, replay = false, retry = true): void {
   });
 }
 
-function cueJob(cue: CrewCue, kind: Speech["kind"] = cue.briefing ? "briefing" : "step"): Job {
+function cueJob(cue: CrewCue, kind: Speech["kind"] = cue.briefing ? "briefing" : cue.inspection ? "inspection" : "step"): Job {
   return {
     stops: cue.stops, holdMs: cue.holdMs,
-    appearance: { status: cue.status, inspect: cue.inspect, speech: { text: cue.activity.text, kind } },
+    appearance: { status: cue.status, inspect: cue.inspect, speech: { text: cue.bubbleText ?? cue.activity.text, kind } },
   };
 }
 
@@ -192,15 +217,37 @@ function onEvent(event: PipelineEvent, replay = false): void {
     useCrewStore.setState({ phase: "error" });
     clearMotion(now);
     startJob(intent.cue.activity.crew, cueJob(intent.cue), now, false);
+  } else if (intent.kind === "thought") {
+    const speech = { kind: "thought", text: intent.activity.text } as const;
+    setAvatar("architect", { speech, status: "working" });
+    // A queued approach can be waiting for a clear aisle. Preserve the newest thought when it starts.
+    for (const job of queue.architect) {
+      if (job.appearance?.status === "working") job.appearance.speech = speech;
+    }
+    if (useCrewStore.getState().avatars.scout.status === "done") setAvatar("scout", { speech: null });
   } else if (intent.kind === "step") {
     const job = cueJob(intent.cue);
     const crew = intent.cue.activity.crew;
-    const waitForArrival = intent.cue.briefing && moving.has(crew);
-    if (crew !== "inspector" && !waitForArrival && !job.stops?.length && !queue[crew].length && heldUntil[crew] <= now) {
-      startJob(crew, job, now, replay || !!preference?.matches);
-    } else {
-      queue[crew].push(job);
+    if (event.type === "selfcheck.done") {
+      if (intent.cue.inspection === "as-dropped") dropReview = job;
+      else recommendationReview = job;
     }
+    if (event.type === "reasoning.done" || event.type === "revision.done") {
+      job.after = dropReview;
+      latestProposal = job;
+    }
+    if (event.type === "selfcheck.started" && intent.cue.inspection === "recommendation") job.after = latestProposal;
+    if (intent.cue.briefing) job.after = recommendationReview;
+    if (intent.cue.briefing && job.after && !job.after.finished) {
+      const speech = { kind: "step", text: "Briefing ready" } as const;
+      setAvatar("chief", { speech, status: "done" });
+      for (const queued of queue.chief) {
+        if (queued.appearance?.status === "working") queued.appearance = { ...queued.appearance, speech, status: "done" };
+      }
+    }
+    const waitForArrival = intent.cue.briefing && moving.has(crew);
+    const immediate = crew !== "inspector" && !waitForArrival && !job.stops?.length && !queue[crew].length && heldUntil[crew] <= now;
+    if (!immediate || !startJob(crew, job, now, replay || !!preference?.matches)) queue[crew].push(job);
   }
   appendActivity("cue" in intent ? intent.cue.activity : intent.activity);
   play(now, replay);

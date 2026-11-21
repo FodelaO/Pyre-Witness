@@ -80,6 +80,7 @@ export function RunProgress({ status, stage, events, gate, error }: ProgressProp
   const stages = crewStages(events);
   const failed = crewForStage(error?.stage ?? null);
   const reassess = events.some((event) => event.type === "run.started" && event.mode === "reassess");
+  const proposed = events.some((event) => event.type === "reasoning.done");
   return (
     <>
       <PanelHeading icon={Activity}>Analysis run</PanelHeading>
@@ -92,7 +93,9 @@ export function RunProgress({ status, stage, events, gate, error }: ProgressProp
           const revising = working && id === "architect" && stage === "revision";
           const phase = failed === id ? "error" : working ? "working" : ms !== undefined ? "done" : "waiting";
           const time = ms === undefined ? null : ms < 1000 ? `${formatNumber(ms)} ms` : `${formatNumber(ms / 1000)} s`;
-          const detail = phase === "error" ? "Error" : revising ? "Revising" : working ? "Working" : time ?? (status === "running" ? "Pending" : "Skipped");
+          const detail = phase === "error" ? "Error" : revising ? "Revising"
+            : working ? (id === "inspector" ? proposed ? "Recommendation" : "As dropped" : "Working")
+              : id === "inspector" && !proposed && time ? "As dropped" : time ?? (status === "running" ? "Pending" : "Skipped");
           return (
             <li key={id} style={{ "--pw-panel-crew-color": `var(${member.colorVar})` } as CSSProperties}
               data-phase={phase} aria-current={working ? "step" : undefined} title={time ? `${member.role} · ${time} measured` : member.role}>

@@ -19,7 +19,6 @@ import { RiskDial } from "./RiskDial";
 import { RiskList } from "./RiskList";
 import { RunError, RunProgress } from "./RunProgress";
 import { SimulationComparison } from "./SimulationComparison";
-import "./panel.css";
 
 const ActivityFeed = lazy(() => import("@/crew/ActivityFeed"));
 const FitPreview = lazy(() => import(/* turbopackOptional: true */ "@/fit/FitPreview"));
@@ -58,6 +57,8 @@ export default function SidePanel({ captureOpen, setCaptureEditor, watchOpen, on
   const hasRun = status !== "idle";
   const focused = hasRun && (running || dismissedRun !== runId);
   const thumbnail = focused && profile ? runThumbnail(run) : undefined;
+  const firstProposal = events.findIndex((event) => event.type === "reasoning.done");
+  const dropped = events.find((event, index) => event.type === "selfcheck.done" && (firstProposal < 0 || index < firstProposal));
   const checkingRevision = events.findLastIndex((event) => event.type === "revision.done")
     > events.findLastIndex((event) => event.type === "selfcheck.done");
   const checked = checkingRevision ? null : selfCheck;
@@ -91,7 +92,15 @@ export default function SidePanel({ captureOpen, setCaptureEditor, watchOpen, on
               </PanelSection>
             )}
             {error && <PanelSection><RunError message={error.message} /></PanelSection>}
+            {(running || (!profile && gate)) && (
+              <PanelSection><RunProgress {...{ status, stage, events, gate, error }} /></PanelSection>
+            )}
             {profile && <PanelSection><DeviceCard profile={profile} thumbnail={thumbnail} /></PanelSection>}
+            {dropped?.type === "selfcheck.done" && (
+              <PanelSection><Disclosure label={`As-dropped rules check · ${dropped.result.paths.length} ${dropped.result.paths.length === 1 ? "path" : "paths"}`}>
+                <AttackPathList paths={assessment?.attack_paths ?? []} selfCheck={dropped.result} heading="As-dropped paths" />
+              </Disclosure></PanelSection>
+            )}
             {assessment && (
               <>
                 <PanelSection><PlacementAnswer assessment={assessment} placedAssetId={placedAssetId} pending={pendingPlacement} /></PanelSection>
@@ -101,18 +110,16 @@ export default function SidePanel({ captureOpen, setCaptureEditor, watchOpen, on
                     <Disclosure label="Compliance references"><ComplianceChips items={assessment.compliance} /></Disclosure>
                   )}
                 </PanelSection>
-                <PanelSection><AttackPathList paths={assessment.attack_paths} selfCheck={checked} /></PanelSection>
+                <PanelSection><AttackPathList paths={dropped ? [] : assessment.attack_paths} selfCheck={checked}
+                  heading={dropped ? "Recommendation rules check" : "Attack paths"} /></PanelSection>
               </>
-            )}
-            {!profile && (running || gate) && (
-              <PanelSection><RunProgress {...{ status, stage, events, gate, error }} /></PanelSection>
             )}
           </>
         ) : <PanelSection><AssetInspector /></PanelSection>}
         {mitigations.length > 0 && <PanelSection><MitigationQueue items={mitigations} /></PanelSection>}
         <SimulationComparison />
         {focused && profile && assessment && <Slot name="Fit preview" quiet><FitPreview /></Slot>}
-        {focused && profile && (
+        {focused && profile && !running && (
           <PanelSection><Disclosure label="Analysis details"><RunProgress {...{ status, stage, events, gate, error }} /></Disclosure></PanelSection>
         )}
         <Slot name="Threat watch" quiet><WatchPanel open={watchOpen} onOpenChange={onWatchOpen} /></Slot>

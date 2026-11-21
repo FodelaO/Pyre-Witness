@@ -56,6 +56,7 @@
   font-size: 14px;
   font-weight: 630;
 }
+.pw-panel-dial-head { min-height: 20px; }
 .pw-panel-dial-head h2 { font-size: 12px; letter-spacing: 0.07em; text-transform: uppercase; }
 
 .pw-panel-heading h2 svg { color: var(--pw-text-dim); }
@@ -433,7 +434,7 @@
 }
 .pw-panel-move:hover, .pw-panel-approve:hover { background: color-mix(in srgb, var(--pw-ok) 18%, var(--pw-panel-2)); }
 .pw-panel-move { justify-content: start; }
-.pw-panel-move svg:last-child { margin-inline-start: auto; }
+.pw-panel-move svg:not(:first-child) { margin-inline-start: auto; }
 
 .pw-panel-never { display: grid; gap: 8px; }
 .pw-panel-never li {
@@ -552,6 +553,11 @@ a.pw-panel-technique:hover { border-color: var(--pw-info); color: var(--pw-info)
 .pw-panel-decision > svg { color: var(--pw-text-dim); }
 .pw-panel-decision[data-status="applied"] > svg { color: var(--pw-ok); }
 .pw-panel-decision > :nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-panel-containment { display: flex; align-items: baseline; gap: 6px; min-width: 0; color: var(--pw-ok); font-size: 11px; }
+.pw-panel-containment svg { align-self: start; margin-top: 1px; }
+.pw-panel-containment .pw-mono { margin-inline-start: 3px; color: var(--pw-text); }
+.pw-panel-containment small { display: block; color: var(--pw-text-dim); font-size: 10px; }
+.pw-panel-decision .pw-panel-containment { grid-column: 2 / -1; }
 
 .pw-panel-facts {
   display: grid;

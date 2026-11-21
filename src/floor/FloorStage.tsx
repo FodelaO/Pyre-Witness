@@ -2,6 +2,7 @@
 import { memo, useMemo, type ReactNode } from "react";
 import { Crosshair, Expand, Minus, Plus, X } from "lucide-react";
 import { areaById, areaCenter, assetById, entryPointById } from "@/twin/geometry";
+import { useTwinStore } from "@/twin/store";
 import type { Twin } from "@/twin/types";
 import Blueprint from "./Blueprint";
 import { drawingBounds } from "./fit";
@@ -22,6 +23,7 @@ interface FloorStageProps {
 
 export default memo(function FloorStage({ twin, selectedId, highlighted, schematic, children, controls }: FloorStageProps) {
   const { plant, areas, entryPoints } = twin;
+  const viewMode = useTwinStore((state) => state.view);
   const selected = selectedId ? assetById(twin, selectedId) : undefined;
   const selectedArea = areas.find(({ id }) => id === selectedId);
   const area = selected ? areaById(twin, selected.physical.area)?.name : undefined;
@@ -29,7 +31,7 @@ export default memo(function FloorStage({ twin, selectedId, highlighted, schemat
     selectedArea ? areaCenter(selectedArea) : entryPointById(twin, selectedId ?? "")
   ), [selected, selectedArea, selectedId, twin]);
   const bounds = useMemo(() => drawingBounds(plant, areas, entryPoints), [plant, areas, entryPoints]);
-  const camera = useFloorCamera(plant.canvas, bounds, selected, selectedPoint, selectedId);
+  const camera = useFloorCamera(plant.canvas, bounds, selected, selectedPoint, selectedId, viewMode);
   const placement = useFloorPlacement();
   const gestures = useFloorGestures(camera, placement);
   const { w, h } = plant.canvas;
@@ -51,7 +53,8 @@ export default memo(function FloorStage({ twin, selectedId, highlighted, schemat
         <div className="pw-floor-placement-hint">
           {placement.armed && <Crosshair size={14} aria-hidden="true" />}
           <span role="status">{hint}</span>
-          <button type="button" onClick={placement.dismiss} aria-label={placement.armed ? "Cancel pin placement" : "Dismiss"}>
+          <button type="button" onClick={placement.dismiss} title={placement.armed ? "Cancel pin placement" : "Dismiss placement message"}
+            aria-label={placement.armed ? "Cancel pin placement" : "Dismiss placement message"}>
             <X size={13} aria-hidden="true" />
           </button>
         </div>

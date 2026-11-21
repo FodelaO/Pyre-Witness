@@ -2,9 +2,8 @@
 import { memo } from "react";
 import { Equipment, FOOTPRINT } from "@/equipment";
 import type { Asset, EquipmentKind } from "@/twin/types";
+import { formatTelemetry } from "./telemetryFormat";
 
-const capacityFormat = new Intl.NumberFormat("en-US");
-const readingFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 const primaryKinds = new Set<EquipmentKind>([
   "vertical_tank", "agitated_tank", "bullet_tank", "ro_skid", "carbo_cooler",
   "rotary_filler", "labeler", "palletizer", "condenser", "firewall",
@@ -23,9 +22,9 @@ const AssetSymbol = memo(function AssetSymbol({ asset, selected, highlighted, di
   const bottom = scale * (Math.abs(w * Math.sin(angle)) + Math.abs(h * Math.cos(angle))) / 2;
   const capacityLabel = asset.specs?.capacity ?? (process?.capacityL === undefined
     ? undefined
-    : `${capacityFormat.format(process.capacityL)} L`);
+    : formatTelemetry(process.capacityL, "L"));
   const reading = process?.telemetry?.[0];
-  const telemetry = capacityLabel ?? (reading && `${readingFormat.format(reading.value)} ${reading.unit}`);
+  const telemetry = reading ? formatTelemetry(reading.value, reading.unit) : capacityLabel;
   const primary = added || primaryKinds.has(kind) || (kind === "generic_device" && scale > 1);
   const tag = primary ? "primary" : secondaryKinds.has(kind) ? "secondary" : "detail";
   const running = process?.running ?? ((kind === "wifi_ap" || kind === "gateway") && !!asset.cyber?.radios.length && asset.status !== "offline" ? true : undefined);
@@ -48,17 +47,16 @@ const AssetSymbol = memo(function AssetSymbol({ asset, selected, highlighted, di
       aria-label={`${asset.id} · ${asset.name}`}
       aria-pressed={selected}
     >
+      <title>{asset.id} · {asset.name}</title>
       <g transform={`rotate(${rotation}) scale(${scale})`}>
         <rect className="pw-floor-asset-hit" x={-w / 2 - 3} y={-h / 2 - 3} width={w + 6} height={h + 6} rx={4} />
         <g className={added ? "pw-floor-symbol pw-placed" : "pw-floor-symbol"}>
           <Equipment
             kind={kind}
-            label={asset.id}
             level={process?.levelPct === undefined ? undefined : process.levelPct / 100}
             medium={process?.medium}
             running={asset.status === "offline" ? false : running}
             status={asset.status}
-            capacityLabel={capacityLabel}
             letters={kind === "instrument" ? asset.id.split("-")[0] : undefined}
             selected={selected}
             highlighted={highlighted}
@@ -68,8 +66,8 @@ const AssetSymbol = memo(function AssetSymbol({ asset, selected, highlighted, di
       </g>
       <g transform={`translate(0 ${bottom})`} pointerEvents="none" aria-hidden="true">
         <g className="pw-floor-screen-label">
-          <text y={10} className="pw-floor-asset-tag">{asset.id}</text>
-          {telemetry && <text y={21} className="pw-floor-asset-reading">{telemetry}</text>}
+          <text y={10} className="pw-floor-asset-tag" textAnchor="middle" fontSize={9} fill="var(--pw-text-dim)">{asset.id}</text>
+          {telemetry && <text y={21} className="pw-floor-asset-reading" textAnchor="middle" fontSize={9} opacity={0}>{telemetry}</text>}
         </g>
       </g>
     </g>

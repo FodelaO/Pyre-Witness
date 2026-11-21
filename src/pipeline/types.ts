@@ -96,9 +96,20 @@ export interface Evidence {
   confidence: number;
 }
 
+export const OBJECT_CLASSES = ["networked_device", "electrical_equipment", "process_equipment", "passive_object"] as const;
+
+export type ObjectClass = (typeof OBJECT_CLASSES)[number];
+
 export interface DeviceProfile {
   device_type: string;
   category: DeviceCategory;
+  /**
+   * What kind of thing was captured. Judges may photograph anything: a passive object (a mug, a
+   * glass bottle, a backpack, a pallet) carries no cyber risk, but it still has a right and a
+   * wrong place in a food plant (foreign-material control, brittle materials near open product,
+   * ignition sources in the NH3 area). Optional so older profiles stay valid.
+   */
+  object_class?: ObjectClass;
   vendor: string | null;
   model: string | null;
   radios: Radio[];

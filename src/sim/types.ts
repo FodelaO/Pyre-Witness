@@ -4,6 +4,14 @@ import type { AreaId, AssetStatus, Mitigation, MitigationEffect, Twin } from "@/
 export type ScenarioId = "cip" | "ammonia" | "ransomware" | "wireless" | "chiller";
 export type SimScenarioId = ScenarioId | "carbonation";
 
+export interface SimulationMitigation extends Mitigation {
+  simulationContainment: {
+    before: number | null;
+    after: number;
+    safeguard: string;
+  };
+}
+
 export interface SimAlert {
   id: string;
   title: string;

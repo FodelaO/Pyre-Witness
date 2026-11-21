@@ -91,16 +91,16 @@ function PathRow({ path, twin }: { path: AttackPath; twin: Twin }) {
   );
 }
 
-export function AttackPathList({ paths, selfCheck }: { paths: AttackPath[]; selfCheck: SelfCheckResult | null }) {
+export function AttackPathList({ paths, selfCheck, heading }: { paths: AttackPath[]; selfCheck: SelfCheckResult | null; heading: string }) {
   const twin = useTwinStore((state) => state.twin);
   const unique = new Map<string, AttackPath>();
-  for (const path of [...(selfCheck?.paths ?? []), ...paths]) {
+  for (const path of [...paths, ...(selfCheck?.paths ?? [])]) {
     const key = `${path.source}:${path.id}`;
     if (!unique.has(key)) unique.set(key, path);
   }
   return (
     <>
-      <PanelHeading icon={Route}>New attack paths {unique.size > 0 && <span className="pw-panel-muted pw-mono">{unique.size}</span>}</PanelHeading>
+      <PanelHeading icon={Route}>{heading} {unique.size > 0 && <span className="pw-panel-muted pw-mono">{unique.size}</span>}</PanelHeading>
       {unique.size > 0 ? (
         <ul className="pw-panel-list">{Array.from(unique, ([key, path]) => <PathRow key={key} path={path} twin={twin} />)}</ul>
       ) : <p className="pw-panel-muted">No new paths reported.</p>}

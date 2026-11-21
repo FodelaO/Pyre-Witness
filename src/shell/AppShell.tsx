@@ -1,19 +1,28 @@
 /** Positions the drawing, fixed instrument dock and responsive results rail. */
 "use client";
 
-import { lazy, useCallback, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
+import { lazy, useCallback, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { X } from "lucide-react";
+import CaptureCard from "@/capture/CaptureCard";
+import { useCrewConnection } from "@/crew/crewStore";
+import PlantFloor from "@/floor/PlantFloor";
+import SidePanel from "@/panel/SidePanel";
+import PurdueMap from "@/purdue/PurdueMap";
+import { startSimRuntime } from "@/sim/runtime";
+import SimControls from "@/sim/SimControls";
 import { useDropStore } from "@/twin/dropPoint";
 import { useTwinStore } from "@/twin/store";
 import { Slot } from "./Slot";
 import { TopBar } from "./TopBar";
+// These styles belong to the shell so lazy views and controls share one stable layout.
+import "@/floor/floor.css";
+import "@/purdue/purdue.css";
+import "@/panel/panel.css";
+import "@/capture/capture.css";
+import "@/crew/crew.css";
+import "@/sim/sim.css";
 import "./shell.css";
 
-const PlantFloor = lazy(() => import("@/floor/PlantFloor"));
-const PurdueMap = lazy(() => import("@/purdue/PurdueMap"));
-const CaptureCard = lazy(() => import("@/capture/CaptureCard"));
-const SimControls = lazy(() => import("@/sim/SimControls"));
-const SidePanel = lazy(() => import("@/panel/SidePanel"));
 const TalkToChief = lazy(() => import(/* turbopackOptional: true */ "@/voice/TalkToChief"));
 
 const DRAWER_QUERY = "(width < 1280px)";
@@ -27,6 +36,8 @@ function subscribeDrawerWidth(onChange: () => void) {
 const drawerWidth = () => window.matchMedia(DRAWER_QUERY).matches;
 
 export default function AppShell() {
+  useCrewConnection();
+  useEffect(startSimRuntime, []);
   const view = useTwinStore((state) => state.view);
   const pinning = useDropStore((state) => state.armed);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -84,7 +95,7 @@ export default function AppShell() {
     <div className="pw-shell" onKeyDown={handleDrawerKeys}>
       <TopBar drawerOpen={drawerOpen && !pinning} watchOpen={watchOpen && !captureOpen}
         onToggleDrawer={toggleDrawer} onToggleWatch={toggleWatch} />
-      <div className="pw-shell-body" data-drawer={drawerOpen} data-pinning={pinning}>
+      <div className="pw-shell-body" data-view={view} data-drawer={drawerOpen} data-pinning={pinning}>
         <main className="pw-stage" aria-label="Plant twin" inert={narrow && drawerOpen && !pinning}>
           <div className="pw-stage-views" data-view={view} id="pw-drawing" role="tabpanel" aria-labelledby={"pw-view-" + view}>
             {view !== "purdue" && (

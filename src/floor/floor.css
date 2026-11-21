@@ -52,11 +52,6 @@
 
 .pw-floor-caption span:first-child { color: var(--pw-text); font-weight: 550; }
 
-/* The embedded launcher is the floor fallback while the shell dock mounts. */
-main:has(.pw-sim-controls[data-mount="shell"]) .pw-plant-floor .pw-sim-controls[data-mount="floor"] {
-  display: none;
-}
-
 .pw-floor-zoom,
 .pw-floor-legend,
 .pw-floor-tag {
@@ -210,8 +205,6 @@ main:has(.pw-sim-controls[data-mount="shell"]) .pw-plant-floor .pw-sim-controls[
 .pw-floor-asset[data-field]:not([data-focused]):not([data-status="alarm"]):not([data-status="attention"]) .pw-floor-symbol {
   opacity: calc(0.26 + 0.74 * var(--pw-floor-detail));
 }
-/* The shared frame keeps its props for instrument semantics and gallery rendering. The floor draws the upright tags. */
-.pw-floor-symbol > g > text:not(.pw-vessel-readout) { display: none; }
 .pw-floor-symbol .pw-instrument-text,
 .pw-floor-symbol .pw-instrument-leader,
 .pw-floor-symbol .pw-vessel-readout { opacity: var(--pw-floor-telemetry); transition: opacity 150ms ease; }

@@ -1,6 +1,6 @@
 /** Turns actual pipeline events into shared avatar and activity cues. */
 import { MODEL_IDS } from "@/gemini/models";
-import type { Assessment, DropPoint, PipelineEvent, PipelineStage } from "@/pipeline/types";
+import type { Assessment, CaptureInput, DropPoint, PipelineEvent, PipelineStage } from "@/pipeline/types";
 import { DEFAULT_DROP } from "@/twin/dropPoint";
 import { areaById, areaCenter, assetById, clampToArea, containsPoint, nodePosition, type Point } from "@/twin/geometry";
 import type { AttackPath, AttackStep, Twin } from "@/twin/types";
@@ -9,6 +9,7 @@ import type { WalkStop } from "./walk";
 
 export type CrewStatus = "idle" | "working" | "done" | "error";
 export type CrewActivity = Omit<ActivityEntry, "id">;
+type Inspection = "as-dropped" | "recommendation";
 
 export interface CrewCue {
   activity: CrewActivity;
@@ -17,16 +18,20 @@ export interface CrewCue {
   inspect?: Point;
   briefing?: boolean;
   holdMs?: number;
+  inspection?: Inspection;
+  bubbleText?: string;
 }
 
 export type CrewIntent =
-  | { kind: "stand" | "complete"; activity: CrewActivity }
+  | { kind: "stand" | "complete" | "log" | "thought"; activity: CrewActivity }
   | { kind: "step" | "error"; cue: CrewCue };
 
 interface DirectorState {
   runId: string | null;
   active: boolean;
   reassess: boolean;
+  inputKind: CaptureInput["kind"];
+  reading: boolean;
   drop: DropPoint;
   recommendation: WalkStop | null;
   gateRejection?: string;
@@ -35,7 +40,8 @@ interface DirectorState {
 }
 
 export const INITIAL_DIRECTOR: DirectorState = {
-  runId: null, active: false, reassess: false, drop: DEFAULT_DROP, recommendation: null, lastCrew: "scout",
+  runId: null, active: false, reassess: false, inputKind: "text", reading: false,
+  drop: DEFAULT_DROP, recommendation: null, lastCrew: "scout",
 };
 
 const stageOwners: Record<PipelineStage, { crew: CrewId; engine?: string }> = {
@@ -77,7 +83,7 @@ function conduitEnforcer(twin: Twin, step: AttackStep): string | null {
   return conduit?.enforcedBy ?? null;
 }
 
-function pathVisit(twin: Twin, path: AttackPath, recommendation: WalkStop | null) {
+function pathVisit(twin: Twin, path: AttackPath, placement: WalkStop) {
   const nodes: string[] = [];
   const add = (id: string) => { if (nodes.at(-1) !== id) nodes.push(id); };
   add(path.entry);
@@ -90,12 +96,14 @@ function pathVisit(twin: Twin, path: AttackPath, recommendation: WalkStop | null
   add(path.target);
   const stops: WalkStop[] = [];
   for (const id of nodes) {
-    const point = nodePosition(twin, id);
-    if (point) stops.push({ point, area: assetById(twin, id)?.physical.area });
-    else if (id === path.causedBy && recommendation) stops.push(recommendation);
+    if (id === path.causedBy) stops.push(placement);
+    else {
+      const point = nodePosition(twin, id);
+      if (point) stops.push({ point, area: assetById(twin, id)?.physical.area });
+    }
   }
   const target = assetById(twin, path.target);
-  const inspect = target && nodePosition(twin, target.id);
+  const inspect = path.causedBy === path.target ? placement.point : target && nodePosition(twin, target.id);
   if (inspect && stops.length) stops[stops.length - 1] = { ...stops[stops.length - 1], beside: true };
   return { stops, inspect };
 }
@@ -113,7 +121,8 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
     const reassess = event.mode === "reassess";
     const crew = reassess ? "architect" : "scout";
     return {
-      state: { ...INITIAL_DIRECTOR, lastCrew: crew, runId: event.runId, active: true, reassess, drop: event.dropPoint ?? DEFAULT_DROP },
+      state: { ...INITIAL_DIRECTOR, lastCrew: crew, runId: event.runId, active: true, reassess,
+        inputKind: event.input.kind, drop: event.dropPoint ?? DEFAULT_DROP },
       intent: { kind: "stand", activity: activity(crew, reassess ? "Reassessment started" : "Analysis started") },
     };
   }
@@ -122,10 +131,13 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
   if (!standaloneError && (!state.active || state.runId !== event.runId)) return { state, intent: null };
 
   const step = (crew: CrewId, status: CrewStatus, text: string, engine?: string,
-    options: Pick<CrewCue, "stops" | "inspect" | "briefing" | "holdMs"> = {}) => ({
+    options: Omit<CrewCue, "activity" | "status"> = {}) => ({
     state: { ...state, lastCrew: crew, lastEngine: engine },
     intent: { kind: "step" as const, cue: { activity: activity(crew, text, engine), status, ...options } },
   });
+  const drop: WalkStop = { point: state.drop, area: state.drop.area };
+  const inspection: Inspection = state.recommendation ? "recommendation" : "as-dropped";
+  const inspectedPlacement = state.recommendation ?? drop;
 
   switch (event.type) {
     case "link.started":
@@ -141,27 +153,36 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
       const verdict = event.gate.proceed ? "Gate passed" : "Gate stopped";
       const score = typeof device?.value === "number" ? `Device? ${device.value.toFixed(2)} · ` : "";
       const reason = !event.gate.proceed && event.gate.reason ? ` · ${event.gate.reason}` : "";
-      const result = step("scout", "done", `${score}${verdict}${reason}`, event.model, { holdMs: 800 });
-      return { ...result, state: { ...result.state, gateRejection: event.gate.proceed ? undefined : `${score}${verdict}` } };
+      const text = `${score}${verdict}${reason}`;
+      const gated = { ...state, gateRejection: event.gate.proceed ? undefined : `${score}${verdict}` };
+      if (state.reading) return { state: gated, intent: { kind: "log", activity: activity("scout", text, event.model) } };
+      const result = step("scout", "done", text, event.model, { holdMs: 800 });
+      return { ...result, state: { ...gated, lastCrew: "scout", lastEngine: event.model } };
     }
-    case "perception.started":
-      return step("scout", "working", "Reading the label…", event.model, {
-        stops: [{ point: state.drop, area: state.drop.area }],
-      });
+    case "perception.started": {
+      const text = state.inputKind === "photo" ? "Reading the label…"
+        : state.inputKind === "link" ? "Reading product evidence…" : "Reading the device description…";
+      const result = step("scout", "working", text, event.model, { stops: [drop] });
+      return { ...result, state: { ...result.state, reading: true } };
+    }
     case "perception.done": {
       const evidence = event.profile.evidence.reduce<typeof event.profile.evidence[number] | undefined>(
         (best, item) => !best || item.confidence > best.confidence ? item : best, undefined,
       );
       const claim = evidence?.claim.trim();
-      return step("scout", "done", claim ? `${event.profile.device_type} · ${claim}` : event.profile.device_type, event.model);
+      const result = step("scout", "done", claim ? `${event.profile.device_type} · ${claim}` : event.profile.device_type,
+        event.model, { bubbleText: event.profile.device_type });
+      return { ...result, state: { ...result.state, reading: false } };
     }
     case "reasoning.started": {
       const area = event.candidateArea ? areaById(twin, event.candidateArea) : areaById(twin, state.drop.area);
-      const stop = area && !state.reassess ? { point: areaCenter(area), area: area.id } : { point: state.drop, area: state.drop.area };
+      const stop = area && !state.reassess ? { point: areaCenter(area), area: area.id } : drop;
       return step("architect", "working", "Checking where this fits…", event.model, { stops: [stop] });
     }
-    case "reasoning.thought":
-      return step("architect", "working", clean(event.text) || "Reviewing placement…", CREW.architect.engine);
+    case "reasoning.thought": {
+      const thought = clean(event.text.replace(/^\*\*([^*]+)\*\*\s*/, "$1 · ").replace(/\*\*|`/g, ""));
+      return { state, intent: thought ? { kind: "thought", activity: activity("architect", thought, CREW.architect.engine) } : null };
+    }
     case "reasoning.done":
     case "revision.done": {
       const recommendation = placementStop(twin, event.assessment, state.drop);
@@ -173,20 +194,21 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
       return { ...result, state: { ...result.state, recommendation } };
     }
     case "selfcheck.started":
-      return step("inspector", "working", "Checking placement rules…", event.engine, {
-        stops: [(!state.reassess && state.recommendation) || { point: state.drop, area: state.drop.area }],
-      });
+      return step("inspector", "working", inspection === "as-dropped" ? "Checking as-dropped placement…" : "Checking the recommendation…",
+        event.engine, { stops: [inspectedPlacement], inspection });
     case "selfcheck.path":
-      return step("inspector", "working", `Path found: ${event.path.title}`, CREW.inspector.engine,
-        { ...pathVisit(twin, event.path, state.recommendation), holdMs: 750 });
+      return step("inspector", "working", `${inspection === "as-dropped" ? "As dropped" : "Recommendation"} path · ${event.path.title}`,
+        CREW.inspector.engine, { ...pathVisit(twin, event.path, inspectedPlacement), inspection,
+          bubbleText: `${inspection === "as-dropped" ? "As dropped" : "Recommendation"} · tracing to ${event.path.target}` });
     case "selfcheck.done": {
       const count = event.result.findings.length;
-      const text = event.result.passed ? "Passed" : `${count} ${count === 1 ? "finding" : "findings"}`;
-      return step("inspector", "done", text, CREW.inspector.engine);
+      const verdict = event.result.passed ? "passed rules check" : count ? `${count} ${count === 1 ? "finding" : "findings"}` : "flagged by rules engine";
+      const label = inspection === "as-dropped" ? "As dropped" : "Recommendation";
+      return step("inspector", "done", `${label} · ${verdict}`, CREW.inspector.engine, { inspection });
     }
     case "revision.started":
       return step("architect", "working", event.reason ? `Reconsidering · ${event.reason}` : "Reconsidering placement…", event.model,
-        { holdMs: 800 });
+        { holdMs: 800, bubbleText: "Reconsidering placement…" });
     case "summary.started": {
       const { x, y, w, h } = twin.plant.building;
       return step("chief", "working", "Writing the briefing…", event.model, {

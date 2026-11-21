@@ -2,9 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODEL_IDS } from "@/gemini/models";
 import { useRunStore } from "@/pipeline/runStore";
-import type { PipelineEvent } from "@/pipeline/types";
+import type { Assessment, PipelineEvent } from "@/pipeline/types";
 import { areaById, distance } from "@/twin/geometry";
 import { SEED_TWIN } from "@/twin/seed";
+import type { AttackPath } from "@/twin/types";
 import { connectCrew, startPatrolVisit, useCrewStore } from "./crewStore";
 import { useFeedStore } from "./feedStore";
 import { deskPosition } from "./officeLayout";
@@ -62,14 +63,14 @@ describe("crew bus connection", () => {
       ingest({ ...run, type: "perception.started", model: MODEL_IDS.perception });
       expect(scout().speech?.text).toBe("Device? 0.97 · Gate passed");
       vi.advanceTimersByTime(850);
-      expect(scout().speech?.text).toBe("Reading the label…");
+      expect(scout().speech?.text).toBe("Reading the device description…");
       expect(scout().walking).toBe(true);
       ingest({ ...run, type: "run.error", stage: "perception", message: "Label unreadable" });
       expect(scout()).toMatchObject({ walking: false, status: "error", speech: { text: "Label unreadable" } });
       vi.advanceTimersByTime(4000);
       expect(scout().status).toBe("error");
       expect(feed().map(({ text }) => text)).toEqual([
-        "Label unreadable", "Reading the label…", "Device? 0.97 · Gate passed", "Analysis started", visit.activity.text,
+        "Label unreadable", "Reading the device description…", "Device? 0.97 · Gate passed", "Analysis started", visit.activity.text,
       ]);
     } finally {
       unmountFeed();
@@ -119,6 +120,45 @@ describe("crew bus connection", () => {
     expect(avatars.inspector.point).not.toEqual(initial.inspector.point);
   });
 
+  it("shows the latest live thought while Inspector walks and delays the recommendation check until Architect arrives", () => {
+    const path: AttackPath = { id: "check", title: "Path to Filler 3", entry: "parking_rf", target: "HMI-F3",
+      steps: [{ from: "parking_rf", to: "HMI-F3", via: "rf", note: "" }], severity: 4, likelihood: 2, impact: "", source: "rules" };
+    const result = { passed: true, findings: [], paths: [path], disagreements: [], revised: false };
+    const assessment: Assessment = {
+      placement: { level: 2, network_area: "Cell Pack", conduit: null, why: "Fixture" },
+      physical_placement: { area: "packaging", near_asset_id: null, position_hint: "", connections: [], physical_constraints: [] },
+      never_place: [], risks: [], attack_paths: [], compliance: [], mitigations: [], confidence: 0.9,
+    };
+    const avatar = (crew: "architect" | "inspector") => useCrewStore.getState().avatars[crew];
+    ingest(start());
+    ingest({ ...run, type: "selfcheck.started", engine: "rules engine" });
+    ingest({ ...run, type: "selfcheck.path", path });
+    ingest({ ...run, type: "selfcheck.done", latencyMs: 3, result });
+    ingest({ ...run, type: "reasoning.started", model: MODEL_IDS.reasoning, candidateArea: null });
+    ingest({ ...run, type: "reasoning.thought", text: "**Reviewing fit** First summary" });
+    ingest({ ...run, type: "reasoning.thought", text: "**Reviewing fit** Latest summary" });
+    expect(avatar("architect").speech).toEqual({ kind: "thought", text: "Reviewing fit · Latest summary" });
+    ingest({ ...run, type: "reasoning.done", model: MODEL_IDS.reasoning, latencyMs: 4, assessment });
+    ingest({ ...run, type: "selfcheck.started", engine: "rules engine" });
+    expect(avatar("architect").speech?.kind).toBe("thought");
+    const sequence: string[] = [];
+    const stop = useCrewStore.subscribe(({ avatars }) => {
+      const cues = [avatars.inspector.speech?.text, avatars.architect.speech?.text];
+      for (const cue of cues) if (cue && !sequence.includes(cue)) sequence.push(cue);
+    });
+    try {
+      vi.advanceTimersByTime(16_000);
+      const walk = sequence.indexOf("As dropped · tracing to HMI-F3");
+      const proposal = sequence.indexOf("Packaging · Purdue L2");
+      const recommendation = sequence.indexOf("Checking the recommendation…");
+      expect(walk).toBeGreaterThanOrEqual(0);
+      expect(proposal).toBeGreaterThan(walk);
+      expect(recommendation).toBeGreaterThan(proposal);
+    } finally {
+      stop();
+    }
+  });
+
   it("teleports in reduced motion and rejects patrol while the tab is hidden", () => {
     const visit = observePatrol(SEED_TWIN, "scout", 0, 1)!;
     tab.hidden = true;
@@ -135,17 +175,17 @@ describe("crew bus connection", () => {
 
   it("reads the current twin telemetry for each observation", () => {
     const initial = observePatrol(SEED_TWIN, "scout", 0, 1)!;
-    expect(initial.activity.text).toBe("LT-301 60 % · in band");
+    expect(initial.activity.text).toBe("LT-301 60% · in band");
     const twin = {
       ...SEED_TWIN,
       assets: SEED_TWIN.assets.map((asset) => asset.process?.telemetry ? {
         ...asset,
         process: { ...asset.process, telemetry: asset.process.telemetry.map((point) =>
-          point.tag === "LT-301" ? { ...point, value: 92 } : point) },
+          point.tag === "LT-301" ? { ...point, value: 92.00026772523983 } : point) },
       } : asset),
     };
     expect(observePatrol(twin, "scout", 0, 2)?.activity).toMatchObject({
-      kind: "patrol", at: 2, text: "LT-301 92 %",
+      kind: "patrol", at: 2, text: "LT-301 92%",
     });
   });
 });

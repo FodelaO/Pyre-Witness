@@ -2,9 +2,9 @@
 import { isKnownTechnique } from "@/data/attack-ics";
 import { evaluateTwin } from "@/rules/engine";
 import { applyEffects } from "@/twin/effects";
-import type { Mitigation, Twin } from "@/twin/types";
+import type { Twin } from "@/twin/types";
 import { ALL_SCENARIOS } from "./scenarios";
-import type { ScenarioContext, ScenarioControl, SimRun, SimScenarioId, SimStage } from "./types";
+import type { ScenarioContext, ScenarioControl, SimRun, SimScenarioId, SimStage, SimulationMitigation } from "./types";
 
 export type { SimRun } from "./types";
 
@@ -58,21 +58,22 @@ function containsEarlier(projected: Omit<SimRun, "counterfactual">, baseline: Om
     || (projectedTime === baselineTime && projected.stages.length < baseline.stages.length);
 }
 
-export function projectScenarioMitigations(scenarioId: SimScenarioId, twin: Twin): Mitigation[] {
+export function projectScenarioMitigations(scenarioId: SimScenarioId, twin: Twin): SimulationMitigation[] {
   const baseline = resolve(scenarioId, twin).run;
   const candidates = ALL_SCENARIOS[scenarioId].mitigations(twin);
   if (candidates.length === 0) return [];
   const before = evaluateTwin(twin).score;
   return candidates.flatMap((candidate) => {
     const changed = applyEffects(twin, candidate.effects);
-    const projected = resolve(scenarioId, changed).run;
-    if (!containsEarlier(projected, baseline)) return [];
+    const { run: projected, control } = resolve(scenarioId, changed);
+    if (!containsEarlier(projected, baseline) || projected.containedAt === undefined || !control) return [];
     return [{
       ...candidate,
       status: "proposed" as const,
       proposedBy: "inspector",
-      description: `${candidate.description} Simulation replay at ${projected.containedAt} s. ${projected.consequence.summary}`,
+      description: `${candidate.description} ${projected.consequence.summary}`,
       riskDelta: evaluateTwin(changed).score - before,
+      simulationContainment: { before: baseline.containedAt ?? null, after: projected.containedAt, safeguard: control.label },
     }];
   });
 }

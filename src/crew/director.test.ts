@@ -72,12 +72,12 @@ describe("crew director", () => {
     expect(next({ ...run, type: "selfcheck.started", engine: "rules engine" }))
       .toMatchObject({ cue: { stops: [{ area: "packaging" }], activity: { crew: "inspector", engine: "rules engine" } } });
     expect(next({ ...run, type: "selfcheck.path", path })).toMatchObject({ cue: {
-      activity: { text: `Path found: ${path.title}`, engine: "rules engine" },
+      inspection: "recommendation", activity: { text: `Recommendation path · ${path.title}`, engine: "rules engine" },
       stops: ["parking_rf", "HMI-F3", "SW-OT", "SCADA-03"].map((id) => ({ point: nodePosition(twin, id) })),
       inspect: nodePosition(twin, "SCADA-03"),
     } });
     expect(next({ ...run, type: "selfcheck.done", latencyMs: 10, result }))
-      .toMatchObject({ cue: { activity: { text: "1 finding", engine: "rules engine", latencyMs: 10 } } });
+      .toMatchObject({ cue: { activity: { text: "Recommendation · 1 finding", engine: "rules engine", latencyMs: 10 } } });
     expect(next({ ...run, type: "revision.started", model: MODEL_IDS.reasoning, reason: result.disagreements[0] }))
       .toMatchObject({ cue: { activity: { text: "Reconsidering · Placement rule applies" } } });
     expect(next({ ...run, type: "revision.done", model: MODEL_IDS.reasoning, latencyMs: 800, assessment }))
@@ -117,15 +117,17 @@ describe("crew director", () => {
     } });
   });
 
-  it("sends Architect and Inspector to the actual reassessment drop point", () => {
+  it("checks the moved device before the proposal and sends Inspector to the proposed room afterward", () => {
     const next = cursor();
     const point = { x: 546, y: 234, area: "syrup_room" } as const;
     expect(next({ ...run, type: "run.started", mode: "reassess", input: { kind: "text", label: "Gauge" }, dropPoint: point }))
       .toMatchObject({ kind: "stand", activity: { crew: "architect", text: "Reassessment started" } });
+    expect(next({ ...run, type: "selfcheck.started", engine: "rules engine" }))
+      .toMatchObject({ cue: { inspection: "as-dropped", activity: { crew: "inspector" }, stops: [{ point, area: "syrup_room" }] } });
     expect(next({ ...run, type: "reasoning.started", model: MODEL_IDS.reasoning, candidateArea: "syrup_room" }))
       .toMatchObject({ cue: { activity: { crew: "architect" }, stops: [{ point, area: "syrup_room" }] } });
     next({ ...run, type: "reasoning.done", model: MODEL_IDS.reasoning, latencyMs: 20, assessment });
     expect(next({ ...run, type: "selfcheck.started", engine: "rules engine" }))
-      .toMatchObject({ cue: { activity: { crew: "inspector" }, stops: [{ point, area: "syrup_room" }] } });
+      .toMatchObject({ cue: { inspection: "recommendation", activity: { crew: "inspector" }, stops: [{ area: "packaging" }] } });
   });
 });

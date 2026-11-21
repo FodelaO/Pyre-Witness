@@ -67,8 +67,10 @@ describe("scenario engine", () => {
     const candidates = projectScenarioMitigations(scenario, twin);
     const mitigation = candidates.find(({ id }) => id === control);
     expect(mitigation).toMatchObject({ status: "proposed", proposedBy: "inspector", riskDelta: expect.any(Number) });
-    expect(mitigation!.description).toContain("Simulation replay");
     const changed = runScenario(scenario, applyEffects(twin, mitigation!.effects));
+    expect(mitigation!.simulationContainment).toEqual({
+      before: run.containedAt ?? null, after: changed.containedAt, safeguard: changed.stages.at(-1)?.by,
+    });
     expect(changed.contained).toBe(true);
     expect(changed.containedAt).toBeLessThan(run.stages.at(-1)!.t);
     expect(changed.stages.at(-1)?.effects).toBeUndefined();

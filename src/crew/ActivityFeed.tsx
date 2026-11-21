@@ -2,17 +2,14 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
-import { useCrewConnection } from "./crewStore";
 import { useFeedStore } from "./feedStore";
 import { CREW } from "./types";
-import "./crew.css";
 
 const timeFormat = new Intl.DateTimeFormat("en-GB", {
   hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
 });
 
 export default function ActivityFeed() {
-  useCrewConnection();
   const entries = useFeedStore((state) => state.entries);
   const list = useRef<HTMLOListElement>(null);
   const pinned = useRef(true);

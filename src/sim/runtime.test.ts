@@ -52,7 +52,11 @@ it("finishes the approved CIP branch replay at six seconds on the same running c
   start("cip");
   vi.advanceTimersByTime(3300);
   expect(useSimStore.getState()).toMatchObject({ mode: "finished", elapsed: 12 });
+  const isolation = () => useTwinStore.getState().mitigations.find(({ id }) => id === "sim-cip-isolate");
+  const projection = { before: 12, after: 6, safeguard: "CIP branch isolation" };
+  expect(isolation()).toMatchObject({ riskDelta: 0, simulationContainment: projection });
   useTwinStore.getState().decideMitigation("sim-cip-isolate", "approved");
+  expect(isolation()).toMatchObject({ status: "applied", riskDelta: 0, simulationContainment: projection });
   togglePlayback();
   vi.advanceTimersByTime(1800);
   expect(useSimStore.getState()).toMatchObject({ mode: "finished", elapsed: 6, run: { containedAt: 6 } });

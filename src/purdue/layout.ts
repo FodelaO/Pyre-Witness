@@ -186,7 +186,7 @@ export function buildPurdueLayout(
   revealed: ReadonlySet<string> = new Set(),
 ): PurdueLayout {
   const compact = viewportWidth < 850;
-  const railWidth = viewportWidth < 575 ? 66 : compact ? 80 : 137;
+  const railWidth = viewportWidth < 575 ? 76 : compact ? 80 : 137;
   const left = railWidth + (compact ? 6 : 14);
   const remote = twin.entryPoints.filter(({ kind }) => kind === "internet" || kind === "remote");
   const side = twin.entryPoints.filter((entry) => !remote.includes(entry));

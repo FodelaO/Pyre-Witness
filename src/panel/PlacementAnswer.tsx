@@ -1,7 +1,8 @@
 /** Recommended floor and network placement, with linked references and one move action. */
 "use client";
 
-import { ArrowRight, LocateFixed, MapPin } from "lucide-react";
+import { ArrowRight, Check, LocateFixed, MapPin } from "lucide-react";
+import { atRecommendedPlacement } from "@/pipeline/assetFromProfile";
 import { moveToRecommended } from "@/pipeline/client";
 import type { Assessment } from "@/pipeline/types";
 import { areaById, assetById } from "@/twin/geometry";
@@ -14,10 +15,17 @@ export function PlacementAnswer({ assessment, placedAssetId, pending }: {
   pending: boolean;
 }) {
   const { placement, physical_placement: physical } = assessment;
-  const area = useTwinStore((state) => areaById(state.twin, physical.area));
-  const near = useTwinStore((state) => physical.near_asset_id ? assetById(state.twin, physical.near_asset_id) : undefined);
-  const placed = useTwinStore((state) => placedAssetId ? assetById(state.twin, placedAssetId) : undefined);
+  const twin = useTwinStore((state) => state.twin);
+  const area = areaById(twin, physical.area);
+  const near = physical.near_asset_id ? assetById(twin, physical.near_asset_id) : undefined;
+  const placed = placedAssetId ? assetById(twin, placedAssetId) : undefined;
   const select = useTwinStore((state) => state.select);
+  const target = placed && !pending ? atRecommendedPlacement(twin, placed, assessment) : null;
+  const atTarget = placed && target && placed.physical.x === target.physical.x && placed.physical.y === target.physical.y
+    && placed.physical.area === target.physical.area && placed.network.level === target.network.level
+    && placed.network.area === target.network.area && placed.network.conduit === target.network.conduit
+    && placed.physical.connections.length === target.physical.connections.length
+    && target.physical.connections.every(({ to, medium }) => placed.physical.connections.some((edge) => edge.to === to && edge.medium === medium));
   return (
     <>
       <PanelHeading icon={MapPin}>Where it goes</PanelHeading>
@@ -28,14 +36,15 @@ export function PlacementAnswer({ assessment, placedAssetId, pending }: {
           {near && <span>near <button type="button" className="pw-panel-link pw-mono" title={near.name} onClick={() => select(near.id)}>{near.id}</button></span>}
         </div>
         {placement.why && <TextPreview text={placement.why} label="Placement rationale" />}
-        <button type="button" className="pw-panel-button pw-panel-move" disabled={!placed || pending}
-          title={!placed ? "Available when the device is on the twin" : pending ? "Requires a completed placement check" : undefined}
+        <button type="button" className="pw-panel-button pw-panel-move" disabled={!target}
+          title={!placed ? "Available when the device is on the twin" : pending ? "Requires a completed placement check"
+            : !target ? "No valid spot for this recommendation" : atTarget ? "Select the device on the twin" : undefined}
           onClick={() => {
             if (!placed) return;
-            moveToRecommended(placed.id);
+            if (!atTarget) moveToRecommended(placed.id);
             select(placed.id);
           }}>
-          <LocateFixed size={14} aria-hidden />Move there<ArrowRight size={14} aria-hidden />
+          {atTarget ? <><Check size={14} aria-hidden />At recommended location</> : <><LocateFixed size={14} aria-hidden />Move there<ArrowRight size={14} aria-hidden /></>}
         </button>
       </div>
     </>

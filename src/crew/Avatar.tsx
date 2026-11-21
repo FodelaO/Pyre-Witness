@@ -13,7 +13,7 @@ export default memo(function Avatar({ member, avatar, canvas }: {
   const { point, status, walking, speech, inspect } = avatar;
   const labelWidth = member.name.length * 7 + 16;
   return (
-    <g className="pw-crew-avatar" data-crew={member.id} data-state={walking ? "walking" : status}
+    <g className="pw-crew-avatar" data-crew={member.id} data-state={walking ? "walking" : status} data-status={status}
       style={{ "--crew-color": `var(${member.colorVar})` } as CSSProperties}>
       {!!inspect && !walking && (
         <g className="pw-crew-leader" aria-hidden="true">

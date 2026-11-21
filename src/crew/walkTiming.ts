@@ -10,13 +10,13 @@ export interface TimedWalk {
   end: { at: number; point: Point };
 }
 
-export function timeWalk(route: Point[], startAt: number, instant = false): TimedWalk {
+export function timeWalk(route: Point[], startAt: number, instant = false, limitMs = MAX_WALK_MS): TimedWalk {
   let length = 0;
   const lengths = route.map((point, index) => {
     if (index) length += distance(route[index - 1], point);
     return length;
   });
-  const duration = instant ? 0 : Math.min(length / UNITS_PER_SECOND * 1000, MAX_WALK_MS);
+  const duration = instant ? 0 : Math.min(length / UNITS_PER_SECOND * 1000, limitMs);
   const waypoints = route.map((point, index) => ({
     point, at: startAt + (length ? lengths[index] / length * duration : 0),
   }));

@@ -58,10 +58,21 @@ export default function useFloorGestures(camera: FloorCamera, placement: FloorPl
     return () => svg.removeEventListener("wheel", wheel);
   }, [svgRef, setCamera, stagePoint, startGesture, zoom]);
 
-  useEffect(() => () => {
-    const store = useTwinStore.getState();
-    if (floorHover.current && floorHover.current === store.hoveredId) store.hover(null);
-  }, []);
+  useEffect(() => {
+    const svg = svgRef.current;
+    const activePointers = pointers.current;
+    return () => {
+      for (const id of activePointers.keys()) {
+        if (svg?.hasPointerCapture(id)) svg.releasePointerCapture(id);
+      }
+      activePointers.clear();
+      gesture.current = null;
+      svg?.removeAttribute("data-interaction");
+      const store = useTwinStore.getState();
+      if (floorHover.current && floorHover.current === store.hoveredId) store.hover(null);
+      floorHover.current = null;
+    };
+  }, [svgRef]);
 
   function hover(assetId: string | null) {
     const store = useTwinStore.getState();
@@ -88,7 +99,8 @@ export default function useFloorGestures(camera: FloorCamera, placement: FloorPl
   }
 
   function onPointerDown(event: PointerEvent<SVGSVGElement>) {
-    if (event.button !== 0) return;
+    // React portal events can bubble here even when their target is outside the SVG.
+    if (event.button !== 0 || !(event.target instanceof SVGElement) || !event.currentTarget.contains(event.target)) return;
     const assetId = targetIdOf(event.target);
     pointers.current.set(event.pointerId, pointOf(event));
     rebase(false, assetId);

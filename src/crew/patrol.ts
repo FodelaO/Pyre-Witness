@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { formatTelemetry } from "@/floor/telemetryFormat";
 import { useRunStore } from "@/pipeline/runStore";
 import { evaluatePlacement } from "@/rules/engine";
 import { areaCenter, isOutdoors } from "@/twin/geometry";
@@ -13,7 +14,7 @@ import { CREW, CREW_ORDER, type CrewId } from "./types";
 
 function telemetryText({ tag, value, unit, lo, hi }: TelemetryPoint): string {
   const inBand = lo !== undefined && hi !== undefined && value >= lo && value <= hi;
-  return `${tag} ${value} ${unit}${inBand ? " · in band" : ""}`.trim();
+  return `${tag} ${formatTelemetry(value, unit)}${inBand ? " · in band" : ""}`;
 }
 
 export function observePatrol(twin: Twin, crew: CrewId, round: number, at: number): CrewCue | undefined {

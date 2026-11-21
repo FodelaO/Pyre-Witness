@@ -2,43 +2,17 @@
 "use client";
 
 import { ChevronDown, CloudFog, FlaskConical, Pause, Play, RotateCcw, ServerCrash, Snowflake, Wifi, type LucideIcon } from "lucide-react";
-import { useEffect } from "react";
-import { startSimRuntime } from "./runtime";
 import { ALL_SCENARIOS, SCENARIOS } from "./scenarios";
 import { useSimStore } from "./simStore";
 import Timeline, { formatSimTime } from "./Timeline";
 import type { ScenarioId } from "./types";
-import "./sim.css";
 
 const icons: Record<ScenarioId, LucideIcon> = {
   cip: FlaskConical, ammonia: CloudFog, ransomware: ServerCrash, wireless: Wifi, chiller: Snowflake,
 };
 const launchers = Object.keys(icons) as ScenarioId[];
 
-let shellMounts = 0;
-const mountListeners = new Set<() => void>();
-
-export function subscribeShellControls(listener: () => void) {
-  mountListeners.add(listener);
-  return () => { mountListeners.delete(listener); };
-}
-
-export function hasShellControls() {
-  return shellMounts > 0;
-}
-
-export default function SimControls({ embedded = false }: { embedded?: boolean } = {}) {
-  useEffect(startSimRuntime, []);
-  useEffect(() => {
-    if (embedded) return;
-    shellMounts++;
-    mountListeners.forEach((listener) => listener());
-    return () => {
-      shellMounts--;
-      mountListeners.forEach((listener) => listener());
-    };
-  }, [embedded]);
-
+export default function SimControls() {
   const active = useSimStore((state) => state.activeScenario);
   const run = useSimStore((state) => state.run);
   const current = useSimStore((state) => state.currentStage);
@@ -60,23 +34,21 @@ export default function SimControls({ embedded = false }: { embedded?: boolean }
   const speedTip = "Switch to " + (speed === 1 ? 4 : 1) + "× speed";
 
   return (
-    <section className="pw-sim-controls" data-mount={embedded ? "floor" : "shell"} aria-label="Deterministic plant simulation">
-      <div className={"pw-tool-rail pw-sim-rail" + (embedded ? " pw-sim-launchers" : "")} role="group" aria-label="Run a simulated scenario">
-        {embedded ? <span className="pw-sim-heading">Simulate</span> : (
-          <details className="pw-sim-extra">
-            <summary aria-label="More simulations" title="More simulations">
-              <span className="pw-sim-heading">Simulate</span><ChevronDown size={12} aria-hidden />
-            </summary>
-            <button type="button" onClick={(event) => {
-              const menu = event.currentTarget.closest("details");
-              if (menu) {
-                menu.open = false;
-                menu.querySelector("summary")?.focus();
-              }
-              start("carbonation");
-            }}>{ALL_SCENARIOS.carbonation.label}</button>
-          </details>
-        )}
+    <section className="pw-sim-controls" data-mount="shell" aria-label="Deterministic plant simulation">
+      <div className="pw-tool-rail pw-sim-rail" role="group" aria-label="Run a simulated scenario">
+        <details className="pw-sim-extra">
+          <summary aria-label="More simulations" title="More simulations">
+            <span className="pw-sim-heading">Simulate</span><ChevronDown size={12} aria-hidden />
+          </summary>
+          <button type="button" onClick={(event) => {
+            const menu = event.currentTarget.closest("details");
+            if (menu) {
+              menu.open = false;
+              menu.querySelector("summary")?.focus();
+            }
+            start("carbonation");
+          }}>{ALL_SCENARIOS.carbonation.label}</button>
+        </details>
         {launchers.map((id) => {
           const { label } = SCENARIOS[id];
           const Icon = icons[id];

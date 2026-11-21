@@ -17,7 +17,6 @@ import { type Box, buildPurdueLayout, type NetworkDrop } from "./layout";
 import { moveAddedDevice } from "./moveDevice";
 import { networkWires } from "./routing";
 import { useDeviceDrag } from "./useDeviceDrag";
-import "./purdue.css";
 
 function scrollToBox(scroller: HTMLDivElement | null, box: Box | undefined, railWidth: number) {
   if (!scroller || !box) return;

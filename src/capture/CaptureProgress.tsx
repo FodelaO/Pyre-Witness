@@ -33,14 +33,18 @@ export default function CaptureProgress() {
   const events = useRunStore((state) => state.events);
   const activeStage = status === "running" ? stage : null;
   const active = activeStage && stageCrew[activeStage];
+  const proposal = events.findLastIndex(({ type }) => type === "reasoning.done" || type === "revision.done");
+  const check = events.findLastIndex(({ type }) => type === "selfcheck.done");
+  const inspectorLabel = `${CREW.inspector.name} · ${CREW.inspector.engine} · ${proposal < 0 ? "as dropped" : "recommendation"}`;
   return (
     <div className="pw-capture-progress" aria-label="Analysis progress">
-      <span className="pw-capture-sr-only" role="status">{activeStage ? captureStageLabel(activeStage) : "Starting analysis"}</span>
+      <span className="pw-capture-sr-only" role="status">{activeStage === "selfcheck" ? inspectorLabel : activeStage ? captureStageLabel(activeStage) : "Starting analysis"}</span>
       {CREW_ORDER.map((id) => {
         const crew = CREW[id];
-        const done = status === "running" && events.some((event) => event.type === finishedEvent[id]);
+        const done = status === "running" && (id === "inspector" ? proposal >= 0 && check > proposal
+          : events.some((event) => event.type === finishedEvent[id]));
         return (
-          <span key={id} title={id === "inspector" ? `${crew.name} · ${crew.engine}` : crew.name}
+          <span key={id} title={id === "inspector" ? inspectorLabel : crew.name}
             data-state={active === id ? "active" : done ? "done" : "waiting"}
             style={{ "--crew-color": `var(${crew.colorVar})` } as CSSProperties}>
             {crew.name}
