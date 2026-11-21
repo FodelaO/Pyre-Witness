@@ -12,16 +12,22 @@ function comparison(delta: PairedDifference) {
     : `${percentPoints(delta.value)} · ${delta.interval.map(percentPoints).join(" to ")} · ${delta.n} paired`;
 }
 
-function Bar({ side, value, ran }: { side: Side; value: Proportion; ran: boolean }) {
+export function MetricBar({ side, value, ran, label = SIDE_NAME[side] }: {
+  side: Side;
+  value: Pick<Proportion, "value" | "n"> & { interval?: readonly number[] | null };
+  ran: boolean;
+  label?: string;
+}) {
   const width = value.value === null ? null : formatPercent(value.value);
-  const range = value.interval?.map(formatPercent);
+  const [low, high] = value.interval ?? [];
+  const range = low != null && high != null ? [formatPercent(low), formatPercent(high)] : null;
   return (
     <div className="pw-proof-bar-row">
-      <span className="pw-proof-bar-label">{SIDE_NAME[side]}</span>
+      <span className="pw-proof-bar-label">{label}</span>
       <div className={`pw-proof-track${side === "system" ? " pw-proof-system-track" : ""}`} aria-hidden="true">
         {width && <span className="pw-proof-fill" style={{ width: `${value.value! * 100}%` }} />}
-        {value.interval && (
-          <span className="pw-proof-whisker" style={{ left: `${value.interval[0] * 100}%`, width: `${(value.interval[1] - value.interval[0]) * 100}%` }} />
+        {low != null && high != null && (
+          <span className="pw-proof-whisker" style={{ left: `${low * 100}%`, width: `${(high - low) * 100}%` }} />
         )}
       </div>
       <div className="pw-proof-bar-value">
@@ -47,7 +53,7 @@ export function MetricBars({ summary, sides, objectAssessment }: { summary: Summ
             <h3>{metricName(key, objectAssessment)}{key === "nonDeviceCyberClaims" && " · lower is better"}</h3>
             <span>{comparison(summary.paired.metrics[key])}</span>
           </div>
-          {SIDES.map((side) => <Bar key={side} side={side} value={summary.sides[side].metrics[key]} ran={sides.includes(side)} />)}
+          {SIDES.map((side) => <MetricBar key={side} side={side} value={summary.sides[side].metrics[key]} ran={sides.includes(side)} />)}
         </div>
       ))}
     </section>

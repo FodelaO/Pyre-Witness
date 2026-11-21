@@ -172,6 +172,25 @@
 .pw-proof-table-scroll td, .pw-proof-table-scroll th { border-top: 1px solid var(--pw-line); padding: 8px 12px; }
 .pw-proof-table-scroll th { font-weight: 570; }
 .pw-proof-table-scroll td { color: var(--pw-text-dim); font-family: var(--font-geist-mono), monospace; white-space: nowrap; }
+.pw-proof-heldout { display: grid; gap: 8px; margin-bottom: 16px; }
+.pw-proof-heldout .pw-proof-section-heading { margin-bottom: 0; }
+.pw-proof-heldout .pw-proof-section-heading a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .75rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pw-proof-heldout-note { color: var(--pw-text-dim); font-size: .75rem; }
+.pw-proof-heldout-bars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 12px 22px;
+}
+.pw-proof-heldout-bars .pw-proof-metric { border: 0; padding: 4px 0 0; }
+.pw-proof-heldout-bars .pw-proof-metric-heading h3 { margin: 0; }
+.pw-proof-heldout .pw-proof-table-scroll th, .pw-proof-heldout .pw-proof-table-scroll td { padding: 4px 8px; }
 .pw-proof-comparison { margin-top: 13px; }
 .pw-proof-comparison p { color: var(--pw-text-dim); font-size: 0.83rem; }
 .pw-proof-before-after { margin-top: 8px; }

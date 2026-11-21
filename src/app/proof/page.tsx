@@ -1,8 +1,10 @@
-/** Shows the archived Run 5 evaluation on the plant's visual grid. */
+/** Shows the held-out test and development results on the plant's visual grid. */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { ArrowLeft, FileChartColumn, ChevronDown } from "lucide-react";
+import heldoutResults from "../../../eval/heldout/results.json";
+import { HeldoutProof } from "@/proof/HeldoutProof";
 import { ProofReport } from "@/proof/ProofReport";
 import { RunFiveProof } from "@/proof/RunFiveProof";
 import { readProofReport } from "@/proof/reportSource";
@@ -27,6 +29,7 @@ export default async function ProofPage() {
         <div className="pw-proof-header">
           <h1>Pyre Witness evaluation</h1>
         </div>
+        <HeldoutProof results={heldoutResults} />
         {proof.state === "ready" ? (
           proof.report.label === "run-5" && proof.report.fairComparison
             ? <RunFiveProof report={proof.report} comparison={proof.report.fairComparison} />

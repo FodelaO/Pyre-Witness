@@ -36,7 +36,7 @@ export function ProofReport({ report }: { report: EvaluationReport }) {
         <time dateTime={report.date}>{date} UTC</time>
         {report.fairComparison ? <span>{report.label === "run-3" ? "Fresh Hydrogen baseline" : "Saved fair Hydrogen baseline"} · {report.fairComparison.concurrency} workers</span>
           : report.baselineFrom && <span>Original baseline receipts</span>}
-        {report.pipelineEvidence && <span>One development set we iterated on. No held-out set yet.</span>}
+        {report.pipelineEvidence && <span>Development-set results</span>}
       </div>
       {report.versionDelta && <VersionDeltaNotice delta={report.versionDelta} />}
       {partial && <p className="pw-proof-partial">

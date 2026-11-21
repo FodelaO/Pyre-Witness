@@ -23,7 +23,7 @@ export async function RunFiveProof({ report, comparison }: { report: EvaluationR
   return (
     <div className="pw-run5">
       <div className="pw-run5-context">
-        <span>Run 5 · {report.dataset.evaluated} real captures · {answered.n} paired answers</span>
+        <span>Development set · Run 5 · {report.dataset.evaluated} real captures · {answered.n} paired answers</span>
         <a href="/proof/sources">Photo credits <ArrowUpRight size={13} aria-hidden /></a>
       </div>
       <section className="pw-run5-hero" aria-label="Run 5 headline results">
@@ -65,7 +65,7 @@ export async function RunFiveProof({ report, comparison }: { report: EvaluationR
           <RunFiveHistory history={history} />
           <aside className="pw-judge-panel pw-run5-limits" aria-labelledby="pw-run5-limits">
             <div className="pw-run5-section-heading"><h2 id="pw-run5-limits">Limits</h2></div>
-            <p>One development set informed all five runs. No held-out set has been evaluated.</p>
+            <p>One development set informed all five runs.</p>
             <p>The single call leads on device category ({wholePercent(categoryAccuracy.baseline.value)} vs {wholePercent(categoryAccuracy.system.value)})
               {baselineLatency !== null && systemLatency !== null && <> and median end-to-end time ({seconds(baselineLatency)} vs {seconds(systemLatency)})</>}.</p>
             <p>Run 5 compares the full system with one saved Gemini 4 Hydrogen call.</p>
