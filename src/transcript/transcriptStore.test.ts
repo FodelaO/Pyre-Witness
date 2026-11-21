@@ -17,6 +17,24 @@ function started(runId: string, timestamp = at, mode: "analyze" | "reassess" = "
 }
 
 describe("transcript session", () => {
+  it("opens the newest capture ahead of newer auxiliary runs and honors explicit run links", () => {
+    const store = createTranscriptStore();
+    const { syncPipeline, recordObservation } = store.getState();
+    syncPipeline({ events: [started("first-capture")], transcript: [] });
+    syncPipeline({ events: [started("reassessed", at + 1, "reassess")], transcript: [] });
+    recordObservation({ id: "tabletop", source: "simulation", label: "Replay",
+      observation: { at: at + 2, crew: "inspector", title: "Simulation started", origin: "simulation" } });
+    const { runs } = store.getState();
+    const html = renderToStaticMarkup(createElement(TranscriptHistory, { runs, target: {} }));
+    expect(html).toContain('value="reassessed" selected');
+    expect(html).toContain('data-run-group="reassessed"');
+    expect(html).not.toContain('data-run-group="tabletop"');
+    expect(html.indexOf('value="reassessed"')).toBeLessThan(html.indexOf('value="first-capture"'));
+    expect(html.indexOf('value="first-capture"')).toBeLessThan(html.indexOf('value="tabletop"'));
+    expect(renderToStaticMarkup(createElement(TranscriptHistory, { runs, target: { runId: "tabletop" } })))
+      .toContain('value="tabletop" selected');
+  });
+
   it("keeps the last twenty analysis and reassess runs across resets", () => {
     const store = createTranscriptStore();
     const { syncPipeline } = store.getState();

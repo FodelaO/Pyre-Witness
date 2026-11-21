@@ -1,7 +1,7 @@
 /** Plans orthogonal walks through room entrances and reserves separate standing slots. */
 import { areaById, distance, type Point } from "@/twin/geometry";
 import type { AreaId, Asset, Twin } from "@/twin/types";
-import { avatarBounds, collides, equipmentBounds, MAX_AVATAR_SCALE } from "./floorLayout";
+import { avatarBounds, collides, equipmentBounds, equipmentTagBounds, MAX_AVATAR_SCALE, roomTitleBands, type Box } from "./floorLayout";
 import { deskScale, isDesk } from "./officeLayout";
 
 export interface WalkStop {
@@ -35,17 +35,23 @@ function same(a: Point, b: Point): boolean {
   return a.x === b.x && a.y === b.y;
 }
 
-function roomSlots(twin: Twin, stop: WalkStop, occupied: Point[]): Point[] {
+function roomSlots(twin: Twin, stop: WalkStop, occupied: Point[], titles: readonly Box[], tags: readonly Box[]): Point[] {
   const floor = inset(twin.plant.building, FLOOR_INSET);
   const area = stop.area ? areaById(twin, stop.area) : undefined;
   const office = areaById(twin, "crew_office");
   const room = area && !area.attrs.outdoor ? inset(area.bounds, FLOOR_INSET) : floor;
   const candidates: Point[] = [];
+  const nearTags: Point[] = [];
+  const nearTargetTag: Point[] = [];
+  const nearTitles: Point[] = [];
+  const seen = new Set<string>();
   const center = within(within(stop.point, room), floor);
   const footprint = (point: Point) => avatarBounds(point,
     office && isDesk(point, twin.plant.building, office) ? deskScale(office) : MAX_AVATAR_SCALE);
   const reservedSlots = occupied.map(footprint);
   const device = stop.clearance && (twin.assets.find((asset) => asset.origin === "added" && distance(asset.physical, stop.point) < 12) ?? stop.device);
+  const target = stop.beside && twin.assets.find((asset) => distance(asset.physical, stop.point) < 12);
+  const targetTags = target ? equipmentTagBounds(target, 1.6, areaById(twin, "washdown")?.bounds) : [];
   const taggedDevice = device ? equipmentBounds(device, 2.3)
     : stop.clearance ? { x: stop.point.x - 85, y: stop.point.y - 38, w: 170, h: 114 } : null;
   const add = (dx: number, dy: number) => {
@@ -54,7 +60,14 @@ function roomSlots(twin: Twin, stop: WalkStop, occupied: Point[]): Point[] {
     const bounds = footprint(point);
     if (reservedSlots.some((neighbor) => collides(bounds, neighbor, 4))
       || taggedDevice && collides(bounds, taggedDevice, 8)) return;
-    if (!candidates.some((candidate) => same(candidate, point))) candidates.push(point);
+    const key = `${point.x}:${point.y}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const exact = !dx && !dy;
+    if (titles.some((title) => collides(bounds, title))) nearTitles.push(point);
+    else if (targetTags.some((tag) => collides(bounds, tag))) nearTargetTag.push(point);
+    else if (!exact && tags.some((tag) => collides(bounds, tag))) nearTags.push(point);
+    else candidates.push(point);
   };
   if (stop.clearance) {
     for (const offset of [148, 192, 236]) {
@@ -73,7 +86,16 @@ function roomSlots(twin: Twin, stop: WalkStop, occupied: Point[]): Point[] {
     add(offset, offset);
     add(-offset, offset);
   }
-  return candidates;
+  if (!candidates.length && area && !area.attrs.outdoor) {
+    // Dense rooms may only have a clear slot between the normal offsets.
+    const acrossRoom = [.15, .5, .85].flatMap((x) => [.25, .5, .8].map((y) => ({
+      x: room.x + x * room.w - center.x, y: room.y + y * room.h - center.y,
+    })));
+    acrossRoom.sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y));
+    for (const { x, y } of acrossRoom) add(x, y);
+  }
+  // The floor mask protects labels when a constrained room has no clear reachable slot.
+  return [...candidates, ...nearTags, ...nearTargetTag, ...nearTitles];
 }
 
 function orthogonalDistance(a: Point, b: Point): number {
@@ -190,11 +212,14 @@ function findRoute(floor: Bounds, rooms: Bounds[], from: Point, to: Point, occup
 export function planWalk(twin: Twin, start: Point, stops: WalkStop[], occupied: Point[] = []): Point[] | undefined {
   const floor = inset(twin.plant.building, FLOOR_INSET);
   const rooms = twin.areas.filter((area) => area.kind !== "context").map((area) => area.bounds);
+  const washdown = areaById(twin, "washdown")?.bounds;
+  const titles = roomTitleBands(twin.areas);
+  const tags = twin.assets.flatMap((asset) => equipmentTagBounds(asset, 1.6, washdown));
   const route = [within(start, floor)];
   for (const stop of stops) {
     let leg: Point[] | undefined;
     const from = route[route.length - 1];
-    for (const slot of roomSlots(twin, stop, occupied)) {
+    for (const slot of roomSlots(twin, stop, occupied, titles, tags)) {
       leg = findRoute(floor, rooms, from, slot, occupied);
       if (leg) break;
     }

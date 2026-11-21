@@ -170,4 +170,17 @@ describe("crew director", () => {
     expect(next({ ...run, type: "selfcheck.started", engine: "rules engine" }))
       .toMatchObject({ cue: { inspection: "recommendation", activity: { crew: "inspector" }, stops: [{ area: "packaging" }] } });
   });
+
+  it("keeps Chief writing through run.completed and delivers a late briefing once", () => {
+    const next = cursor();
+    next({ ...run, type: "run.started", input: { kind: "text", label: "LTE gateway" }, dropPoint: null });
+    expect(next({ ...run, type: "summary.started", model: MODEL_IDS.chief }))
+      .toMatchObject({ cue: { status: "working", activity: { crew: "chief", text: "Writing the briefing…" } } });
+    expect(next({ ...run, type: "run.completed", totalMs: 9000 })).toMatchObject({ kind: "complete", activity: { crew: "chief" } });
+    expect(next({ ...run, at: 9_400, type: "summary.done", model: MODEL_IDS.chief, latencyMs: 4000, text: "Keep it in the DMZ." }))
+      .toMatchObject({ kind: "step", cue: { briefing: true, status: "done",
+        activity: { crew: "chief", text: "Keep it in the DMZ.", engine: MODEL_IDS.chief, latencyMs: 4000 } } });
+    expect(next({ ...run, type: "summary.done", model: MODEL_IDS.chief, latencyMs: 10, text: "Duplicate" })).toBeNull();
+    expect(next({ ...run, runId: "other-run", type: "summary.done", model: MODEL_IDS.chief, latencyMs: 10, text: "Stray" })).toBeNull();
+  });
 });

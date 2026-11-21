@@ -55,7 +55,7 @@ function CrewCard({ id }: { id: CrewId }) {
         <span className="pw-crew-dock-identity"><strong>{name}</strong><ArrowUpRight size={12} strokeWidth={1.7} /></span>
         <span className="pw-crew-dock-engine pw-mono">{engine}</span>
         <span className="pw-crew-dock-row">
-          <span className="pw-crew-dock-message">{message}</span>
+          <span className="pw-crew-dock-message" title={message}>{message}</span>
           {latency && <span className="pw-crew-dock-latency pw-mono">{latency}</span>}
         </span>
       </span>

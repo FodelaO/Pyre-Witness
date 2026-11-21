@@ -28,7 +28,7 @@ Keep the shell's existing `useCrewConnection()` call. `FloorStage` and `SidePane
 
 ## Floor camera
 
-Selecting a dock card dispatches `pw:focus-point` on `window` with `{ x, y, crewId }` in SVG floor units, then opens the transcript filtered to that member. To pan with the current floor camera, add the import and effect below to `src/floor/useFloorCamera.ts`. Place the effect after `setCamera`.
+Selecting a dock card dispatches `pw:focus-point` on `window` with `{ x, y }` in SVG floor units, then opens the transcript filtered to that member. The floor camera listens for this event in `src/floor/useFloorCamera.ts`.
 
 ```tsx
 import { CREW_FOCUS_EVENT, type CrewFocusPoint } from "@/crew/focusCrew";

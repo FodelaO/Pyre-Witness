@@ -311,6 +311,7 @@ function queueOffice(crew: CrewId): void {
 function onEvent(event: PipelineEvent, replay = false): void {
   if (seen.has(event)) return;
   seen.add(event);
+  const lateBriefing = event.type === "summary.done" && !director.active;
   const { state, intent } = directCrew(director, event, readTwin(), useRunStore.getState().placedAssetId);
   director = state;
   if (!intent) return;
@@ -339,6 +340,11 @@ function onEvent(event: PipelineEvent, replay = false): void {
       if (job.appearance?.status === "working") job.appearance.speech = speech;
     }
     if (crewAvatar("scout").status === "done") setAvatar("scout", { speech: null });
+  } else if (lateBriefing && intent.kind === "step") {
+    // Placement already completed. Its remaining floor choreography cannot hold the briefing.
+    updateLive(intent.cue, event);
+    queue.chief.length = 0;
+    startJob("chief", cueJob(intent.cue), now, replay || !!preference?.matches);
   } else if (intent.kind === "step") {
     const { cue } = intent;
     const crew = cue.activity.crew;

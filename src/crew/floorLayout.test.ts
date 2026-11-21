@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { areaById } from "@/twin/geometry";
 import { SEED_TWIN } from "@/twin/seed";
-import { avatarBounds, collides, placeCallout, placeFloorLabel, placePatrolCallout } from "./floorLayout";
+import { avatarBounds, calloutGap, clearLeader, collides, keepLabelInRoom, placeCallout, placeFloorLabel, placePatrolCallout, ROOM_TITLE_DEPTH } from "./floorLayout";
 import { deskPosition, deskScale } from "./officeLayout";
 import { CREW_ORDER } from "./types";
 
@@ -24,6 +24,30 @@ describe("crew callout placement", () => {
     expect(placeCallout(anchor, { w: 180, h: 60 }, viewport, [viewport], 1)).toBeNull();
   });
 
+  it("can move a large card into a clear viewport margin", () => {
+    const viewport = { x: 0, y: 0, w: 900, h: 680 };
+    const labels = [{ x: 0, y: 140, w: 900, h: 540 }];
+    const card = placeCallout({ x: 800, y: 420 }, { w: 360, h: 112 }, viewport, [], 1, true, labels);
+    expect(card).not.toBeNull();
+    expect(card!.y + card!.h).toBeLessThan(140);
+  });
+
+  it("chooses a clear side for the bubble and drops a leader that would cross a label", () => {
+    const viewport = { x: 0, y: 0, w: 900, h: 680 };
+    const anchor = { x: 400, y: 350 };
+    const size = { w: 180, h: 60 };
+    const title = { x: 420, y: 334, w: 14, h: ROOM_TITLE_DEPTH };
+    const right = placeCallout(anchor, size, viewport, [], 1)!;
+    expect(collides(right, title)).toBe(false);
+    expect(clearLeader(anchor, right, [title], 1)).toBe(false);
+    const clear = placeCallout(anchor, size, viewport, [], 1, false, [title])!;
+    expect(clearLeader(anchor, clear, [title], 1)).toBe(true);
+    const aroundAnchor = { x: 390, y: 340, w: 20, h: 20 };
+    const withoutLeader = placeCallout(anchor, size, viewport, [], 1, false, [aroundAnchor])!;
+    expect(collides(withoutLeader, aroundAnchor)).toBe(false);
+    expect(clearLeader(anchor, withoutLeader, [aroundAnchor], 1)).toBe(false);
+  });
+
   it("keeps small patrol callouts above the portrait and clear of nearby equipment", () => {
     const viewport = { x: 0, y: 0, w: 600, h: 500 };
     const anchor = { x: 285, y: 300 };
@@ -40,7 +64,7 @@ describe("crew callout placement", () => {
     const desks = CREW_ORDER.map((id) =>
       avatarBounds(deskPosition(id, SEED_TWIN.plant.building, office), deskScale(office)));
     for (const [index, desk] of desks.entries()) {
-      expect(desk.y).toBeGreaterThan(office.bounds.y + 20);
+      expect(desk.y).toBeGreaterThanOrEqual(office.bounds.y + ROOM_TITLE_DEPTH);
       expect(desk.y + desk.h).toBeLessThan(office.bounds.y + office.bounds.h);
       for (const neighbor of desks.slice(index + 1)) expect(collides(desk, neighbor, 4)).toBe(false);
     }
@@ -63,5 +87,20 @@ describe("crew callout placement", () => {
     expect(collides(proposalLabel, checkLabel)).toBe(false);
     const occupiedNeighborhood = { x: anchor.x - 180, y: anchor.y - 180, w: 360, h: 360 };
     expect(placeFloorLabel(passed, anchor, viewport, [occupiedNeighborhood], 1)).toBeNull();
+  });
+
+  it("drops a room caption that drifted into a neighbouring room and measures stray callouts", () => {
+    // Rects measured in the qa2-crew capture: Corporate office, a caption inside it, one in the parking lot, one in Filler 3.
+    const room = { x: 212, y: 572, w: 243, h: 80 };
+    const inside = { x: 220, y: 626, w: 138, h: 18 };
+    expect(keepLabelInRoom(inside, room, 1)).toBe(inside);
+    const onEdge = { x: 310, y: 650, w: 143, h: 25 };
+    expect(keepLabelInRoom(onEdge, room, 1)).toBe(onEdge);
+    expect(keepLabelInRoom({ x: 256, y: 700, w: 139, h: 18 }, room, 1)).toBeNull();
+    expect(keepLabelInRoom({ x: 382, y: 481, w: 143, h: 26 }, room, 1)).toBeNull();
+    expect(keepLabelInRoom(inside, undefined, 1)).toBe(inside);
+    expect(keepLabelInRoom(null, room, 1)).toBeNull();
+    expect(calloutGap({ x: 334, y: 640 }, { x: 198, y: 72, w: 226, h: 66 })).toBeCloseTo(502);
+    expect(calloutGap({ x: 300, y: 100 }, { x: 198, y: 72, w: 226, h: 66 })).toBe(0);
   });
 });

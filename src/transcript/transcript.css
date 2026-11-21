@@ -40,6 +40,7 @@
 .pw-transcript-title > svg { color: var(--pw-info); flex: none; }
 .pw-transcript-title h2 { font-size: 22px; font-weight: 650; line-height: 1.2; letter-spacing: -.03em; }
 .pw-transcript-title p { margin-top: 4px; color: var(--transcript-muted); font-size: 12px; }
+.pw-transcript-all-runs { margin-inline-start: 8px; color: var(--pw-info); text-decoration: underline; cursor: pointer; }
 .pw-transcript-header-actions { display: flex; gap: 7px; align-items: center; }
 .pw-transcript-action {
   display: inline-flex;
@@ -153,7 +154,7 @@
 .pw-transcript-run-status[data-status="interrupted"] { color: var(--pw-attention); }
 
 .pw-transcript-step {
-  --transcript-accent: #a0afbf;
+  --transcript-accent: var(--transcript-muted);
   position: relative;
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);

@@ -1,15 +1,15 @@
 /** Composes the event-backed crew, work cues, and callouts in the floor coordinate system. */
 "use client";
 
-import { useId, type CSSProperties } from "react";
+import { useId, useMemo, type CSSProperties } from "react";
 import { useRunStore } from "@/pipeline/runStore";
-import { areaById, distance } from "@/twin/geometry";
+import { areaAt, areaById, distance } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import Avatar from "./Avatar";
 import Bubble from "./Bubble";
 import CrewOffice from "./CrewOffice";
 import { crewAvatar, useCrewStore } from "./crewStore";
-import { avatarBounds, avatarScale, equipmentBounds, placeCallout, placeFloorLabel, placePatrolCallout, type Box } from "./floorLayout";
+import { avatarBounds, avatarScale, calloutGap, clearLeader, equipmentBounds, keepLabelInRoom, placeCallout, placeFloorLabel, placePatrolCallout, roomTitleBands, type Box } from "./floorLayout";
 import { deskPosition, deskScale, isDesk } from "./officeLayout";
 import { useIdlePatrol } from "./patrol";
 import { CapturePreview, EvidenceCard, useScoutLanding } from "./ScoutEvidence";
@@ -34,7 +34,7 @@ export default function CrewLayer() {
   const dismiss = useCrewStore((state) => state.dismissBriefing);
   const thumbnail = useRunStore((state) => state.captureThumbnail);
   const placedAssetId = useRunStore((state) => state.placedAssetId);
-  const { ref, viewport, card, inverse } = useCrewViewport(plant.canvas, selectedId);
+  const { ref, viewport, card, chrome, labels, inverse } = useCrewViewport(plant.canvas, selectedId);
   const scale = inverse;
   const picture = visuals.scout?.effect.kind === "capture" ? thumbnail : null;
   const evidence = visuals.scout?.effect.kind === "evidence" ? visuals.scout.effect : undefined;
@@ -42,7 +42,11 @@ export default function CrewLayer() {
 
   const portraitScale = avatarScale(inverse);
   const seatedScale = office ? avatarScale(inverse, deskScale(office)) : portraitScale;
-  const occupied: Box[] = card ? [card] : [];
+  const occupied: Box[] = card ? [card, ...chrome] : [...chrome];
+  const protectedLabels = useMemo(() => [...roomTitleBands(twin.areas), ...labels], [twin.areas, labels]);
+  const clearanceMask = `${idPrefix}-crew-label-clearance`;
+  const callout = (anchor: { x: number; y: number }, size: { w: number; h: number }, preferLeft = false) =>
+    placeCallout(anchor, size, viewport, occupied, scale, preferLeft, protectedLabels);
   const added = placedAssetId ? twin.assets.find(({ id }) => id === placedAssetId) : undefined;
   if (added) occupied.push(equipmentBounds(added, scale));
   const deskAway = new Set<CrewId>();
@@ -67,34 +71,44 @@ export default function CrewLayer() {
     occupied.push({ x: x + 36 * scout.size, y: y - 107 * scout.size, w: 91 * scout.size, h: 108 * scout.size });
   }
   const evidenceBox = evidence?.chips.length && phase !== "idle" && chief.avatar.speech?.kind !== "briefing" && !scout.avatar.speech?.attention
-    ? placeCallout(scout.end, { w: 278 * scale, h: Math.min(197, 39 + evidence.chips.length * 24) * scale }, viewport, occupied, scale)
+    ? callout(scout.end, { w: 278 * scale, h: Math.min(197, 39 + evidence.chips.length * 24) * scale })
     : null;
   if (evidenceBox) occupied.push(evidenceBox);
 
   const proposal = visuals.architect?.effect;
   const area = proposal?.kind === "proposal" ? areaById(twin, proposal.area) : undefined;
-  const proposalLabel = proposal?.kind === "proposal" ? placeFloorLabel({
+  const proposalLabel = proposal?.kind === "proposal" ? keepLabelInRoom(placeFloorLabel({
     x: area ? area.bounds.x + 12 : proposal.to.x,
     y: (area ? area.bounds.y + area.bounds.h : proposal.to.y) - 25 * scale,
     w: 158 * scale, h: 18 * scale,
-  }, proposal.to, viewport, occupied, scale) : null;
+  }, proposal.to, viewport, [...occupied, ...protectedLabels], scale), area?.bounds, scale) : null;
   if (proposalLabel) occupied.push(proposalLabel);
   const check = visuals.inspector?.effect;
-  const checkLabel = check?.kind === "check" && check.passed ? placeFloorLabel({
+  const checkLabel = check?.kind === "check" && check.passed ? keepLabelInRoom(placeFloorLabel({
     x: check.at.x + 18 * scale, y: check.at.y - 13 * scale, w: 144 * scale, h: 26 * scale,
-  }, check.at, viewport, occupied, scale) : null;
+  }, check.at, viewport, [...occupied, ...protectedLabels], scale), areaAt(twin, check.at.x, check.at.y)?.bounds, scale) : null;
   if (checkLabel) occupied.push(checkLabel);
 
   return (
     <g ref={ref} className="pw-crew-layer" aria-label="AI crew" pointerEvents="none">
-      <CrewOffice room={office} building={plant.building} away={deskAway} scale={seatedScale} idPrefix={idPrefix} />
-      {proposal && <ArchitectureOverlay effect={proposal} twin={twin} marker={`${idPrefix}-recommendation`} label={proposalLabel} scale={scale} />}
-      {visuals.inspector && <InspectionOverlay key={visuals.inspector.at} displayed={visuals.inspector} scale={scale} label={checkLabel} />}
-      {handoffs.map((handoff) => <HandoffPulse key={handoff.id} handoff={handoff} />)}
-      {crew.map(({ id, avatar, size, desk }) => (
-        <Avatar key={id} member={CREW[id]} avatar={avatar} idPrefix={idPrefix} scale={size} desk={desk}
-          preview={id === "scout" && picture ? <CapturePreview thumbnail={picture} /> : undefined} />
-      ))}
+      <defs>
+        <mask id={clearanceMask} maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse"
+          x={viewport.x} y={viewport.y} width={viewport.w} height={viewport.h}>
+          <rect x={viewport.x} y={viewport.y} width={viewport.w} height={viewport.h} fill="white" />
+          {protectedLabels.map(({ x, y, w, h }, index) => <rect key={index} x={x} y={y} width={w} height={h} fill="black" />)}
+        </mask>
+      </defs>
+      {/* Walks may cross a room threshold. Keep the floor labels readable during the crossing. */}
+      <g mask={`url(#${clearanceMask})`}>
+        <CrewOffice room={office} building={plant.building} away={deskAway} scale={seatedScale} idPrefix={idPrefix} />
+        {proposal && <ArchitectureOverlay effect={proposal} twin={twin} marker={`${idPrefix}-recommendation`} label={proposalLabel} scale={scale} />}
+        {visuals.inspector && <InspectionOverlay key={visuals.inspector.at} displayed={visuals.inspector} scale={scale} label={checkLabel} />}
+        {handoffs.map((handoff) => <HandoffPulse key={handoff.id} handoff={handoff} />)}
+        {crew.map(({ id, avatar, size, desk }) => (
+          <Avatar key={id} member={CREW[id]} avatar={avatar} idPrefix={idPrefix} scale={size} desk={desk}
+            preview={id === "scout" && picture ? <CapturePreview thumbnail={picture} /> : undefined} />
+        ))}
+      </g>
       {evidence && evidenceBox && <g style={palette("scout")}><EvidenceCard key={visuals.scout?.at} effect={evidence} box={evidenceBox} scale={scale} /></g>}
       {BUBBLE_ORDER.map((id) => {
         const { avatar, end, size } = crew.find((member) => member.id === id)!;
@@ -106,11 +120,16 @@ export default function CrewLayer() {
         const w = Math.min(maxWidth * scale, viewport.w - 26 * scale);
         const h = (patrol ? 31 : pinned ? 137 : 67) * scale;
         const box = patrol
-          ? placePatrolCallout(end, { w, h }, viewport, occupied, twin.assets.map((asset) => equipmentBounds(asset, scale)), scale, size)
-          : placeCallout(end, { w, h }, viewport, occupied, scale, pinned || !!picture && id === "scout");
+          ? placePatrolCallout(end, { w, h }, viewport, occupied, twin.assets.map((asset) => equipmentBounds(asset, scale)), scale, size, protectedLabels)
+          : callout(end, { w, h }, pinned || !!picture && id === "scout")
+            ?? (pinned ? callout(end, { w: Math.min(w, 360 * scale), h: 112 * scale }, true) : null);
         if (!box) return null;
+        const leader = clearLeader(end, box, protectedLabels, scale);
+        // A step card at a far edge with no leader reads as a stray notice: the dock card already carries that status.
+        if (!leader && !pinned && !patrol && calloutGap(end, box) > 220 * scale) return null;
         occupied.push(box);
-        return <g key={id} style={palette(id)}><Bubble anchor={end} box={box} scale={scale} avatar={avatar} member={CREW[id]} dismiss={dismiss} /></g>;
+        return <g key={id} style={palette(id)}><Bubble anchor={end} box={box} scale={scale} avatar={avatar} member={CREW[id]} dismiss={dismiss}
+          showLeader={leader} /></g>;
       })}
     </g>
   );

@@ -142,7 +142,7 @@
 .pw-crew-dock-card:is([data-active], [data-state="walking"]) .pw-crew-dock-state { color: var(--crew-color); }
 .pw-crew-dock-card[data-state="done"] .pw-crew-dock-state { color: var(--pw-ok); }
 .pw-crew-dock-card[data-state="error"] .pw-crew-dock-state { color: var(--pw-alarm); }
-.pw-crew-dock-readout { display: grid; min-inline-size: 0; gap: 1px; }
+.pw-crew-dock-readout { display: grid; min-inline-size: 0; grid-template-columns: minmax(0, 1fr); gap: 1px; }
 
 .pw-crew-dock-identity {
   display: flex;
@@ -159,7 +159,8 @@
 .pw-crew-dock-engine { color: var(--pw-text-dim); font-size: 9px; line-height: 12px; }
 
 .pw-crew-dock-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: baseline;
   gap: 4px;
   font-size: 10px;
@@ -172,9 +173,9 @@
   white-space: nowrap;
 }
 
-.pw-crew-dock-message { flex: 1; }
+.pw-crew-dock-row > * { min-inline-size: 0; }
 .pw-crew-dock-card[data-state="idle"] .pw-crew-dock-message { color: var(--pw-text-dim); }
-.pw-crew-dock-latency { flex: none; color: var(--pw-text-dim); font-size: 9px; }
+.pw-crew-dock-latency { color: var(--pw-text-dim); font-size: 9px; }
 .pw-crew-dock-card[data-attention] :is(.pw-crew-dock-message, .pw-crew-dock-state) { color: var(--pw-attention); }
 .pw-crew-dock-card[data-attention] .pw-crew-dock-message { white-space: normal; }
 

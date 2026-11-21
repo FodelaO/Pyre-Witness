@@ -6,7 +6,7 @@ import { ChevronDown, ClipboardList, Download, Search, X } from "lucide-react";
 import { CREW_ORDER } from "@/crew/types";
 import { connectTranscriptAdapters } from "./featureAdapters";
 import { downloadTranscript } from "./transcriptExport";
-import { useTranscriptStore, type OpenTranscript, type TranscriptCrew, type TranscriptRun } from "./transcriptStore";
+import { isPipelineRun, useTranscriptStore, type OpenTranscript, type TranscriptCrew, type TranscriptRun } from "./transcriptStore";
 import { activityFallback, CREW_LABEL, includesSearch, locateStep, SOURCE_LABEL, timeline, timestamp } from "./transcriptSteps";
 import TranscriptStepCard from "./TranscriptStepCard";
 import "./transcript.css";
@@ -45,14 +45,19 @@ function keyboardRows(event: KeyboardEvent<HTMLDivElement>) {
 }
 
 export function TranscriptHistory({ runs, target }: { runs: readonly TranscriptRun[]; target: OpenTranscript }) {
-  const selectedRun = runs.some((run) => run.id === target.runId) ? target.runId : undefined;
-  const [runId, setRunId] = useState(selectedRun ?? "");
+  const orderedRuns = useMemo(() => [...runs].sort((a, b) =>
+    Number(isPipelineRun(b)) - Number(isPipelineRun(a)) || b.startedAt - a.startedAt), [runs]);
+  const [runId, setRunId] = useState(() => {
+    const requested = target.runId ?? target.activity?.runId;
+    if (requested || target.activity) return orderedRuns.find((run) => run.id === requested)?.id ?? "";
+    return orderedRuns.find(isPipelineRun)?.id ?? "";
+  });
   const [crewId, setCrewId] = useState<TranscriptCrew | "">(target.crewId ?? "");
   const [search, setSearch] = useState("");
   const scroll = useRef<HTMLDivElement>(null);
   const positioned = useRef(false);
   const downloadMenu = useRef<HTMLDetailsElement>(null);
-  const indexedRuns = useMemo(() => runs.map((run) => ({ run, steps: timeline(run) })), [runs]);
+  const indexedRuns = useMemo(() => orderedRuns.map((run) => ({ run, steps: timeline(run) })), [orderedRuns]);
   const focusedStep = useMemo(() => locateStep(indexedRuns.filter(({ run }) => !target.runId || run.id === target.runId)
     .flatMap(({ steps }) => steps), target), [indexedRuns, target]);
   const query = search.trim().toLocaleLowerCase();
@@ -70,14 +75,11 @@ export function TranscriptHistory({ runs, target }: { runs: readonly TranscriptR
     if (!container || positioned.current) return;
     const key = focusedStep?.id ?? linkedActivity?.id;
     const row = key && [...container.querySelectorAll<HTMLElement>("[data-step-id]")].find((item) => item.dataset.stepId === key);
-    const latestRun = container.querySelector<HTMLElement>("[data-run-group]:last-child");
     if (row) {
       row.focus({ preventScroll: true });
       row.scrollIntoView({ block: "center" });
-    } else if (latestRun) {
-      latestRun.scrollIntoView({ block: "start" });
+      positioned.current = true;
     }
-    positioned.current = Boolean(row || latestRun);
   }, [focusedStep, linkedActivity]);
 
   return (
@@ -86,7 +88,10 @@ export function TranscriptHistory({ runs, target }: { runs: readonly TranscriptR
         <div className="pw-transcript-title">
           <ClipboardList size={22} aria-hidden="true" />
           <div><h2 id="pw-transcript-title">Run transcript</h2>
-            <p>{runs.length} {runs.length === 1 ? "run" : "runs"} · {visibleCount} {visibleCount === 1 ? "step" : "steps"} shown</p>
+            <p>{runs.length} {runs.length === 1 ? "run" : "runs"} · {visibleCount} {visibleCount === 1 ? "step" : "steps"} shown
+              {runId && <button type="button" className="pw-transcript-all-runs"
+                onClick={() => { setRunId(""); scroll.current?.scrollTo({ top: 0 }); }}>All runs</button>}
+            </p>
           </div>
         </div>
         <div className="pw-transcript-header-actions">
@@ -118,7 +123,7 @@ export function TranscriptHistory({ runs, target }: { runs: readonly TranscriptR
           <span>Run</span>
           <select value={runId} onChange={(event) => { setRunId(event.target.value); scroll.current?.scrollTo({ top: 0 }); }}>
             <option value="">All runs</option>
-            {[...runs].reverse().map((run) => <option key={run.id} value={run.id}>
+            {orderedRuns.map((run) => <option key={run.id} value={run.id}>
               {SOURCE_LABEL[run.source]} · {run.label} · {timestamp(run.startedAt).slice(0, 8)}
             </option>)}
           </select>

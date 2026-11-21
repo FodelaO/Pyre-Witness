@@ -149,6 +149,19 @@ describe("crew bus connection", () => {
     expect(feed()).toContainEqual(expect.objectContaining({ eventType: "summary.done", text: "Use the utility header." }));
   });
 
+  it("pins a late briefing even while Inspector's room visit is still queued", () => {
+    ingest(start());
+    ingest({ ...run, type: "selfcheck.started", phase: "recommendation", engine: "rules engine" });
+    ingest({ ...run, type: "selfcheck.done", phase: "recommendation", latencyMs: 4,
+      result: { passed: true, findings: [], paths: [], disagreements: [], revised: false } });
+    ingest({ ...run, type: "summary.started", model: MODEL_IDS.chief });
+    ingest({ ...run, type: "run.completed", totalMs: 20 });
+    expect(crewLive("chief").message).toBe("Writing the briefing…");
+    expect(crewAvatar("inspector").walking).toBe(true);
+    ingest({ ...run, type: "summary.done", model: MODEL_IDS.chief, latencyMs: 20, text: "Install in utilities." });
+    expect(crewAvatar("chief").speech).toEqual({ kind: "briefing", text: "Install in utilities." });
+  });
+
   it("keeps Scout at the desk during reassessment and moves the checking crew", () => {
     const initial = useCrewStore.getState().avatars;
     const dropPoint = { x: 546, y: 234, area: "syrup_room" } as const;

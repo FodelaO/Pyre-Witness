@@ -4,7 +4,7 @@ import { areaById, areaCenter, containsPoint, distance, type Point } from "@/twi
 import { SEED_TWIN } from "@/twin/seed";
 import { DEFAULT_DROP } from "@/twin/dropPoint";
 import type { Asset } from "@/twin/types";
-import { avatarBounds, collides, equipmentBounds, MAX_AVATAR_SCALE } from "./floorLayout";
+import { avatarBounds, collides, equipmentBounds, equipmentTagBounds, MAX_AVATAR_SCALE, roomTitleBands } from "./floorLayout";
 import { BADGE_SEPARATION, planWalk } from "./walk";
 import { timeWalk, walkPosition, walksConflict } from "./walkTiming";
 
@@ -99,5 +99,17 @@ describe("crew walking", () => {
     const vertical = [{ x: 100, y: -100 }, { x: 100, y: 100 }];
     expect(walksConflict(horizontal, timeWalk(vertical, 0), 0)).toBe(true);
     expect(walksConflict(horizontal, timeWalk(vertical, 2000), 0)).toBe(false);
+  });
+
+  it("keeps a crew badge off room titles and equipment tags near a room's top edge", () => {
+    const tank = twin.assets.find(({ process }) => process?.telemetry?.some(({ tag }) => tag === "LT-301"))!;
+    const { x, y, area } = tank.physical;
+    const route = planWalk(twin, areaCenter(office), [{ point: { x, y }, area, beside: true }])!;
+    const end = route.at(-1)!;
+    const box = avatarBounds(end, MAX_AVATAR_SCALE);
+    const washdown = areaById(twin, "washdown")?.bounds;
+    const labels = [...roomTitleBands(twin.areas), ...equipmentTagBounds(tank, 1.6, washdown)];
+    expect(labels.some((label) => collides(box, label))).toBe(false);
+    expect(distance(end, tank.physical)).toBeLessThan(260);
   });
 });
