@@ -47,3 +47,8 @@ One Gemini button in the AI crew dock opens the existing ten-service board besid
 | 3D | [Board](shots/office-health-after-board-light-3d-1440x900.png) | [Board](shots/office-health-after-board-light-3d-1280x720.png) | [Board](shots/office-health-after-board-dark-3d-1440x900.png) | [Board](shots/office-health-after-board-dark-3d-1280x720.png) |
 
 The cached browser's 3D screenshots contain a transparent patch outside the dock and board when the popover is open. The 2D screenshots show the full viewport.
+
+### Review correction
+
+- Below 760 px the dock is a full-width strip, but the compact rule still stacked the header into a column. At 390 px that pushed the transcript button under the stage's escalation chip, and at 700 px it made the dock taller. `services.css` now keeps the header on one row below 760 px. The 54 px rail between 760 and 1366 px keeps its column.
+- Installed Chrome rechecked the dock and board in light and dark, 2D and 3D, at 1440×900 and 1280×720. It showed one Gemini control, four dots, ten board rows, and Escape returning focus to Gemini. It did not show the transparent patch, so the patch comes from the cached headless browser, not the app. A fixture snapshot with no probes showed core failure red, auxiliary failure amber, and stale as a ring in both themes. Shots are in `.agents/qa/opus-correct/crew-office/`.

@@ -128,6 +128,11 @@
   .pw-health-crew-dot[data-portrait]:is([data-status="stale"], [data-status="checking"]) { background: var(--pw-floor); }
 }
 
+/* Below 760 px the dock is a full-width strip: one header row keeps it short and the transcript button clear of the stage chips. */
+@media (width < 760px) {
+  .pw-crew-stage-dock .pw-crew-dock-header:has(> .pw-health-chip) { flex-direction: row; }
+}
+
 @media (max-width: 440px) {
   .pw-health-service { padding-inline: 9px; }
   .pw-health-reading { min-width: 68px; }
