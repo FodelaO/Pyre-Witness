@@ -185,6 +185,6 @@ export function completeAssessmentRisks(assessment: Assessment, profile: DeviceP
   for (const risk of notable) {
     if (!risks.some(({ id }) => id === risk.id)) risks.push(risk);
   }
-  const final = risks.slice(0, MAX_VISIBLE_RISKS).sort((a, b) => b.severity - a.severity || b.likelihood - a.likelihood);
+  const final = risks.sort((a, b) => b.severity - a.severity || b.likelihood - a.likelihood).slice(0, MAX_VISIBLE_RISKS);
   return { ...assessment, risks: final };
 }

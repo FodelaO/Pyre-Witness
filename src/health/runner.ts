@@ -1,98 +1,136 @@
-/** Keeps a process-local snapshot, single-flight refreshes, and bounded check history. */
-import { HEALTH_CHECKS, type HealthCheck } from "./checks";
-import { healthErrorDetail } from "./probe";
-import type { HealthResult, HealthRun, HealthSnapshot, ServiceHealth } from "./services";
+/** Schedules bounded probes and retains confirmed health across inconclusive attempts. */
+import { setTimeout as delay } from "node:timers/promises";
+import type { HealthCheck } from "./checks";
+import {
+  HEALTH_REFRESH_MS, SERVICES, initialServiceHealth,
+  type HealthResult, type HealthRun, type HealthSnapshot, type ServiceHealth,
+} from "./services";
 
-const STALE_MS = 60_000;
+const CONCURRENCY = 3;
 const HISTORY_LIMIT = 20;
+const RETRY_MS = 750;
 
 interface RunInProgress {
   done: Promise<HealthSnapshot>;
-  onDemand?: Promise<void[]>;
+  all: boolean;
 }
 
-export function createHealthRunner(checks: readonly HealthCheck[], now = Date.now) {
-  const results = new Map<string, HealthResult>();
-  const eligibleAt = new Map<string, number>();
-  const skipped = new Map<string, NonNullable<ServiceHealth["skipped"]>>();
+function recordAttempt(row: ServiceHealth, attempt: HealthResult): ServiceHealth {
+  if (attempt.ok) {
+    return { ...row, status: "ok", last: attempt, lastAttempt: attempt, lastGoodAt: attempt.checkedAt, failingSince: undefined };
+  }
+  const failure = attempt.failure;
+  const confirmed = (failure === "http" || failure === "timeout")
+    && row.lastAttempt?.failure === failure;
+  return {
+    ...row, status: confirmed ? "failing" : "stale",
+    last: confirmed ? attempt : row.last, lastAttempt: attempt,
+    failingSince: confirmed ? row.failingSince ?? attempt.checkedAt : row.failingSince,
+  };
+}
+
+export function createHealthRunner(checks: readonly HealthCheck[], now = Date.now, backoff = () => delay(RETRY_MS)) {
+  const rows = new Map(checks.map(({ service }) => [service.id, initialServiceHealth(service)]));
   const history: HealthRun[] = [];
   const periodic = checks.filter(({ service }) => !service.onDemand);
   const onDemand = checks.filter(({ service }) => service.onDemand);
+  let lastStartedAt: number | null = null;
   let lastCompletedAt: number | null = null;
   let active: RunInProgress | undefined;
-
-  function services(): ServiceHealth[] {
-    return checks.map(({ service }) => {
-      const last = results.get(service.id) ?? null;
-      const skip = skipped.get(service.id) ?? null;
-      const next = eligibleAt.get(service.id);
-      return {
-        service, last, skipped: skip,
-        status: skip ? "skipped" : last === null ? "unknown" : last.ok ? "ok" : "failing",
-        nextEligibleAt: next === undefined ? null : new Date(next).toISOString(),
-      };
-    });
-  }
 
   function getHealth(): HealthSnapshot {
     return {
       checkedAt: lastCompletedAt === null ? null : new Date(lastCompletedAt).toISOString(),
       refreshing: active !== undefined,
-      services: services(),
+      services: Array.from(rows.values()),
       history: history.slice(),
     };
   }
 
-  function needsRefresh(): boolean {
-    return !active && (lastCompletedAt === null || now() - lastCompletedAt >= STALE_MS);
+  function canStart() {
+    return lastStartedAt === null || now() - lastStartedAt >= HEALTH_REFRESH_MS;
   }
 
-  async function run({ run: probe, service }: HealthCheck) {
+  function needsRefresh(): boolean {
+    return !active && canStart() && (lastCompletedAt === null || now() - lastCompletedAt >= HEALTH_REFRESH_MS);
+  }
+
+  async function attempt({ run: probe, service }: HealthCheck): Promise<HealthResult> {
     const start = now();
-    if (start < (eligibleAt.get(service.id) ?? -Infinity)) {
-      skipped.set(service.id, "cooldown");
-      return;
-    }
-    if (service.minIntervalMs) eligibleAt.set(service.id, start + service.minIntervalMs);
-    skipped.delete(service.id);
     try {
-      results.set(service.id, await probe());
+      return await probe();
     } catch (error) {
       // A broken check must not discard the other services' results.
-      results.set(service.id, {
-        ...service, ok: false, latencyMs: Math.max(0, now() - start),
+      const { classifyProbeFailure, healthErrorDetail } = await import("./probe");
+      return {
+        ...service, ok: false, failure: classifyProbeFailure(error), latencyMs: Math.max(0, now() - start),
         checkedAt: new Date(now()).toISOString(), detail: healthErrorDetail(error),
-      });
+      };
     }
+  }
+
+  async function run(check: HealthCheck) {
+    const { service } = check;
+    const start = now();
+    let row = rows.get(service.id)!;
+    if (row.nextEligibleAt && start < Date.parse(row.nextEligibleAt)) return;
+    if (service.minIntervalMs) {
+      row = { ...row, nextEligibleAt: new Date(start + service.minIntervalMs).toISOString() };
+    }
+    if (row.status === "on-demand") row = { ...row, status: "checking" };
+    rows.set(service.id, row);
+    const first = await attempt(check);
+    row = recordAttempt(row, first);
+    rows.set(service.id, row);
+    if (!service.costly && row.status === "stale" && first.failure && first.failure !== "other") {
+      await backoff();
+      rows.set(service.id, recordAttempt(row, await attempt(check)));
+    }
+  }
+
+  async function scan(selected: readonly HealthCheck[]) {
+    let next = 0;
+    async function worker() {
+      while (next < selected.length) await run(selected[next++]);
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, selected.length) }, worker));
   }
 
   function refreshHealth(all = false): Promise<HealthSnapshot> {
-    if (!active) {
-      const startedAt = new Date(now()).toISOString();
-      const runInProgress: RunInProgress = {
-        done: Promise.resolve().then(async () => {
-          if (!runInProgress.onDemand) {
-            for (const { service } of onDemand) skipped.set(service.id, "on-demand");
-          }
-          await Promise.all(periodic.map(run));
-          if (runInProgress.onDemand) await runInProgress.onDemand;
+    if (active) {
+      active.all ||= all;
+      return active.done;
+    }
+    if (!canStart()) return Promise.resolve(getHealth());
+    lastStartedAt = now();
+    const startedAt = new Date(lastStartedAt).toISOString();
+    const pass: RunInProgress = {
+      all,
+      done: Promise.resolve().then(async () => {
+        try {
+          await scan(periodic);
+          if (pass.all) await scan(onDemand);
           lastCompletedAt = now();
           history.push({ startedAt, checkedAt: new Date(lastCompletedAt).toISOString(),
-            all: !!runInProgress.onDemand, services: services() });
+            all: pass.all, services: Array.from(rows.values()) });
           if (history.length > HISTORY_LIMIT) history.shift();
+        } finally {
           active = undefined;
-          return getHealth();
-        }),
-      };
-      active = runInProgress;
-    }
-    // An explicit all request can extend a periodic pass already in flight.
-    if (all && !active.onDemand) active.onDemand = Promise.all(onDemand.map(run));
-    return active.done;
+        }
+        return getHealth();
+      }),
+    };
+    active = pass;
+    return pass.done;
   }
 
   return { getHealth, needsRefresh, refreshHealth };
 }
 
-const shared = globalThis as typeof globalThis & { pyreWitnessHealth?: ReturnType<typeof createHealthRunner> };
-export const { getHealth, needsRefresh, refreshHealth } = shared.pyreWitnessHealth ??= createHealthRunner(HEALTH_CHECKS);
+// The cache can answer a cold GET before loading the Gemini SDK and probe implementations.
+const checks: HealthCheck[] = SERVICES.map((service, index) => ({
+  service,
+  run: async () => (await import("./checks")).HEALTH_CHECKS[index].run(),
+}));
+const shared = globalThis as typeof globalThis & { pyreWitnessHealthV3?: ReturnType<typeof createHealthRunner> };
+export const { getHealth, needsRefresh, refreshHealth } = shared.pyreWitnessHealthV3 ??= createHealthRunner(checks);

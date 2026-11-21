@@ -30,7 +30,16 @@
 
 .pw-health-dot[data-status="ok"] { background: var(--pw-ok); }
 .pw-health-dot[data-status="failing"] { background: var(--pw-alarm); }
-.pw-health-dot[data-status="skipped"] { background: transparent; border: 1px solid var(--pw-text-dim); }
+.pw-health-dot[data-status="degraded"] { background: var(--pw-attention); }
+.pw-health-chip[data-status="failing"] { color: var(--pw-alarm); }
+.pw-health-chip[data-status="degraded"] { color: var(--pw-attention); }
+.pw-health-dot[data-status="on-demand"], .pw-health-dot[data-status="stale"], .pw-health-dot[data-status="checking"] {
+  background: transparent; border: 1px solid var(--pw-text-dim);
+}
+.pw-health-dot[data-status="checking"] { border-right-color: transparent; animation: pw-health-spin .9s linear infinite; }
+@keyframes pw-health-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pw-health-dot[data-status="checking"] { animation: none; } }
+.pw-health-chip-age, .pw-health-snapshot-age { color: var(--pw-text-dim); font-size: 10px; }
 
 .pw-health-popover {
   position: fixed;
@@ -84,14 +93,18 @@
 .pw-health-reading { min-width: 75px; color: var(--pw-text-dim); text-align: right; font-size: 10px; font-variant-numeric: tabular-nums; }
 .pw-health-reading > * { display: block; }
 .pw-health-reading > [data-status="ok"] { color: var(--pw-ok); }
-.pw-health-reading > [data-status="failing"], .pw-health-failure, .pw-health-request-error { color: #ff9baa; }
-.pw-health-failure { grid-column: 2 / -1; margin: 0; overflow-wrap: anywhere; }
-.pw-health-request-error { margin: 8px 12px; }
+.pw-health-reading > [data-status="failing"], .pw-health-attempt[data-status="failing"] { color: #ff9baa; }
+.pw-health-reading > [data-status="degraded"], .pw-health-attempt[data-status="degraded"] { color: var(--pw-attention); }
+.pw-health-attempt { grid-column: 2 / -1; margin: 0; overflow-wrap: anywhere; color: var(--pw-text-dim); }
+.pw-health-request-error { margin: 8px 12px; color: var(--pw-text-dim); }
+
+@media (max-width: 560px) { .pw-health-chip-age { display: none; } }
 
 @media (max-width: 440px) {
   .pw-top:has(.pw-health-chip) { column-gap: 4px; }
   .pw-top-actions:has(> .pw-health-chip) { gap: 4px; }
   .pw-health-chip { gap: 4px; padding-inline: 5px; font-size: 10px; }
+  .pw-health-chip[data-status="checking"] .pw-health-chip-value { display: flex; flex-direction: column; line-height: 1.05; }
   .pw-health-service { padding-inline: 9px; }
   .pw-health-reading { min-width: 68px; }
 }

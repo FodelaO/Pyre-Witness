@@ -1,6 +1,6 @@
 /** Bounds each probe and sanitizes provider details before they leave the server. */
 import { providerDiagnostic } from "@/gemini/transport";
-import type { HealthResult, HealthService } from "./services";
+import { HEALTH_PROBE_TIMEOUT_MS, type HealthResult, type HealthService } from "./services";
 
 export type Probe = (signal: AbortSignal) => Promise<string>;
 
@@ -14,7 +14,15 @@ export function healthErrorDetail(error: unknown): string {
     .slice(0, 420);
 }
 
-export async function runCheck(service: HealthService, probe: Probe, timeoutMs = 8_000): Promise<HealthResult> {
+export function classifyProbeFailure(error: unknown): NonNullable<HealthResult["failure"]> {
+  const { status, name, code } = providerDiagnostic(error);
+  if (status !== undefined && status >= 400 && status < 600) return "http";
+  if (/TimeoutError$/i.test(name) || /(?:ETIMEDOUT|_TIMEOUT)$/.test(code ?? "")) return "timeout";
+  if (/(Abort|Aborted|Cancellation)Error$/i.test(name) || code === "ABORT_ERR") return "aborted";
+  return "other";
+}
+
+export async function runCheck(service: HealthService, probe: Probe, timeoutMs = HEALTH_PROBE_TIMEOUT_MS): Promise<HealthResult> {
   const start = performance.now();
   const controller = new AbortController();
   const timeout = new Error(`Timed out after ${timeoutMs / 1_000} s.`);
@@ -26,14 +34,16 @@ export async function runCheck(service: HealthService, probe: Probe, timeoutMs =
     }, timeoutMs);
   });
   let ok = false;
+  let failure: HealthResult["failure"];
   let detail: string;
   try {
     detail = await Promise.race([probe(controller.signal), deadline]);
     ok = true;
   } catch (error) {
+    failure = controller.signal.aborted ? "timeout" : classifyProbeFailure(error);
     detail = healthErrorDetail(controller.signal.aborted ? timeout : error);
   } finally {
     clearTimeout(timer);
   }
-  return { ...service, ok, detail, latencyMs: Math.round(performance.now() - start), checkedAt: new Date().toISOString() };
+  return { ...service, ok, failure, detail, latencyMs: Math.round(performance.now() - start), checkedAt: new Date().toISOString() };
 }

@@ -147,3 +147,12 @@ it("caps low-severity clutter while retaining blockers and observed features", (
   expect(result.risks).toHaveLength(16);
   expect(result.risks.slice(0, 2).map(({ id }) => id)).toEqual([`RULE-HAZ-01:${placedId}:21`, `PROFILE-WIRELESS:${placedId}`]);
 });
+
+it("keeps the most severe risk when it is last among 20 merged risks", () => {
+  const findings = Array.from({ length: 20 }, (_, index) =>
+    finding("PLACE-01", { detail: `Condition ${index + 1}`, severity: index === 19 ? 3 : 2 }));
+  const result = completeAssessmentRisks(assessment, pressureProfile, candidate(pressureProfile), { ...check, findings });
+
+  expect(result.risks).toHaveLength(16);
+  expect(result.risks[0]).toMatchObject({ id: `RULE-PLACE-01:${placedId}:20`, severity: 3 });
+});

@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { LiveServerMessage } from "@google/genai";
 import { chiefSetup } from "@/app/api/voice/session/setup";
 import { MODEL_IDS } from "@/gemini/models";
+import { HEALTH_PROBE_TIMEOUT_MS } from "./services";
 
 const GOOGLE = "https://generativelanguage.googleapis.com";
 const LIVE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
@@ -84,7 +85,7 @@ export async function checkFiles(signal: AbortSignal): Promise<string> {
   const type = "text/plain";
   const file = new File(["Pyre Witness health check.\n"], "probe.txt", { type });
   // Reserve time in the overall deadline to delete even after a lost finalize response.
-  const uploadSignal = AbortSignal.any([signal, AbortSignal.timeout(6_000)]);
+  const uploadSignal = AbortSignal.any([signal, AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS - 2_000)]);
   const session = await googleRequest(`${GOOGLE}/upload/v1beta/files`, {
     method: "POST",
     headers: {

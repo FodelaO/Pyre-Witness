@@ -6,9 +6,9 @@ import { geminiClients, noSdkRetries, structuredInteraction } from "@/gemini/tra
 import { GEMINI_OUTPUT_RATE } from "@/voice/wav";
 import { WATCH_SOURCES } from "@/watch/sources";
 import { checkFiles, checkLive } from "./mediaChecks";
-import { healthErrorDetail, runCheck, type Probe } from "./probe";
+import { classifyProbeFailure, healthErrorDetail, runCheck, type Probe } from "./probe";
 import { probePng } from "./probePng";
-import { SERVICES, type HealthResult, type HealthService } from "./services";
+import { HEALTH_PROBE_TIMEOUT_MS, SERVICES, type HealthResult, type HealthService } from "./services";
 
 export interface HealthCheck {
   service: HealthService;
@@ -120,26 +120,30 @@ async function managedAgent(signal: AbortSignal): Promise<string> {
 }
 
 async function feeds(signal: AbortSignal): Promise<string> {
-  const deadline = AbortSignal.any([signal, AbortSignal.timeout(7_500)]);
+  const deadline = AbortSignal.any([signal, AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS - 500)]);
   const probes = Object.entries(WATCH_SOURCES).map(async ([source, { label, url }]) => {
     try {
-      const headSignal = AbortSignal.any([deadline, AbortSignal.timeout(3_000)]);
+      const headSignal = AbortSignal.any([deadline, AbortSignal.timeout(4_000)]);
       let response = await fetch(url, { method: "HEAD", signal: headSignal, cache: "no-store" }).catch(() => null);
       if (!response || response.status === 405 || response.status === 501) {
         response = await fetch(url, { headers: { Range: "bytes=0-511" }, signal: deadline, cache: "no-store" });
       }
       const type = response.headers.get("content-type") ?? "";
       await response.body?.cancel();
-      if (!response.ok) return { label, ok: false, detail: `HTTP ${response.status}` };
+      if (!response.ok) return { label, ok: false, status: response.status, detail: `HTTP ${response.status}` };
       const expected = source === "cisa-kev" ? /\bjson\b/i : /\bxml\b/i;
       if (!expected.test(type)) return { label, ok: false, detail: `Unexpected content type (${type || "missing"})` };
       return { label, ok: true, detail: `HTTP ${response.status}` };
     } catch (error) {
-      return { label, ok: false, detail: deadline.aborted ? "Timed out" : healthErrorDetail(error) };
+      return { label, ok: false, failure: classifyProbeFailure(error), detail: deadline.aborted ? "Timed out" : healthErrorDetail(error) };
     }
   });
   const results = await Promise.all(probes);
   const detail = results.map(({ label, detail }) => `${label} ${detail}`).join(" · ");
+  const httpStatus = results.find(({ status }) => status && status >= 400 && status < 600)?.status;
+  if (httpStatus) throw Object.assign(new Error(detail), { status: httpStatus });
+  if (results.some(({ failure }) => failure === "timeout")) throw new DOMException(detail, "TimeoutError");
+  if (results.some(({ failure }) => failure === "aborted")) throw new DOMException(detail, "AbortError");
   if (results.some(({ ok }) => !ok)) throw new Error(detail);
   return detail;
 }
@@ -151,5 +155,5 @@ const probes = {
 
 export const HEALTH_CHECKS: readonly HealthCheck[] = SERVICES.map((service) => ({
   service,
-  run: () => runCheck(service, probes[service.id], service.id === "image" ? 30_000 : 8_000),
+  run: () => runCheck(service, probes[service.id], service.id === "image" ? 30_000 : HEALTH_PROBE_TIMEOUT_MS),
 }));
