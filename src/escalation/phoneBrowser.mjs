@@ -83,8 +83,9 @@ function attachPhone(page) {
     const answered = !!call?.answeredAt;
     const terminalAt = call?.approvedAt ?? call?.acknowledgedAt ?? call?.resolvedAt;
     const awaitingAnswer = !!call && !answered && !terminalAt;
-    const ringing = awaitingAnswer && !call.dialedAt && !dialStarted && !connectionError;
-    const canDial = !terminalAt && !call?.dialedAt && !dialStarted && dial.hasAttribute("href");
+    const dialed = !!call && (call.dialedAt !== undefined || dialStarted);
+    const ringing = awaitingAnswer && !dialed && !connectionError;
+    const canDial = !!call && !terminalAt && !dialed && dial.hasAttribute("href");
     const waiting = !!(call?.approvalRequestedAt && !call.approvalUnavailableAt && !terminalAt);
     const approvable = !!(alert?.canApprove && !call.approvalUnavailableAt);
     const loss = alert?.lossText ?? (alert?.loss == null ? "" : `$${alert.loss.toLocaleString("en-US")}`);
@@ -122,6 +123,7 @@ function attachPhone(page) {
     element("enable").disabled = enabled;
     element("enable").querySelector("span").textContent = enabled ? "Ringer enabled" : "Enable ringer";
     show("dial", canDial);
+    show("dial-receipt", dialed);
     show("incoming", awaitingAnswer);
     show("enable-incoming", !enabled && ringing);
     element("answer").classList.toggle("pw-call-primary", !canDial);

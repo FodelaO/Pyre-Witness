@@ -5,7 +5,7 @@
 
 1. **Presenter** — On the laptop, open the escalation bell, select **Add your phone**, and save your own international number. The collaborator will dial this number from their phone.
 2. **Presenter and collaborator** — On the same Wi-Fi, the presenter clicks **Pair phone** and the collaborator scans the QR. Keep the phone page open and tap **Enable ringer**. The QR lasts 45 minutes.
-3. **Presenter** — In the bell menu, click **Run test alert**. The default loss threshold is $100,000 per event. **TEST-901** at Filler 3 raises a **TEST SCENARIO** card with a **$290k** estimated loss. If the phone is still unpaired, click **Pair a phone to call you** and let the collaborator scan that QR. Pairing delivers the waiting alert.
+3. **Presenter** — In the bell menu, click **Run test alert**. The default loss threshold is $100,000 per event. **TEST-901** raises a **TEST SCENARIO** card with a **$290k** estimated loss for the modeled path to **FIL-3**. If the phone is still unpaired, click **Pair a phone to call you** and let the collaborator scan that QR. Pairing delivers the waiting alert.
 4. **Collaborator** — On **Incoming call**, tap **Call [name] · [masked number]**. The phone opens its dialer. Confirm the call if the OS prompts. The laptop shows **Calling on-call from the paired phone** when it receives the tap receipt.
 5. **Presenter** — Answer on your own handset. After the demo, use **Clear test** in the bell menu if the gateway is still present.
 
@@ -16,10 +16,10 @@
 | Time | Laptop operator | Paired-phone collaborator |
 | --- | --- | --- |
 | 0–15 s | In **Describe**, enter “Indoor Wi-Fi IP camera. The vendor default password is enabled. Brittle plastic enclosure, IP20, explicitly non-food-grade.” Set the floor drop point inside Filler 3, then run the capture. | Keep the call page open. |
-| When the camera appears | Set the loss threshold to **25000** in the bell popover. Call out the resulting **CAM-901** tag, room, and **est.** amount on the card. | Let the incoming screen ring. Tap **Call [name]** for a cellular call, or **Answer** for the Chief briefing. |
+| When the camera appears | Keep the default **$100,000** threshold. The panel showed **$290k** estimated loss in rehearsal. Read the current **CAM-901** estimate from the card. | Let the incoming screen ring. Tap **Call [name]** for a cellular call, or **Answer** for the Chief briefing. |
 | Next 10–25 s | Point to **Answered** on the laptop as the Chief reads the finding, loss, and proposed action. | Let the Chief speak, or read the displayed script aloud. Tap **Approve action** to apply the displayed change to the twin, or **Acknowledge** to record receipt. |
 
-Wait for the card before starting the voice timing. In a deterministic rehearsal of that camera description, the largest camera finding was about **$31k est.** The estimate depends on the detected specifications and drop point. The seed rehearsal generated a **14.2-second** Chief briefing.
+Wait for the card before starting the voice timing. The estimate depends on the detected specifications and drop point. The seed rehearsal generated a **14.2-second** Chief briefing.
 
 For the handoff, the laptop operator can say “CAM-901 at Filler 3. The estimate is [read the card]. I’m calling on-call.” After the briefing, the collaborator can say “I’ve received the alert. I’m approving [read the action] in the twin,” then tap the button.
 

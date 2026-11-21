@@ -47,6 +47,7 @@ export function phoneMarkup(code: string) {
     <div class="pw-call-notice" id="operation-error" role="status" hidden></div>
     <button class="pw-call-button pw-call-primary" id="enable" type="button" hidden>${icon("bell", 20)} <span>Enable ringer</span></button>
     <a class="pw-call-button pw-call-primary pw-call-dial" id="dial" hidden>${icon("phone", 21)}<span id="dial-label"></span></a>
+    <div class="pw-call-muted pw-call-dial-receipt" id="dial-receipt" hidden>Call placed from the paired phone · no carrier integration</div>
     <div class="pw-call-incoming-actions" id="incoming" hidden>
       <button class="pw-call-button pw-call-secondary" id="answer" type="button">${icon("headphones", 20)} Answer</button>
       <button class="pw-call-quiet" id="enable-incoming" type="button">${icon("bell", 16)} Enable ringer</button>

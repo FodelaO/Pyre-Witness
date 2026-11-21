@@ -20,12 +20,11 @@ export function testScenarioCause({ twin, risk, baselineScore }: TwinState): Esc
       .map((path) => ({ path, estimate: estimateLoss(twin, scenarioFromPath(twin, path)) }))
       .sort((a, b) => b.estimate.lossIfManifests - a.estimate.lossIfManifests)[0];
     if (priced) {
-      const finding = risk.findings.find(({ assetId, ruleId }) => assetId === asset.id && priced.path.ruleIds?.includes(ruleId));
       cause = {
         key: "test-scenario:" + asset.id, kind: "finding", test: true,
         assetId: asset.id, assetName: asset.name, assetKind: asset.physical.kind,
         room: areaById(twin, asset.physical.area)?.name ?? null,
-        title: finding?.title ?? priced.path.title, ruleId: finding?.ruleId,
+        title: priced.path.title,
         loss: displayedEventLoss(priced.estimate),
         score: risk.score, baseline: baselineScore,
       };

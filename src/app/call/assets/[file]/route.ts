@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 export const runtime = "nodejs";
 
-const assets = new Set(["phoneCall.css", "phoneBrowser.mjs", "phoneAudio.mjs", "roster.mjs", "connection.mjs", "wire.mjs"]);
+const assets = new Set(["phoneCall.css", "phoneBrowser.mjs", "phoneAudio.mjs", "connection.mjs", "wire.mjs"]);
 
 export async function GET(_request: Request, { params }: { params: Promise<{ file: string }> }) {
   const { file } = await params;

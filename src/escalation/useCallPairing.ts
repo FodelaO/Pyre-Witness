@@ -10,7 +10,7 @@ import { readPhoneContact, type PhoneContact } from "./phoneContact";
 import { thresholdCrossed } from "./policy";
 import type { DialDestination, PairingSnapshot, PublicAlert } from "./protocol";
 import { applyApproval, confirmApproval, type ApprovalPlan } from "./recommendation";
-import { useEscalationStore } from "./store";
+import { canRingEscalation, selectEscalationRecord, useEscalationStore } from "./store";
 import type { EscalationMoment, EscalationRecord } from "./types";
 
 interface Pairing {
@@ -44,6 +44,7 @@ export function useCallPairing(responderLabel: string, contact: PhoneContact | n
   const activeId = snapshot?.call?.alert.id;
   const records = useEscalationStore((state) => state.records);
   const activeRecord = records.find((record) => record.id === activeId);
+  const record = selectEscalationRecord(records, activeRecord);
 
   async function openPairing(reset = false): Promise<Pairing> {
     if (opening.current) return opening.current;
@@ -122,11 +123,7 @@ export function useCallPairing(responderLabel: string, contact: PhoneContact | n
       return;
     }
     published.current = null;
-    if (!contact) return;
-    const pending = records.filter((record) => !record.resolvedAt && !record.dismissedAt
-      && !record.dialed && !record.acknowledged && !record.approved);
-    const record = pending.findLast(({ trigger }) => trigger.test) ?? pending.at(-1);
-    if (!record) return;
+    if (!contact || !record || !canRingEscalation(record)) return;
     const key = pairing.connection.code + ":" + record.id;
     if (automaticRing.current === key) return;
     automaticRing.current = key;
@@ -190,5 +187,5 @@ export function useCallPairing(responderLabel: string, contact: PhoneContact | n
     void callCommand(pairing.connection, { type: "resolve", id: activeRecord.id }).catch(() => {});
   }, [pairing, activeRecord?.id, activeRecord?.resolvedAt, snapshot?.call]);
 
-  return { pairing, snapshot, busy, error, preparePairing, ring };
+  return { pairing, snapshot, busy, error, preparePairing, ring, record, activeRecord };
 }

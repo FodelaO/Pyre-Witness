@@ -39,6 +39,7 @@ it("raises and resolves one labeled test alert above the default loss threshold"
     const cause = testScenarioCause(state);
     if (!cause) throw new Error("The rules engine and loss model did not yield a test alert.");
     expect(cause.loss).toBeGreaterThanOrEqual(DEFAULT_THRESHOLDS.loss);
+    expect(state.risk.paths.find(({ title }) => title === cause.title)?.target).toBe("FIL-3");
     expect(thresholdCrossed(cause, DEFAULT_THRESHOLDS)).toBe(true);
     vi.advanceTimersByTime(ESCALATION_DEBOUNCE_MS - 1);
     expect(records()).toHaveLength(0);
@@ -46,6 +47,7 @@ it("raises and resolves one labeled test alert above the default loss threshold"
     expect(records()).toHaveLength(1);
     expect(records()[0].script.startsWith(TEST_BRIEFING_PREFIX)).toBe(true);
     expect(records()[0].script).toContain("rogue LTE gateway");
+    expect(records()[0].script).toMatch(/ Attack path from .+ to FIL-3\. Estimated loss \$[\d.,]+[kM]?\. /);
     expect(records()[0].script).toContain("Remove the test gateway from the twin");
 
     runTestAlert();

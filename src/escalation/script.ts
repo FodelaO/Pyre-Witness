@@ -8,6 +8,13 @@ function phrase(value: string, words: number, characters: number): string {
     .slice(0, characters).trim().replace(/[.!?,;:]+$/, "");
 }
 
+/** A rules-engine path title ("entry -> ... -> target") is read as its entry and target, never cut mid-chain. */
+function evidencePhrase(title: string): string {
+  const steps = title.split(" -> ");
+  if (steps.length < 2) return phrase(title, 7, 57);
+  return `Attack path from ${phrase(steps[0], 4, 30)} to ${phrase(steps[steps.length - 1], 2, 22)}`;
+}
+
 export function buildEscalationScript(
   cause: EscalationCause,
   action: string,
@@ -17,7 +24,7 @@ export function buildEscalationScript(
     ? [phrase(cause.assetId, 2, 22), cause.assetName && phrase(cause.assetName, cause.test ? 5 : 4, 36)].filter(Boolean).join(", ")
     : "Line 3";
   const location = cause.room ? ` at ${phrase(cause.room, 4, 30)}` : "";
-  const evidence = phrase(cause.title, 7, 57);
+  const evidence = evidencePhrase(cause.title);
   const assessment = cause.kind === "risk"
     ? (cause.score >= thresholds.risk ? `Plant risk is ${Number(cause.score.toFixed(1))}`
       : `Plant risk rose ${Number((cause.score - cause.baseline).toFixed(1))} points`)

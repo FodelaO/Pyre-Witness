@@ -39,7 +39,7 @@ export function PhoneContactDialog({ contact, onSave, onRemove, onDismiss }: {
     <form className="pw-es-form pw-es-phone-form" onSubmit={save} autoComplete="off">
       <label>Name (optional)<input name="name" maxLength={36} defaultValue={contact?.name} /></label>
       <label>Phone number
-        <input name="number" type="password" inputMode="tel" maxLength={48} autoComplete="off"
+        <input name="number" type="tel" inputMode="tel" maxLength={48} autoComplete="off"
           placeholder={contact ? maskPhoneNumber(contact.number) : "+1 …"} aria-invalid={error === "number" || undefined}
           aria-describedby="pw-es-phone-hint" onInput={() => setError(null)} autoFocus />
       </label>

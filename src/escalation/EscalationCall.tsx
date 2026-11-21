@@ -150,19 +150,13 @@ export default function EscalationCall() {
   const records = useEscalationStore((state) => state.records);
   const thresholds = useEscalationStore((state) => state.thresholds);
   const phone = useEscalationPhone(records);
-  const { pairing, snapshot, busy, error, preparePairing, ring } = useCallPairing(label, phone.contact);
+  const { pairing, snapshot, busy, error, preparePairing, ring, record, activeRecord } = useCallPairing(label, phone.contact);
 
   useEffect(monitorEscalations, []);
   useEffect(() => {
     try { setLabel(localStorage.getItem(RESPONDER_KEY) ?? ""); } catch { /* The paired browser still has an identifier. */ }
   }, []);
 
-  const liveId = snapshot?.call?.alert.id;
-  const called = records.find((record) => record.id === liveId && !record.dismissedAt);
-  const pending = records.filter((record) => !record.resolvedAt && !record.dismissedAt);
-  const record = pending.findLast(({ trigger }) => trigger.test) ?? called
-    ?? pending.toSorted((a, b) => b.raisedAt - a.raisedAt)[0]
-    ?? records.findLast((entry) => entry.trigger.test && !!entry.resolvedAt && !entry.dismissedAt);
   const phoneConnected = snapshot?.phoneConnected ?? false;
 
   function saveLabel(value: string) {
@@ -213,7 +207,7 @@ export default function EscalationCall() {
     {pairingOpen && !settings && <section className="pw-es-popover" aria-label="Phone pairing">
       <div className="pw-es-popup-head"><span>On-call link</span><button type="button" className="pw-es-icon" aria-label="Close pairing" onClick={() => setPairingOpen(false)}><X size={15} /></button></div>
       {pairing ? <PairingCard pairing={pairing} connected={phoneConnected}
-        canRenew={!called || !!(called.approved || called.acknowledged || called.resolvedAt)}
+        canRenew={!activeRecord || !!(activeRecord.approved || activeRecord.acknowledged || activeRecord.resolvedAt)}
         onRenew={() => void preparePairing(true)} />
         : busy && <div className="pw-es-note">Opening phone link…</div>}
     </section>}

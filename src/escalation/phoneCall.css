@@ -91,6 +91,7 @@ svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-l
 .pw-call[data-ringing="true"] .pw-call-primary > svg { color: inherit; }
 .pw-call-secondary { background: var(--pw-panel-2); color: var(--pw-text); }
 .pw-call-dial { min-height: 62px; font-size: 16px; }
+.pw-call-dial-receipt { text-align: center; }
 .pw-call-button:disabled { opacity: .62; cursor: default; }
 .pw-call-quiet {
   display: inline-flex; justify-content: center; align-items: center; gap: 4px; min-height: 31px; padding: 3px 5px;

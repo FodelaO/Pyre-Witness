@@ -6,6 +6,22 @@ import type { EscalationRecord, Thresholds } from "./types";
 const SETTINGS_KEY = "pw:escalation-thresholds";
 type RecordUpdate = Partial<Omit<EscalationRecord, "id" | "thresholds" | "raisedAt">>;
 
+export function canRingEscalation(record: EscalationRecord): boolean {
+  return !record.resolvedAt && !record.dismissedAt && !record.dialed && !record.acknowledged && !record.approved;
+}
+
+/** Keep the desktop on the handset's active alert, then select the next alert for both. */
+export function selectEscalationRecord(records: readonly EscalationRecord[], pairedRecord?: EscalationRecord) {
+  const paired = pairedRecord?.dismissedAt ? undefined : pairedRecord;
+  if (paired && !paired.resolvedAt && !paired.acknowledged && !paired.approved) return paired;
+
+  const newestFirst = (a: EscalationRecord, b: EscalationRecord) => b.raisedAt - a.raisedAt;
+  const pending = records.filter(canRingEscalation);
+  return pending.findLast(({ trigger }) => trigger.test) ?? pending.toSorted(newestFirst)[0] ?? paired
+    ?? records.filter((record) => !record.resolvedAt && !record.dismissedAt).toSorted(newestFirst)[0]
+    ?? records.findLast((record) => record.trigger.test && !!record.resolvedAt && !record.dismissedAt);
+}
+
 interface EscalationState {
   thresholds: Thresholds;
   records: EscalationRecord[];

@@ -23,6 +23,13 @@ it("identifies simulated outcomes and avoids invented estimates for risk-only al
   expect(risk).not.toContain("Estimated loss");
 });
 
+it("reads a rules-engine path title as its entry and target", () => {
+  const path = { ...camera, title: "Nearby RF (parking lot) -> CAM-901 -> PLC-F3 -> SW-F3 -> FIL-3" };
+  const script = buildEscalationScript(path, "Review the finding", DEFAULT_THRESHOLDS);
+  expect(script).toContain(" Attack path from Nearby RF (parking lot) to FIL-3. Estimated loss $340k.");
+  expect(script).not.toContain("->");
+});
+
 it("keeps verbose source fields to a short read", () => {
   const long = "lengthy equipment description ".repeat(25);
   const script = buildEscalationScript({ ...camera, assetName: long, title: long, room: long }, long, DEFAULT_THRESHOLDS);
