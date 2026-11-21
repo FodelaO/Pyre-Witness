@@ -5,6 +5,7 @@ import { formatUsd } from "@/econ/format";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { callCommand, listenToCall, randomHex, type CallConnection } from "./connection.mjs";
 import type { HumanResponse } from "./decision";
+import { rememberDeskConnection, restoreDeskConnection } from "./deskPairing";
 import { ensureDecision } from "./requestDecision";
 import { readCauses } from "./evidence";
 import { recommendedBriefing } from "./monitor";
@@ -19,6 +20,7 @@ import type { EscalationMoment, EscalationRecord } from "./types";
 interface Pairing {
   connection: CallConnection;
   addresses: string[];
+  wifiAddresses?: string[];
   port: number;
 }
 
@@ -33,11 +35,14 @@ function publicAlert(record: EscalationRecord): PublicAlert {
 }
 
 export function useCallPairing(responderLabel: string, contact: PhoneContact | null) {
-  const [pairing, setPairing] = useState<Pairing | null>(null);
+  const [pairing, setPairing] = useState<Pairing | null>(() => {
+    const connection = restoreDeskConnection();
+    return connection ? { connection, addresses: [], port: Number(location.port) } : null;
+  });
   const [snapshot, setSnapshot] = useState<PairingSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const pairingRef = useRef<Pairing | null>(null);
+  const pairingRef = useRef(pairing);
   const opening = useRef<Promise<Pairing> | null>(null);
   const plans = useRef(new Map<string, ApprovalPlan>());
   const decisions = useRef(new Map<string, "approval-applied" | "approval-unavailable">());
@@ -51,19 +56,28 @@ export function useCallPairing(responderLabel: string, contact: PhoneContact | n
   const activeRecord = records.find((record) => record.id === activeId);
   const record = selectEscalationRecord(records, activeRecord);
 
-  async function openPairing(reset = false): Promise<Pairing> {
+  async function openPairing(reset = false, refreshAddresses = false): Promise<Pairing> {
     if (opening.current) return opening.current;
-    if (!reset && pairingRef.current && (!snapshot || snapshot.expiresAt > Date.now())) return pairingRef.current;
+    const current = !reset && (!snapshot || snapshot.expiresAt > Date.now()) ? pairingRef.current : null;
+    if (current && !refreshAddresses) return current;
     opening.current = (async () => {
-      const connection: CallConnection = { code: randomHex(12), key: randomHex(16), role: "desktop" };
+      const connection: CallConnection = current?.connection ?? { code: randomHex(12), key: randomHex(16), role: "desktop" };
       const info = fetch("/api/escalation/info", { cache: "no-store", signal: AbortSignal.timeout(5000) })
-        .then(async (response) => response.ok ? await response.json() as Pick<Pairing, "addresses" | "port"> : null)
+        .then(async (response) => response.ok ? await response.json() as Omit<Pairing, "connection"> : null)
         .catch(() => null);
-      await callCommand(connection, { type: "pair" });
+      if (!current) await callCommand(connection, { type: "pair" });
       const lan = await info;
-      const next = { connection, addresses: lan?.addresses ?? [], port: lan?.port ?? Number(location.port) };
+      const next = {
+        connection,
+        addresses: lan?.addresses ?? current?.addresses ?? [],
+        wifiAddresses: lan ? lan.wifiAddresses : current?.wifiAddresses,
+        port: lan?.port ?? current?.port ?? Number(location.port),
+      };
       pairingRef.current = next;
-      setSnapshot(null);
+      if (!current) {
+        rememberDeskConnection(null);
+        setSnapshot(null);
+      }
       setPairing(next);
       return next;
     })();
@@ -73,7 +87,7 @@ export function useCallPairing(responderLabel: string, contact: PhoneContact | n
   async function preparePairing(reset = false) {
     setError("");
     setBusy(true);
-    try { await openPairing(reset); }
+    try { await openPairing(reset, true); }
     catch { setError("Could not open the phone link."); }
     finally { setBusy(false); }
   }
@@ -194,6 +208,8 @@ export function useCallPairing(responderLabel: string, contact: PhoneContact | n
   }
 
   const onFrame = useEffectEvent((frame: PairingSnapshot, connection: CallConnection) => {
+    if (pairingRef.current?.connection !== connection) return;
+    rememberDeskConnection(connection, frame.expiresAt);
     setError("");
     setSnapshot(frame);
     const call = frame.call;
@@ -234,13 +250,20 @@ export function useCallPairing(responderLabel: string, contact: PhoneContact | n
     });
   });
 
+  const connection = pairing?.connection;
   useEffect(() => {
-    if (!pairing) return;
-    return listenToCall(pairing.connection, (frame) => onFrame(frame, pairing.connection), (message) => {
+    if (!connection) return;
+    return listenToCall(connection, (frame) => onFrame(frame, connection), (message, terminal) => {
+      if (pairingRef.current?.connection !== connection) return;
+      if (terminal) {
+        rememberDeskConnection(null);
+        pairingRef.current = null;
+        setPairing(null);
+      }
       setError(message);
       setSnapshot((current) => current && { ...current, phoneConnected: false });
-    });
-  }, [pairing]);
+    }, 1500);
+  }, [connection]);
 
   useEffect(() => {
     if (!pairing || !activeRecord?.resolvedAt || !snapshot?.call || snapshot.call.resolvedAt) return;

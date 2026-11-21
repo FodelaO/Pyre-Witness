@@ -51,9 +51,9 @@ it("shows waiting when the ringing handset disconnects", () => {
     expect(dock([ringing], ringing, frames.at(-1)!.phoneConnected)).toContain("Call · TEST-901 · Ringing");
     closePhone();
     expect(frames.at(-1)!.phoneConnected).toBe(false);
-    expect(dock([ringing], ringing, false)).toContain("Call · TEST-901 · Waiting for phone");
+    expect(dock([ringing], ringing, false)).toContain("Call · TEST-901 · Phone not connected · Pair again");
     const answered: EscalationRecord = { ...ringing, answered: { at: 4, channel: "paired-phone" } };
-    expect(dock([answered], answered, false)).toContain("Call · TEST-901 · Answered");
+    expect(dock([answered], answered, false)).toContain("Call · TEST-901 · Phone not connected · Pair again");
   } finally {
     closePhone();
     closeDesk();

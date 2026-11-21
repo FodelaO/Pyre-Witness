@@ -83,6 +83,7 @@ export interface PhoneCall {
 
 export interface PairingSnapshot {
   expiresAt: number;
+  phonePaired?: boolean;
   phoneConnected: boolean;
   call: PhoneCall | null;
   messages?: PublicMessage[];

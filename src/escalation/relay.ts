@@ -1,5 +1,6 @@
 /** Short-lived LAN pairing relay. The desktop owns all decisions that change the twin. */
 import { maskPhoneNumber } from "./phoneNumber";
+import { pairingFile, readPairings, writePairings } from "./pairingPersistence";
 import { PAIRING_TTL, type CallCommand, type DialDestination, type DialTarget, type PairingSnapshot, type PhoneCall, type PublicMessage } from "./protocol";
 
 type Role = "desktop" | "phone";
@@ -17,12 +18,11 @@ interface Session {
 }
 
 const limit = 32;
-const shared = globalThis as typeof globalThis & { pyreEscalationSessions?: Map<string, Session> };
-const sessions = shared.pyreEscalationSessions ??= new Map<string, Session>();
 
 function snapshot(session: Session): PairingSnapshot {
   return {
     expiresAt: session.expiresAt,
+    phonePaired: session.phone !== null,
     phoneConnected: [...session.subscribers].some(({ role }) => role === "phone"),
     call: session.call,
     ...(session.messages && { messages: session.messages }),
@@ -39,38 +39,79 @@ function clearDestination(session: Session) {
   if (session.call) delete session.call.destinationVersion;
 }
 
-function expire(code: string, session: Session) {
-  if (sessions.get(code) !== session) return;
-  sessions.delete(code);
-  clearTimeout(session.expiry);
-  clearDestination(session);
-  for (const subscriber of session.subscribers) subscriber.close();
-}
+export function createPairingRegistry(file?: string, sessions = new Map<string, Session>()) {
+  let cleanupPending = false;
+  function save() {
+    if (file) writePairings(file, sessions);
+    cleanupPending = false;
+  }
 
-function prune(now = Date.now()) {
-  for (const [code, session] of sessions) if (session.expiresAt <= now) expire(code, session);
-}
+  function prune() {
+    for (const [code, session] of sessions) {
+      if (session.expiresAt > Date.now()) continue;
+      sessions.delete(code);
+      cleanupPending = true;
+      clearTimeout(session.expiry);
+      clearDestination(session);
+      for (const subscriber of session.subscribers) subscriber.close();
+    }
+    // A full or unavailable temporary volume must not crash the relay's expiry timer.
+    if (cleanupPending) {
+      try { save(); } catch { /* Expired sessions are already denied. Retry on the next access. */ }
+    }
+  }
 
-export function register(code: string, owner: string): Session | undefined {
+  function armExpiry(session: Session) {
+    clearTimeout(session.expiry);
+    session.expiry = setTimeout(prune, Math.max(0, session.expiresAt - Date.now()));
+    session.expiry.unref?.();
+  }
+
+  const hadLiveSessions = sessions.size > 0;
+  if (file) {
+    let saved: ReturnType<typeof readPairings> = [];
+    // An unreadable file must not take the relay down; the next save replaces it.
+    try { saved = readPairings(file); } catch { saved = []; }
+    for (const { code, owner, phone, expiresAt } of saved) {
+      if (!sessions.has(code)) sessions.set(code, { owner, phone, expiresAt, call: null, subscribers: new Set() });
+    }
+  }
   prune();
-  const existing = sessions.get(code);
-  if (existing) return existing.owner === owner ? existing : undefined;
-  if (sessions.size >= limit) return undefined;
-  const session: Session = { owner, phone: null, expiresAt: Date.now() + PAIRING_TTL, call: null, subscribers: new Set() };
-  sessions.set(code, session);
-  session.expiry = setTimeout(() => expire(code, session), PAIRING_TTL);
-  session.expiry.unref?.();
-  return session;
+  for (const session of sessions.values()) armExpiry(session);
+  if (hadLiveSessions) save();
+
+  function register(code: string, owner: string): Session | undefined {
+    prune();
+    const existing = sessions.get(code);
+    if (existing) return existing.owner === owner ? existing : undefined;
+    if (sessions.size >= limit) return undefined;
+    const session: Session = { owner, phone: null, expiresAt: Date.now() + PAIRING_TTL, call: null, subscribers: new Set() };
+    sessions.set(code, session);
+    try { save(); } catch { sessions.delete(code); throw new Error("Could not save pairing."); }
+    armExpiry(session);
+    return session;
+  }
+
+  function authorize(code: string, role: Role, key: string, allowJoin = false) {
+    prune();
+    const session = sessions.get(code);
+    if (!session) return null;
+    if (role === "desktop") return session.owner === key ? session : null;
+    if (allowJoin && !session.phone) {
+      session.phone = key;
+      try { save(); } catch { session.phone = null; throw new Error("Could not save handset pairing."); }
+    }
+    return session.phone === key ? session : null;
+  }
+
+  return { register, authorize };
 }
 
-export function authorize(code: string, role: Role, key: string, allowJoin = false) {
-  prune();
-  const session = sessions.get(code);
-  if (!session) return null;
-  if (role === "desktop") return session.owner === key ? session : null;
-  if (allowJoin && !session.phone) session.phone = key;
-  return session.phone === key ? session : null;
-}
+const shared = globalThis as typeof globalThis & { pyreEscalationSessions?: Map<string, Session> };
+export const { register, authorize } = createPairingRegistry(
+  process.env.NODE_ENV === "test" ? undefined : pairingFile(),
+  shared.pyreEscalationSessions ??= new Map<string, Session>(),
+);
 
 export function subscribe(session: Session, subscriber: Subscriber) {
   session.subscribers.add(subscriber);

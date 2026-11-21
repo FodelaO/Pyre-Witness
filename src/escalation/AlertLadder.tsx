@@ -84,9 +84,10 @@ export function AlertLadder({ records, call, phoneConnected, openId, onOpen, onR
         : "Waiting for phone";
   const callStatus = high?.humanResponse?.kind === "override" ? "Overridden"
     : high?.humanResponse?.kind === "approve" || high?.approved ? "Approved"
-      : high?.answered ? "Answered" : !phoneConnected ? "Waiting for phone" : high?.ringing ? "Ringing" : "Ready";
+      : !phoneConnected ? (high?.ringing || high?.answered ? "Phone not connected · Pair again" : "Waiting for phone")
+        : high?.answered ? "Answered" : high?.ringing ? "Ringing" : "Ready";
   const CallGlyph = { Approved: Check, Overridden: CornerUpLeft, Answered: PhoneIncoming, Ringing: PhoneCall,
-    Ready: Phone, "Waiting for phone": Phone }[callStatus];
+    Ready: Phone, "Waiting for phone": Phone, "Phone not connected · Pair again": Phone }[callStatus];
 
   const tiers = [
     { name: "Flag", record: flag, status: "Flagged", icon: <b className="pw-es-ladder-flag" aria-hidden>!</b> },
@@ -120,8 +121,8 @@ export function AlertLadder({ records, call, phoneConnected, openId, onOpen, onR
       <span>{record.trigger.title}</span>
       {record.level === 3 && <>
         <DecisionControls key={record.id} record={record} respond={respond} />
-        {!record.ringing && !record.humanResponse && <button type="button" className="pw-es-text-button" onClick={() => onRing(record)}>
-          {phoneConnected ? "Ring phone" : "Pair phone"}
+        {(!record.ringing || !phoneConnected) && canRingEscalation(record) && <button type="button" className="pw-es-text-button" onClick={() => onRing(record)}>
+          {phoneConnected ? "Ring phone" : record.ringing ? "Pair again" : "Pair phone"}
         </button>}
       </>}
     </section>}

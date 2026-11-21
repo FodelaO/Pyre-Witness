@@ -46,7 +46,7 @@ export async function fetchDialTarget(connection, id, version) {
 /**
  * @param {CallConnection} connection
  * @param {(frame: import("./protocol").PairingSnapshot) => void} onFrame
- * @param {(message: string) => void} onError
+ * @param {(message: string, terminal?: boolean) => void} onError
  * @param {number} [retryMs]
  */
 export function listenToCall(connection, onFrame, onError, retryMs = RECONNECT_MS) {
@@ -59,7 +59,7 @@ export function listenToCall(connection, onFrame, onError, retryMs = RECONNECT_M
         headers: headers(connection), cache: "no-store", signal: abort.signal,
       });
       if (response.status === 404 || response.status === 403) {
-        onError("Link expired or paired elsewhere. Open a fresh QR.");
+        if (!abort.signal.aborted) onError("Link expired or paired elsewhere. Open a fresh QR.", true);
         return;
       }
       if (!response.ok || !response.body) throw new Error("Call stream unavailable.");

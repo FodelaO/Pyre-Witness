@@ -8,6 +8,7 @@ import { formatUsd } from "@/econ/format";
 import { Equipment, FOOTPRINT } from "@/equipment";
 import { AlertLadder } from "./AlertLadder";
 import { monitorEscalations } from "./monitor";
+import { PairingCard } from "./PairingCard";
 import { PhoneContactDialog } from "./PhoneContactDialog";
 import { BASELINE_INCREASE, validThresholds } from "./policy";
 import { monitorSlackAlerts, useSlackStatuses } from "./slackClient";
@@ -56,43 +57,6 @@ function ThresholdForm({ thresholds, onSave, label, onLabel }: {
     <label>Paired responder label <input name="responder" maxLength={28} placeholder="Optional" defaultValue={label} /></label>
     <button className="pw-es-button" type="submit"><Check size={14} aria-hidden /> Save thresholds</button>
   </form>;
-}
-
-function PairingCard({ pairing, connected, canRenew, onRenew }: {
-  pairing: NonNullable<ReturnType<typeof useCallPairing>["pairing"]>;
-  connected: boolean;
-  canRenew: boolean;
-  onRenew: () => void;
-}) {
-  const [address, setAddress] = useState("");
-  const [qr, setQr] = useState<{ url: string; src: string }>();
-  const host = pairing.addresses.includes(address) ? address
-    : pairing.addresses.includes(location.hostname) ? location.hostname : pairing.addresses[0];
-  const path = `/call/${pairing.connection.code}`;
-  const url = host ? `http://${host}:${pairing.port}${path}` : new URL(path, location.origin).href;
-
-  useEffect(() => {
-    let alive = true;
-    void import("qrcode").then(({ default: QRCode }) => QRCode.toDataURL(url, { width: 240, margin: 2 }))
-      .then((src) => { if (alive) setQr({ url, src }); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [url]);
-
-  return <div className="pw-es-pair">
-    <a href={url} className="pw-es-qr" target="_blank" rel="noreferrer" aria-label="Open paired phone link">
-      {qr?.url === url ? <img src={qr.src} alt="On-call pairing QR code" width={88} height={88} /> : <QrCode size={32} aria-hidden />}
-    </a>
-    <div className="pw-es-pair-copy">
-      <strong data-connected={connected}>{connected ? "Phone paired" : host ? "Scan on paired phone" : "Open call link"}</strong>
-      <span className="pw-es-note">{host ? "Use the same Wi-Fi" : "LAN address unavailable"}</span>
-      <a className="pw-es-link" href={url} target="_blank" rel="noreferrer">{url}</a>
-      {pairing.addresses.length > 1 && <select aria-label="Call network address" value={host} onChange={(event) => setAddress(event.target.value)}>
-        {pairing.addresses.map((ip) => <option key={ip} value={ip}>{ip}</option>)}
-      </select>}
-      {canRenew && <button type="button" className="pw-es-text-button" onClick={onRenew}>New link</button>}
-    </div>
-  </div>;
 }
 
 function AlertCard({ record, busy, phoneConnected, telephone, onRing, onDismiss }: {
@@ -179,6 +143,7 @@ export default function EscalationCall() {
   }, [panel, phone.dialog]);
 
   const phoneConnected = snapshot?.phoneConnected ?? false;
+  const phoneLost = !!snapshot?.phonePaired && !phoneConnected;
 
   function saveLabel(value: string) {
     setLabel(value.trim());
@@ -193,7 +158,7 @@ export default function EscalationCall() {
   function openPairing() {
     chip.current?.focus();
     setPanel("pairing");
-    void preparePairing();
+    void preparePairing(phoneLost);
   }
 
   return dock && createPortal(<div className="pw-es" ref={controls} onKeyDown={(event) => {
@@ -202,12 +167,17 @@ export default function EscalationCall() {
       closePanel();
     }
   }}>
+    {phoneLost && <button type="button" className="pw-es-chip pw-es-repair" onClick={openPairing}>
+      Phone not connected · Pair again
+    </button>}
     <button type="button" ref={chip} className="pw-es-chip" aria-label="Escalation thresholds" aria-expanded={panel === "settings"} onClick={() => {
       setPanel(panel === "settings" ? null : "settings");
     }}>
-      <Bell size={14} aria-hidden />
-      <span>{record ? "Escalation" : "Armed"}</span>
-      <span className="pw-es-chip-values">{formatUsd(thresholds.loss)} / {thresholds.risk}</span>
+      {!phoneLost && <>
+        <Bell size={14} aria-hidden />
+        <span>{record ? "Escalation" : "Armed"}</span>
+        <span className="pw-es-chip-values">{formatUsd(thresholds.loss)} / {thresholds.risk}</span>
+      </>}
       <Settings2 size={13} aria-hidden />
     </button>
     {panel === "settings" && <section className="pw-es-popover" aria-label="Escalation settings">
@@ -246,10 +216,9 @@ export default function EscalationCall() {
     }} />}
     {panel === "pairing" && <section className="pw-es-popover" aria-label="Phone pairing">
       <div className="pw-es-popup-head"><span>On-call link</span><button type="button" className="pw-es-icon" aria-label="Close pairing" onClick={closePanel}><X size={15} /></button></div>
-      {pairing ? <PairingCard pairing={pairing} connected={phoneConnected}
+      {busy && !phoneConnected ? <div className="pw-es-note">Opening phone link…</div> : pairing && <PairingCard key={pairing.connection.code} pairing={pairing} connected={phoneConnected}
         canRenew={!activeRecord || !!(activeRecord.approved || activeRecord.acknowledged || activeRecord.resolvedAt || activeRecord.humanResponse)}
-        onRenew={() => void preparePairing(true)} />
-        : busy && <div className="pw-es-note">Opening phone link…</div>}
+        onRenew={() => void preparePairing(true)} />}
     </section>}
     {error && <div className="pw-es-error" role="status">{error}</div>}
     {phone.dialog && <PhoneContactDialog contact={phone.contact} onSave={phone.savePhone}
