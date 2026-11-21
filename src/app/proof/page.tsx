@@ -1,19 +1,22 @@
-/** Shows the latest measured placement evaluation on the plant's visual grid. */
+/** Shows the archived Run 5 evaluation on the plant's visual grid. */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { ArrowLeft, FileChartColumn, ChevronDown } from "lucide-react";
 import { ProofReport } from "@/proof/ProofReport";
+import { RunFiveProof } from "@/proof/RunFiveProof";
 import { readProofReport } from "@/proof/reportSource";
 import { BrandMark } from "@/shell/BrandMark";
 import "@/proof/proof.css";
 import "@/proof/proof-overview.css";
+import "@/proof/run-five.css";
 
 export const metadata: Metadata = { title: "Evaluation | Pyre Witness" };
 
 export default async function ProofPage() {
   await connection();
-  const proof = await readProofReport();
+  const saved = await readProofReport("run-5");
+  const proof = saved.state === "ready" ? saved : await readProofReport();
   return (
     <main className="pw-proof pw-scroll">
       <header className="pw-proof-top">
@@ -22,9 +25,13 @@ export default async function ProofPage() {
       </header>
       <div className="pw-proof-shell">
         <div className="pw-proof-header">
-          <h1>Proof it works</h1>
+          <h1>Pyre Witness evaluation</h1>
         </div>
-        {proof.state === "ready" ? <ProofReport report={proof.report} /> : (
+        {proof.state === "ready" ? (
+          proof.report.label === "run-5" && proof.report.fairComparison
+            ? <RunFiveProof report={proof.report} comparison={proof.report.fairComparison} />
+            : <ProofReport report={proof.report} />
+        ) : (
           <section className="pw-proof-empty" aria-label="Evaluation status">
             <div className="pw-proof-empty-icon"><FileChartColumn aria-hidden size={24} strokeWidth={1.5} /></div>
             <div>
