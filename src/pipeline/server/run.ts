@@ -8,7 +8,7 @@ import { recordGeminiTranscript, withGeminiTranscript } from "@/gemini/transcrip
 import { geminiClients, PipelineFailure, providerFailure, type GeminiClients } from "@/gemini/transport";
 import { LinkFetchError } from "@/link/errors";
 import { fetchProductPage } from "@/link/fetchProductPage";
-import { asPassiveObject, assetFromProfile, capturedAssetId, networkAt, resolveDropPoint } from "@/pipeline/assetFromProfile";
+import { asPassiveObject, assetFromProfile, capturedAssetId, networkAt, refreshModeledControllerLink, resolveDropPoint } from "@/pipeline/assetFromProfile";
 import type {
   AnalyzeRequest, CaptureInput, DeviceProfile, DropPoint, GateResult, LinkSnapshot, PipelineStage, ReassessRequest, SelfCheckPhase, SelfCheckResult,
 } from "@/pipeline/types";
@@ -20,7 +20,7 @@ import { completeAssessmentRisks } from "./finalRisks";
 import { groundAssessment } from "./groundAssessment";
 import { captureImageSchema } from "./requests";
 import { assessWithReducedRetry, REASONING_DEADLINE_MS } from "./reasoning";
-import { checkAsDropped, holdBlockedPlacement, reviewRecommendation } from "./selfCheck";
+import { checkAsDropped, holdBlockedPlacement, reconcilePlacementExclusions, reviewRecommendation } from "./selfCheck";
 import type { StreamEvent } from "./sse";
 
 type EventData<T = StreamEvent> = T extends StreamEvent ? Omit<T, "runId" | "at"> : never;
@@ -211,11 +211,14 @@ async function assessAndBrief(
   }
 
   const riskStarted = performance.now();
-  finalAssessment = completeAssessmentRisks(finalAssessment, profile, candidate, checked);
+  const { assessment: reconciled, superseded } = reconcilePlacementExclusions(twin, finalAssessment, checked, candidate, asDropped);
+  finalAssessment = completeAssessmentRisks(reconciled, profile, candidate, checked);
   recordGeminiTranscript({
     stage: "selfcheck", crew: "inspector", engine: "rules engine", latencyMs: elapsed(riskStarted),
-    response: { json: { risks: finalAssessment.risks } },
-    note: "Final risk list assembled from the Architect, the final rules check and the device profile.",
+    response: { json: { risks: finalAssessment.risks, ...(superseded.length ? { supersededNeverPlace: superseded } : {}) } },
+    note: superseded.length
+      ? "Final risk list assembled. Recorded absolute exclusions superseded by a passing rules check."
+      : "Final risk list assembled from the Architect, the final rules check and the device profile.",
   });
   run.stage("summary");
   run.emit({ type: "summary.started", model: MODEL_IDS.chief, assessment: finalAssessment });
@@ -328,7 +331,8 @@ export function runReassess(request: ReassessRequest, sink: EventSink, signal = 
       ? asset.network
       : { ...asset.network, ...networkAt(twin, dropPoint, asset.physical.kind, level) };
     const moved: Asset = { ...asset, physical: { ...asset.physical, ...dropPoint }, network };
-    const candidate = profile.object_class === "passive_object" ? asPassiveObject(twin, moved) : moved;
+    const candidate = profile.object_class === "passive_object"
+      ? asPassiveObject(twin, moved) : refreshModeledControllerLink(twin, moved);
     const current = { ...twin, assets: twin.assets.map((peer) => peer.id === assetId ? candidate : peer) };
     await assessAndBrief(run, clients, current, candidate, profile, true);
   });

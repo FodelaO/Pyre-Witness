@@ -3,7 +3,7 @@ import { FOOTPRINT } from "@/equipment/types";
 import { isPlantHome } from "@/rules/engine";
 import { areaAt, areaById, areaCenter, areasAt, assetById, containsPoint, distance, type Point } from "@/twin/geometry";
 import { DEFAULT_DROP } from "@/twin/dropPoint";
-import type { Area, Asset, EquipmentKind, NetworkPresence, PurdueLevel, Twin } from "@/twin/types";
+import type { Area, Asset, Connection, EquipmentKind, NetworkPresence, PurdueLevel, Twin } from "@/twin/types";
 import type { Assessment, DeviceProfile, DropPoint, ObjectClass } from "./types";
 
 const DEVICE_LEVEL: Partial<Record<EquipmentKind, PurdueLevel>> = {
@@ -120,6 +120,38 @@ export function placementEnvironment(twin: Twin, { x, y }: Point) {
   };
 }
 
+const MODELED_PLC_LINK = "Simulated PLC Ethernet link. Physical connection unverified.";
+const ETHERNET_PORT = /\b(?:ether[ -]?net|profi[ -]?net)\b/i;
+
+function modeledControllerLink(twin: Twin, asset: Asset): Connection | undefined {
+  // A serial fieldbus port, or a connector shape alone, does not establish Ethernet compatibility.
+  if (asset.physical.kind !== "plc_cabinet" || !asset.cyber?.ports.some((port) => ETHERNET_PORT.test(port))) return;
+  let nearest: Asset | undefined;
+  let nearestDistance = Infinity;
+  for (const peer of twin.assets) {
+    if (peer.physical.kind !== "network_switch" || peer.status === "offline" || peer.physical.area !== asset.physical.area
+      || peer.network.area !== asset.network.area || peer.network.level !== asset.network.level) continue;
+    const separation = distance(peer.physical, asset.physical);
+    if (separation < nearestDistance || (separation === nearestDistance && nearest && peer.id < nearest.id)) {
+      nearest = peer;
+      nearestDistance = separation;
+    }
+  }
+  if (nearest) return { to: nearest.id, medium: "network", label: MODELED_PLC_LINK };
+}
+
+/** Keep a capture-time simulated link local after a move without changing deliberate wiring. */
+export function refreshModeledControllerLink(twin: Twin, asset: Asset): Asset {
+  const isModeled = (link: Connection) => link.medium === "network" && link.label === MODELED_PLC_LINK;
+  const { connections } = asset.physical;
+  const previous = connections.find(isModeled);
+  if (!previous || previous.active === false) return asset;
+  const retained = connections.filter((link) => !isModeled(link));
+  const next = retained.some(({ medium }) => medium === "network") ? undefined : modeledControllerLink(twin, asset);
+  if (next?.to === previous.to) return asset;
+  return { ...asset, physical: { ...asset.physical, connections: next ? [...retained, next] : retained } };
+}
+
 export function assetFromProfile(profile: DeviceProfile, twin: Twin, id: string, point: DropPoint): Asset {
   const location = { ...point, area: areaAt(twin, point.x, point.y)?.id ?? point.area };
   const passive = profile.object_class === "passive_object";
@@ -128,7 +160,7 @@ export function assetFromProfile(profile: DeviceProfile, twin: Twin, id: string,
     || /\b(?:removable|(?:micro[ -]?)?sd(?:hc|xc)?|usb (?:drive|storage))\b/i.test(profile.storage ?? "");
   const hasCyber = !passive && (IT_KINDS.has(kind) || profile.radios.length > 0 || profile.ports.length > 0
     || profile.cloud_connectivity === true || profile.default_credentials_visible || hasRemovableStorage);
-  return {
+  const asset: Asset = {
     id,
     name: [profile.vendor, profile.model].filter(Boolean).join(" ") || profile.device_type,
     description: profile.device_type,
@@ -152,11 +184,15 @@ export function assetFromProfile(profile: DeviceProfile, twin: Twin, id: string,
       hazardRating: profile.hazardous_area_rating,
       ipRating: profile.ip_rating,
     },
-    criticality: 2,
+    // Use the control equipment's provisional operational consequence without assuming a safety role.
+    criticality: kind === "plc_cabinet" ? 4 : 2,
     origin: "added",
     status: "ok",
     placement: "neutral",
   };
+  const link = modeledControllerLink(twin, asset);
+  if (link) asset.physical.connections.push(link);
+  return asset;
 }
 
 function halfFootprint(asset: Asset): Point {

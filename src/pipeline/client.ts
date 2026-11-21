@@ -3,7 +3,7 @@ import { evaluatePlacement } from "@/rules/engine";
 import { assetById } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import type { Asset, Twin } from "@/twin/types";
-import { asPassiveObject, assetFromProfile, atRecommendedPlacement, capturedAssetId, rememberCapturedAssetId, resolveDropPoint } from "./assetFromProfile";
+import { asPassiveObject, assetFromProfile, atRecommendedPlacement, capturedAssetId, refreshModeledControllerLink, rememberCapturedAssetId, resolveDropPoint } from "./assetFromProfile";
 import { useRunStore } from "./runStore";
 import type { StreamEvent } from "./server/sse";
 import type {
@@ -262,8 +262,8 @@ export async function reassessAsset(assetId: string): Promise<void> {
           const device = captured.get(assetId);
           if (asset?.origin !== "added" || !device) return;
           const passive = device.profile.object_class === "passive_object";
-          const candidate = passive ? asPassiveObject(store.twin, asset) : asset;
-          if (passive) store.updateAsset(assetId, () => candidate);
+          const candidate = passive ? asPassiveObject(store.twin, asset) : refreshModeledControllerLink(store.twin, asset);
+          if (candidate !== asset) store.updateAsset(assetId, () => candidate);
           const { area, x, y } = candidate.physical;
           await startRun("reassess", {
             twin: useTwinStore.getState().twin, assetId, profile: device.profile,

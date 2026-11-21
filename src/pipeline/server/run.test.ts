@@ -78,7 +78,10 @@ it("streams the raw provider calls and placed checks in transcript order without
     ...pressureProfile, device_type: " Pressure gauge ",
     provider_extension: { dataBase64: pixelPng, detail: `${key} ${pixelPng} ${"raw output ".repeat(4000)}` },
   };
-  const rawAssessment = { ...officeAssessment, review_paths: [], provider_extension: "raw only" };
+  const rawAssessment = {
+    ...officeAssessment, review_paths: [], provider_extension: "raw only",
+    never_place: [{ area: "corporate_office", where: "Corporate office", level: 4, why: "Check the bench before mounting." }],
+  };
   const sent: Record<string, { input: string; system_instruction: string }> = {};
   const thoughts = ["Compare the submitted spot.", "Check the inspection bench."];
   const { promise: releaseScout, resolve: finishGate } = Promise.withResolvers<void>();
@@ -133,6 +136,9 @@ it("streams the raw provider calls and placed checks in transcript order without
     system: sent[MODEL_IDS.reasoning].system_instruction, text: sent[MODEL_IDS.reasoning].input, schema: expect.any(String),
   });
   expect(architect).toMatchObject({ response: { json: rawAssessment }, thoughts, thinkingLevel: expect.any(String) });
+  expect(events.find((event) => event.type === "summary.started")?.assessment?.never_place).toEqual([]);
+  expect(entries.find((entry) => entry.note?.includes("absolute exclusions superseded"))?.response?.json)
+    .toMatchObject({ supersededNeverPlace: rawAssessment.never_place });
   expect(chief.request).toMatchObject({ system: sent[MODEL_IDS.chief].system_instruction, text: sent[MODEL_IDS.chief].input });
   expect(chief.response?.text).toContain(brief.caution);
   for (const entry of calls) expect(entry.latencyMs).toBeGreaterThanOrEqual(0);

@@ -534,3 +534,20 @@ All 195 tests passed with `npx vitest run src/pipeline src/gemini src/link --max
 Frozen at **2026-11-21T18:49:45.477Z**. The evaluator's `sourceFingerprint()` SHA-256 is `16359d87973d668b3a8a389eb02f8f4bfce6ce028eb5461fb09cb7df4f22ba30`. The 29-file production pipeline surface SHA-256 is `59cd79a93f3ecc3cbe4a47e8e3a772bf95fe92c8b4154713c45f8f6ec606a985`, computed over the sorted JSON array of path and UTF-8 contents. This separately covers the browser client and both HTTP routes.
 
 The [freeze marker](pipeline-frozen-run4) and [evaluator handoff](pipeline-speed-handoff.md) are in the writable log directory. The session mounts `.agents` read-only.
+
+## Demo PLC follow-up
+
+The before result is the [saved demo answer](../../demo/out/shots/take-2AkyeS/capture-answer.txt). The after result is one live `POST /api/analyze` of `photo-032.jpg` at the same Filler 3 pin, approximately `(830, 675)`. The after run ID was `db30599d-533a-4939-bd22-4e2b0d32686d`.
+
+| Output | Saved demo | Live after |
+| --- | --- | --- |
+| As dropped, Filler 3 at Purdue 1 | Passed · **0** rules-engine paths | Passed · **1** rules-engine path for local physical exposure to the PLC |
+| Final recommended placement | Water treatment, Purdue 1 · cleared · **0** paths | Packaging, Purdue 1 · cleared · **0** paths |
+| Never here | Filler 3, Purdue 1 · washdown rating and hygienic enclosure unverified | Empty. The transcript records the superseded Filler 3 exclusion. |
+| As-dropped findings | Exposed ports, washdown, unmanaged asset | `PHYS-01` severity 3, `WASH-01` severity 3, `MGMT-01` severity 2 |
+
+Scout reported MPI and PROFIBUS DP for the SIMATIC S7-300 CPU 314C-2 DP. The existing rules already recognized exposed PROFIBUS, but the generic capture criticality left the controller outside the graph's high-consequence targets. The captured PLC now carries provisional operational criticality 4. The rules engine can show the PLC's local port exposure without assuming a safety role or bridging it to an Ethernet switch. Captured PLCs with documented Ethernet or PROFINET get a labeled simulated link to the nearest available switch in the same room, zone and level. Siemens lists PROFINET on the separate PN/DP variant. [Siemens SIMATIC catalog](https://cache.industry.siemens.com/dl/files/167/109744167/att_1145924/v1/simatic-st70-complete-english-2023.pdf)
+
+The final assessment removes absolute exclusions for an exact passed drop or cleared recommendation. Other room and level restrictions remain, and a held alternative stays on hold. In the live run the washdown caution stayed visible as an Inspector finding after reconciliation. Checked placement arrived at 22.274 s, and the Neon briefing took another 4.563 s.
+
+`npx tsc --noEmit` passed. `npx vitest run src/pipeline src/gemini --maxWorkers=1` passed all 148 tests.

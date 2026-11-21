@@ -1,11 +1,12 @@
 /** Checks how Inspector findings and grounded disagreements affect a placement review. */
 import { expect, it } from "vitest";
 import { assetFromProfile, atRecommendedPlacement } from "@/pipeline/assetFromProfile";
+import type { Assessment, SelfCheckResult } from "@/pipeline/types";
 import { bestPlacement, evaluatePlacement } from "@/rules/engine";
 import { SEED_TWIN } from "@/twin/seed";
 import { officeAssessment, pressureProfile } from "./__fixtures__/placement";
 import { groundAssessment } from "./groundAssessment";
-import { checkPlacement, holdBlockedPlacement } from "./selfCheck";
+import { checkPlacement, holdBlockedPlacement, reconcilePlacementExclusions } from "./selfCheck";
 
 const candidate = assetFromProfile(pressureProfile, SEED_TWIN, "NEW-TEST", { x: 1420, y: 150, area: "utilities" });
 
@@ -72,4 +73,31 @@ it("keeps the findings and a clear hold when the twin has no usable option", () 
   const held = holdBlockedPlacement(twin, candidate, assessment, before)!;
   expect(held.assessment.placement.why).toMatch(/^HOLD: no usable alternative/);
   expect(held.check()).toEqual({ ...before, disagreements: [...before.disagreements, held.assessment.placement.why] });
+});
+
+it("removes absolute exclusions for the passed drop and recommendation while keeping other scopes", () => {
+  const exclusions = [
+    { area: "utilities", where: "Utilities", level: candidate.network.level, why: "Unverified enclosure" },
+    { area: null, where: "Corporate office", level: null, why: "Avoid office mounting" },
+    { area: "corporate_office", where: "Corporate office", level: 3, why: "Avoid operations networking" },
+    { area: "nh3_hazard", where: "Ammonia overlay", level: null, why: "Unverified hazard rating" },
+  ] satisfies Assessment["never_place"];
+  const { assessment } = groundAssessment(SEED_TWIN, candidate, { ...officeAssessment, never_place: exclusions }, "run");
+  const passed: SelfCheckResult = { passed: true, revised: false, paths: [], findings: [], disagreements: [] };
+  const result = reconcilePlacementExclusions(SEED_TWIN, assessment, passed, candidate, passed);
+
+  expect(result.assessment.never_place).toEqual(exclusions.slice(2));
+  expect(result.superseded).toEqual(exclusions.slice(0, 2));
+  expect(assessment.never_place).toEqual(exclusions);
+});
+
+it("keeps the exclusion when the recommendation is blocked or remains on hold", () => {
+  const { assessment } = groundAssessment(SEED_TWIN, candidate, {
+    ...officeAssessment,
+    never_place: [{ area: "corporate_office", where: "Corporate office", level: 4, why: "Review isolation" }],
+  }, "run");
+  const blocked: SelfCheckResult = { passed: false, revised: true, paths: [], findings: [], disagreements: [] };
+  expect(reconcilePlacementExclusions(SEED_TWIN, assessment, blocked, candidate, blocked).assessment).toBe(assessment);
+  const held = { ...assessment, placement: { ...assessment.placement, why: "HOLD: review the alternative." } };
+  expect(reconcilePlacementExclusions(SEED_TWIN, held, { ...blocked, passed: true }, candidate, blocked).assessment).toBe(held);
 });

@@ -3,7 +3,8 @@ import { expect, it } from "vitest";
 import { evaluatePlacement } from "@/rules/engine";
 import { SEED_TWIN } from "@/twin/seed";
 import { DEFAULT_DROP } from "@/twin/dropPoint";
-import { assetFromProfile, atRecommendedPlacement, capturedAssetId, placementEnvironment, resolveDropPoint } from "./assetFromProfile";
+import { assetFromProfile, atRecommendedPlacement, capturedAssetId, placementEnvironment, refreshModeledControllerLink, resolveDropPoint } from "./assetFromProfile";
+import type { DeviceProfile } from "./types";
 import { officeAssessment, pressureProfile } from "./server/__fixtures__/placement";
 
 it("allocates readable, stable tags in sequence against the capture snapshot", () => {
@@ -39,6 +40,45 @@ it("builds a neutral provisional asset and keeps undocumented ratings unknown", 
     specs: { foodGrade: null, hazardRating: null, ipRating: null },
     cyber: undefined,
   });
+});
+
+const controllerProfile: DeviceProfile = {
+  ...pressureProfile, device_type: "Programmable logic controller", category: "controller",
+  physical_kind: "plc_cabinet", object_class: "networked_device",
+};
+
+it("models exposed fieldbus access to the controller without inventing an Ethernet link", () => {
+  const candidate = assetFromProfile({ ...controllerProfile, ports: ["MPI", "PROFIBUS DP"] }, SEED_TWIN, "PLC-901", {
+    area: "filler3", x: 830, y: 675,
+  });
+  expect(candidate.criticality).toBe(4);
+  expect(candidate.safetyCritical).toBeUndefined();
+  expect(candidate.physical.connections).toEqual([]);
+  const { paths } = evaluatePlacement(SEED_TWIN, candidate);
+  expect(paths).toContainEqual(expect.objectContaining({ source: "rules", target: candidate.id }));
+  expect(paths.every((path) => path.steps.length === 1 && path.steps[0].via === "physical")).toBe(true);
+});
+
+it("uses the nearest available switch in the same room and network for documented Ethernet", () => {
+  const area = "corporate_office";
+  const switchAsset = SEED_TWIN.assets.find(({ id }) => id === "SW-IT")!;
+  const twin = { ...SEED_TWIN, assets: [
+    ...SEED_TWIN.assets,
+    { ...switchAsset, id: "SW-NEAR", physical: { ...switchAsset.physical, x: 390 } },
+    { ...switchAsset, id: "SW-OFFLINE", status: "offline" as const, physical: { ...switchAsset.physical, x: 460 } },
+    { ...switchAsset, id: "SW-OTHER-ZONE", physical: { ...switchAsset.physical, x: 470 }, network: { ...switchAsset.network, level: 3.5 as const, area: "Other zone" } },
+  ] };
+  const controller = assetFromProfile({ ...controllerProfile, ports: ["PROFINET (Ethernet)"] }, twin, "PLC-901", { area, x: 475, y: 780 });
+  expect(controller.physical.connections).toEqual([
+    { to: "SW-NEAR", medium: "network", label: expect.stringMatching(/simulated.*unverified/i) },
+  ]);
+  expect(evaluatePlacement(twin, controller).paths).toContainEqual(expect.objectContaining({
+    steps: expect.arrayContaining([expect.objectContaining({ from: controller.id, to: "SW-NEAR", via: "network" })]),
+  }));
+  const fieldbusOnly = assetFromProfile({ ...controllerProfile, ports: ["MPI", "RJ45"] }, twin, "PLC-902", { area, x: 475, y: 780 });
+  expect(fieldbusOnly.physical.connections).toEqual([]);
+  const moved = { ...controller, physical: { ...controller.physical, area: "packaging" as const, x: 1000, y: 450 } };
+  expect(refreshModeledControllerLink(twin, moved).physical.connections).toEqual([]);
 });
 
 it("uses the home room while preserving every restriction at the candidate's coordinates", () => {

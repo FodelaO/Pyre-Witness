@@ -3,7 +3,7 @@ import { atRecommendedPlacement, passiveNetworkAt } from "@/pipeline/assetFromPr
 import type { Assessment, SelfCheckResult } from "@/pipeline/types";
 import { bestPlacement, evaluatePlacement, evaluateTwin, isPlantHome, rankPlacements } from "@/rules/engine";
 import { areaById } from "@/twin/geometry";
-import type { Asset, Twin } from "@/twin/types";
+import type { AreaId, Asset, PurdueLevel, Twin } from "@/twin/types";
 
 function verdict(checked: ReturnType<typeof evaluatePlacement> | null, disagreements: string[], revised: boolean): SelfCheckResult {
   return {
@@ -17,6 +17,35 @@ function verdict(checked: ReturnType<typeof evaluatePlacement> | null, disagreem
 
 export function checkAsDropped(twin: Twin, candidate: Asset): SelfCheckResult {
   return verdict(evaluatePlacement(twin, candidate), [], false);
+}
+
+/** Keeps absolute exclusions consistent with the exact configurations the Inspector cleared. */
+export function reconcilePlacementExclusions(
+  twin: Twin,
+  assessment: Assessment,
+  checked: SelfCheckResult,
+  candidate: Asset,
+  asDropped: SelfCheckResult,
+) {
+  const normalize = (name: string) => name.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+  const cleared: { area: AreaId; level: PurdueLevel }[] = [];
+  if (asDropped.passed) cleared.push({ area: candidate.physical.area, level: candidate.network.level });
+  if (checked.passed && !assessment.placement.why.startsWith("HOLD:")) {
+    cleared.push({ area: assessment.physical_placement.area, level: assessment.placement.level });
+  }
+  const superseded = assessment.never_place.filter((exclusion) => cleared.some(({ area, level }) => {
+    if (exclusion.level !== null && exclusion.level !== level) return false;
+    if (exclusion.area !== null) return exclusion.area === area;
+    const name = areaById(twin, area)?.name;
+    const where = normalize(exclusion.where);
+    return where === normalize(area) || (name !== undefined && where === normalize(name));
+  }));
+  return {
+    assessment: superseded.length
+      ? { ...assessment, never_place: assessment.never_place.filter((exclusion) => !superseded.includes(exclusion)) }
+      : assessment,
+    superseded,
+  };
 }
 
 export function reviewRecommendation(
