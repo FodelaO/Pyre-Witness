@@ -13,13 +13,14 @@ function headers(connection) {
   return { [connection.role === "desktop" ? DESK_KEY : PHONE_KEY]: connection.key };
 }
 
-/** @param {CallConnection} connection @param {import("./protocol").CallCommand} command */
-async function postCommand(connection, command) {
+/** @param {CallConnection} connection @param {import("./protocol").CallCommand} command @param {AbortSignal} [signal] */
+async function postCommand(connection, command, signal) {
   const response = await fetch(`/api/escalation/${connection.code}`, {
     method: "POST",
     headers: { ...headers(connection), "Content-Type": "application/json" },
     body: JSON.stringify(command),
-    keepalive: true,
+    keepalive: !signal,
+    signal,
   });
   if (!response.ok) throw new Error(response.status === 404 ? "The phone link expired." : "Could not update the call.");
   return response;
@@ -30,20 +31,25 @@ export async function callCommand(connection, command) {
   await postCommand(connection, command);
 }
 
-/** @param {CallConnection} connection @param {string} id @param {number} version */
+/** @param {CallConnection} connection @param {string} id @param {number} version @returns {Promise<import("./protocol").DialTarget>} */
 export async function fetchDialTarget(connection, id, version) {
-  const response = await postCommand(connection, { type: "dial-target", id, version });
-  /** @type {import("./protocol").DialTarget} */
-  const target = await response.json();
-  return target;
+  const abort = new AbortController();
+  const timeout = setTimeout(() => abort.abort(), 5000);
+  try {
+    const response = await postCommand(connection, { type: "dial-target", id, version }, abort.signal);
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
  * @param {CallConnection} connection
  * @param {(frame: import("./protocol").PairingSnapshot) => void} onFrame
  * @param {(message: string) => void} onError
+ * @param {number} [retryMs]
  */
-export function listenToCall(connection, onFrame, onError) {
+export function listenToCall(connection, onFrame, onError, retryMs = RECONNECT_MS) {
   const abort = new AbortController();
   let retry;
 
@@ -79,7 +85,7 @@ export function listenToCall(connection, onFrame, onError) {
     }
     if (abort.signal.aborted) return;
     onError("Call link interrupted. Reconnecting…");
-    retry = setTimeout(() => void connect(), RECONNECT_MS);
+    retry = setTimeout(() => void connect(), retryMs);
   }
 
   void connect();

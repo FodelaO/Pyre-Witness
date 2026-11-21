@@ -24,6 +24,10 @@ function attachPhone(page) {
   let snapshot;
   let targetVersion;
   let targetRequest = 0;
+  let targetRetry;
+  let stopListening;
+  let foreground = !document.hidden;
+  let awaitingSnapshot = true;
   let dialStarted = false;
   let expiry;
   let enabled = false;
@@ -38,13 +42,15 @@ function attachPhone(page) {
     if (call?.acknowledgedAt) return "Acknowledged";
     if (call?.resolvedAt) return "Alert cleared";
     if (call?.answeredAt) return "Chief briefing";
-    if (call && (call.dialedAt || dialStarted)) return "Dialer opened";
+    if (call && (call.dialedAt || dialStarted)) return "Call tapped";
+    if (awaitingSnapshot) return connectionError ? "Call link unavailable" : "Connecting phone";
     if (call) return "Incoming call";
     if (snapshot) return "Ready for calls";
     return connectionError ? "Call link unavailable" : "Connecting phone";
   }
 
   function clearDialTarget() {
+    clearTimeout(targetRetry);
     targetRequest++;
     targetVersion = undefined;
     dial.removeAttribute("href");
@@ -54,7 +60,7 @@ function attachPhone(page) {
   function syncDialTarget() {
     const call = snapshot?.call;
     const version = call?.destinationVersion;
-    if (!version || dialStarted || connectionError || Date.now() >= snapshot.expiresAt) {
+    if (!version || !foreground || awaitingSnapshot || dialStarted || connectionError || Date.now() >= snapshot.expiresAt) {
       clearDialTarget();
       return;
     }
@@ -73,6 +79,7 @@ function attachPhone(page) {
       if (request !== targetRequest) return;
       clearDialTarget();
       operationError = "Could not load the call destination. Check the phone link.";
+      targetRetry = setTimeout(syncDialTarget, 1500);
       render();
     });
   }
@@ -82,12 +89,14 @@ function attachPhone(page) {
     const alert = call?.alert;
     const answered = !!call?.answeredAt;
     const terminalAt = call?.approvedAt ?? call?.acknowledgedAt ?? call?.resolvedAt;
-    const awaitingAnswer = !!call && !answered && !terminalAt;
+    const ready = foreground && !awaitingSnapshot;
+    const awaitingAnswer = !!call && ready && !answered && !terminalAt;
     const dialed = !!call && (call.dialedAt !== undefined || dialStarted);
     const ringing = awaitingAnswer && !dialed && !connectionError;
-    const canDial = !!call && !terminalAt && !dialed && dial.hasAttribute("href");
+    const canDial = !!call && ready && !terminalAt && !dialed && dial.hasAttribute("href");
     const waiting = !!(call?.approvalRequestedAt && !call.approvalUnavailableAt && !terminalAt);
     const approvable = !!(alert?.canApprove && !call.approvalUnavailableAt);
+    const ringerReady = enabled && audio.context?.state === "running";
     const loss = alert?.lossText ?? (alert?.loss == null ? "" : `$${alert.loss.toLocaleString("en-US")}`);
 
     page.dataset.ringing = String(ringing);
@@ -119,22 +128,22 @@ function attachPhone(page) {
     show("operation-error", !!operationError);
     text("operation-error", operationError);
 
-    show("enable", !!snapshot && !call);
-    element("enable").disabled = enabled;
-    element("enable").querySelector("span").textContent = enabled ? "Ringer enabled" : "Enable ringer";
+    show("enable", !!snapshot && ready && !call);
+    element("enable").disabled = ringerReady;
+    element("enable").querySelector("span").textContent = ringerReady ? "Ringer enabled" : "Enable ringer";
     show("dial", canDial);
     show("dial-receipt", dialed);
     show("incoming", awaitingAnswer);
-    show("enable-incoming", !enabled && ringing);
+    show("enable-incoming", !ringerReady && ringing);
     element("answer").classList.toggle("pw-call-primary", !canDial);
     element("answer").classList.toggle("pw-call-secondary", canDial);
     element("answer").disabled = pending === "answer";
-    if (enabled && ringing && !pending) audio.ring();
+    if (ringerReady && ringing && !pending) audio.ring();
     else audio.stopRing();
 
     show("briefing", answered);
     text("script", alert?.script);
-    show("response", !terminalAt);
+    show("response", ready && !terminalAt);
     show("approve", approvable);
     show("action", approvable);
     text("action", alert && `Twin update · ${alert.action}`);
@@ -222,16 +231,18 @@ function attachPhone(page) {
   element("acknowledge").addEventListener("click", () => void respond("acknowledge"));
   dial.addEventListener("click", (event) => {
     const alert = snapshot?.call?.alert;
-    if (!alert || dialStarted || !dial.hasAttribute("href") || Date.now() >= snapshot.expiresAt) {
+    if (!alert || !event.isTrusted || !foreground || awaitingSnapshot || dialStarted
+      || !dial.hasAttribute("href") || Date.now() >= snapshot.expiresAt) {
       event.preventDefault();
       return;
     }
+    // Keep the native anchor navigation in this tap. The relay receipt can arrive separately.
     dialStarted = true;
     audio.stopRing();
     void send("dial", alert.id).then((sent) => {
       if (snapshot?.call?.alert.id !== alert.id) return;
       if (sent) clearDialTarget();
-      else dialStarted = false;
+      else { dialStarted = false; syncDialTarget(); }
       render();
     });
   });
@@ -245,8 +256,7 @@ function attachPhone(page) {
     } else void play(alert);
   });
 
-  render();
-  const stop = listenToCall(connection, (frame) => {
+  function onFrame(frame) {
     if (frame.call?.alert.id !== snapshot?.call?.alert.id) {
       audio.stopSpeech();
       clearDialTarget();
@@ -257,6 +267,7 @@ function attachPhone(page) {
       pending = "";
     }
     connectionError = "";
+    awaitingSnapshot = false;
     snapshot = frame;
     expiry ??= setTimeout(() => {
       snapshot = undefined;
@@ -266,17 +277,46 @@ function attachPhone(page) {
     }, Math.max(0, frame.expiresAt - Date.now()));
     syncDialTarget();
     render();
-  }, (message) => {
+  }
+
+  function onConnectionError(message) {
     connectionError = message;
+    awaitingSnapshot = true;
     clearDialTarget();
     render();
-  });
-  window.addEventListener("pagehide", (event) => {
+  }
+
+  function resume() {
+    if (document.hidden) return;
+    foreground = true;
+    awaitingSnapshot = true;
+    stopListening?.();
     clearDialTarget();
-    if (!event.persisted) { stop(); clearTimeout(expiry); audio.close(); }
-    else audio.stopRing();
+    render();
+    stopListening = listenToCall(connection, onFrame, onConnectionError, 1500);
+  }
+
+  function pause() {
+    foreground = false;
+    awaitingSnapshot = true;
+    stopListening?.();
+    stopListening = undefined;
+    clearDialTarget();
+    render();
+  }
+
+  render();
+  if (foreground) resume();
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) pause();
+    else if (!foreground) resume();
+  });
+  window.addEventListener("online", resume);
+  window.addEventListener("pagehide", (event) => {
+    pause();
+    if (!event.persisted) { clearTimeout(expiry); audio.close(); }
   });
   window.addEventListener("pageshow", (event) => {
-    if (event.persisted) { syncDialTarget(); render(); }
+    if (event.persisted && !foreground) resume();
   });
 }

@@ -99,7 +99,7 @@ function AlertCard({ record, busy, phoneConnected, telephone, onRing, onDismiss 
   const { trigger, approved, acknowledged, answered, ringing, dialed, resolvedAt } = record;
   const done = approved ?? acknowledged;
   const status = approved ? "Approved" : acknowledged ? "Acknowledged"
-    : resolvedAt ? "Resolved" : answered ? "Answered" : dialed ? "Dialer opened"
+    : resolvedAt ? "Resolved" : answered ? "Briefing opened" : dialed ? "Call tapped"
       : ringing ? (phoneConnected ? "Ringing" : "Waiting for paired phone") : "Threshold crossed";
   const when = done?.at ?? resolvedAt ?? answered?.at ?? dialed?.at ?? ringing?.at ?? record.raisedAt;
 
@@ -128,7 +128,7 @@ function AlertCard({ record, busy, phoneConnected, telephone, onRing, onDismiss 
     </div>}
     {done && <div className="pw-es-receipt">{done.actor} · <Time at={done.at} />{approved && <> · {record.action}</>}</div>}
     {dialed && <div className="pw-es-receipt" role="status"><PhoneCall size={13} aria-hidden />
-      <span>Calling on-call from the paired phone</span> <Time at={dialed.at} />
+      <span>Call tapped on the paired phone</span> <Time at={dialed.at} />
     </div>}
     {!resolvedAt && !done && !dialed && (!phoneConnected || !ringing) &&
       <button type="button" className="pw-es-button pw-es-call-button" disabled={busy} onClick={onRing}>
