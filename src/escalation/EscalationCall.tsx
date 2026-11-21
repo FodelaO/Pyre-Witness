@@ -1,13 +1,14 @@
 /** Fixed desktop alert instrument with threshold settings, phone pairing and call receipts. */
 "use client";
 
-import { Bell, Check, ChevronDown, FlaskConical, Phone, PhoneCall, QrCode, Settings2, X } from "lucide-react";
+import { Bell, Check, ChevronDown, FlaskConical, MessageSquare, Phone, PhoneCall, QrCode, Settings2, X } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { formatUsd } from "@/econ/format";
 import { Equipment, FOOTPRINT } from "@/equipment";
 import { monitorEscalations } from "./monitor";
 import { PhoneContactDialog } from "./PhoneContactDialog";
 import { BASELINE_INCREASE, validThresholds } from "./policy";
+import { monitorSlackAlerts, useSlackStatuses } from "./slackClient";
 import { useEscalationStore } from "./store";
 import { TelephoneCard } from "./TelephoneCard";
 import { TEST_SCENARIO_LABEL } from "./testScenario";
@@ -97,6 +98,7 @@ function AlertCard({ record, busy, phoneConnected, telephone, onRing, onDismiss 
   onRing: () => void; onDismiss: () => void;
 }) {
   const { trigger, approved, acknowledged, answered, ringing, dialed, resolvedAt } = record;
+  const slackStatus = useSlackStatuses((statuses) => statuses[record.id]);
   const done = approved ?? acknowledged;
   const status = approved ? "Approved" : acknowledged ? "Acknowledged"
     : resolvedAt ? "Resolved" : answered ? "Briefing opened" : dialed ? "Call tapped"
@@ -136,6 +138,9 @@ function AlertCard({ record, busy, phoneConnected, telephone, onRing, onDismiss 
       {busy ? "Opening phone link…" : phoneConnected ? "Ring paired phone" : "Pair a phone to call you"}
     </button>}
     {telephone}
+    <div className="pw-es-slack" role="status">
+      {slackStatus && slackStatus !== "pending" && <><MessageSquare size={12} aria-hidden /> Slack {slackStatus}</>}
+    </div>
     <details className="pw-es-script">
       <summary>Read call script <ChevronDown size={13} aria-hidden /></summary>
       <div>{record.script}</div>
@@ -152,6 +157,7 @@ export default function EscalationCall() {
   const phone = useEscalationPhone(records);
   const { pairing, snapshot, busy, error, preparePairing, ring, record, activeRecord } = useCallPairing(label, phone.contact);
 
+  useEffect(monitorSlackAlerts, []);
   useEffect(monitorEscalations, []);
   useEffect(() => {
     try { setLabel(localStorage.getItem(RESPONDER_KEY) ?? ""); } catch { /* The paired browser still has an identifier. */ }

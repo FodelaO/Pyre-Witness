@@ -1,6 +1,8 @@
 <!-- Two-person run of the Pyre Witness on-call demonstration. -->
 # MacBook Pro on-call recording
 
+Add `SLACK_WEBHOOK_URL=...` to the server’s `.env` to enable Slack alerts, including **Run test alert**.
+
 1. **Set up the devices.** The presenter runs Pyre Witness on the laptop and keeps their iPhone nearby to receive the call. The collaborator holds a separate phone with voice service. Connect the laptop and collaborator’s phone to the same Wi-Fi and check that the presenter’s iPhone can receive calls.
 2. **Pair the collaborator’s phone.** On the laptop, open the escalation bell and choose **Pair phone**. The collaborator scans the on-call QR, opens it in Safari on iPhone, and taps **Enable ringer**. Wait for **Phone paired** on the laptop. Keep the on-call tab available. Pairing links expire after 45 minutes.
 3. **Save the destination.** On the laptop, open the bell and choose **Add your phone**. Enter the presenter’s name and their real iPhone number with the country code. Leave **Call this number when a threshold is crossed** unchecked for the paired-phone call, then choose **Save phone**.
