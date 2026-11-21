@@ -1,18 +1,21 @@
-/** Launches the five deterministic exercises and exposes transport during a replay. */
+/** Launches exercises for the selected lens and keeps replay transport available. */
 "use client";
 
-import { ChevronDown, CloudFog, FlaskConical, Pause, Play, RotateCcw, ServerCrash, Snowflake, Wifi, type LucideIcon } from "lucide-react";
-import { ALL_SCENARIOS, SCENARIOS } from "./scenarios";
+import { CloudFog, FlaskConical, Gauge, Pause, Play, RotateCcw, ServerCrash, Snowflake, Wifi, type LucideIcon } from "lucide-react";
+import { useLensStore } from "@/layers/lensStore";
+import { scenarioLens } from "./scenarioLens";
+import { ALL_SCENARIOS } from "./scenarios";
 import { useSimStore } from "./simStore";
 import Timeline, { formatSimTime } from "./Timeline";
-import type { ScenarioId } from "./types";
+import type { SimScenarioId } from "./types";
 
-const icons: Record<ScenarioId, LucideIcon> = {
-  cip: FlaskConical, ammonia: CloudFog, ransomware: ServerCrash, wireless: Wifi, chiller: Snowflake,
+const icons: Record<SimScenarioId, LucideIcon> = {
+  cip: FlaskConical, ammonia: CloudFog, chiller: Snowflake, carbonation: Gauge, ransomware: ServerCrash, wireless: Wifi,
 };
-const launchers = Object.keys(icons) as ScenarioId[];
+const launchers = Object.keys(icons) as SimScenarioId[];
 
 export default function SimControls() {
+  const lens = useLensStore((state) => state.mode);
   const active = useSimStore((state) => state.activeScenario);
   const run = useSimStore((state) => state.run);
   const current = useSimStore((state) => state.currentStage);
@@ -24,6 +27,7 @@ export default function SimControls() {
   const togglePlayback = useSimStore((state) => state.togglePlayback);
   const setSpeed = useSimStore((state) => state.setSpeed);
   const reset = useSimStore((state) => state.reset);
+  const seek = useSimStore((state) => state.seek);
   const playing = mode === "playing";
   const playback = playing ? "Pause" : mode === "finished" ? "Rerun" : "Play";
   const containedAt = run?.containedAt;
@@ -35,30 +39,20 @@ export default function SimControls() {
 
   return (
     <section className="pw-sim-controls" data-mount="shell" aria-label="Deterministic plant simulation">
-      <div className="pw-tool-rail pw-sim-rail" role="group" aria-label="Run a simulated scenario">
-        <details className="pw-sim-extra">
-          <summary aria-label="More simulations" title="More simulations">
-            <span className="pw-sim-heading">Simulate</span><ChevronDown size={12} aria-hidden />
-          </summary>
-          <button type="button" onClick={(event) => {
-            const menu = event.currentTarget.closest("details");
-            if (menu) {
-              menu.open = false;
-              menu.querySelector("summary")?.focus();
-            }
-            start("carbonation");
-          }}>{ALL_SCENARIOS.carbonation.label}</button>
-        </details>
-        {launchers.map((id) => {
-          const { label } = SCENARIOS[id];
-          const Icon = icons[id];
-          return (
-            <button type="button" className="pw-tool-button" key={id} onClick={() => start(id)}
-              aria-label={label} aria-pressed={active === id} data-pw-tip={label} data-pw-tip-side="top">
-              <Icon size={18} strokeWidth={1.65} aria-hidden />
-            </button>
-          );
-        })}
+      <div className="pw-sim-launch" data-replaying={!!run || undefined}>
+        <div className="pw-tool-rail pw-sim-rail" role="group" aria-label="Run a simulated scenario">
+          <span className="pw-sim-heading">Simulate</span>
+          {launchers.filter((id) => lens === "both" || scenarioLens[id] === lens).map((id) => {
+            const { label } = ALL_SCENARIOS[id];
+            const Icon = icons[id];
+            return (
+              <button type="button" className="pw-tool-button" key={id} onClick={() => start(id)}
+                aria-label={label} aria-pressed={active === id} data-pw-tip={label} data-pw-tip-side="top">
+                <Icon size={18} strokeWidth={1.65} aria-hidden />
+              </button>
+            );
+          })}
+        </div>
       </div>
       {run && (
         <div className="pw-sim-replay">
@@ -75,7 +69,7 @@ export default function SimControls() {
               data-pw-tip="Reset simulation" data-pw-tip-side="top"><RotateCcw size={15} aria-hidden /></button>
           </div>
           <Timeline stages={run.stages} current={current} elapsed={elapsed}
-            outcome={outcomeLine} outcomeDetail={outcome} contained={run.contained} />
+            outcome={outcomeLine} outcomeDetail={outcome} contained={run.contained} onSeek={seek} />
         </div>
       )}
     </section>

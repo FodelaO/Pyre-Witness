@@ -4,6 +4,7 @@ import { useTwinStore } from "@/twin/store";
 import type { Twin } from "@/twin/types";
 import { publishNewSimAlerts } from "./crewAlerts";
 import { projectScenarioMitigations, runScenario } from "./engine";
+import { replaceSimulationProposals } from "./mitigationQueue";
 import { applyMonitorStatus, readMonitors } from "./monitors";
 import { counterfactualText } from "./outcome";
 import { applySimEffects, restoreProjection, type Projection } from "./overlay";
@@ -25,6 +26,8 @@ export interface SimState {
   togglePlayback: () => void;
   setSpeed: (speed: 1 | 4) => void;
   advance: (realSeconds: number) => void;
+  /** Jump the replay to the start of one stage; pauses unless it is the last stage. */
+  seek: (stageIndex: number) => void;
   tickPlant: () => void;
   reset: () => void;
 }
@@ -68,8 +71,24 @@ export const useSimStore = create<SimState>((set, get) => {
   let trialProcess: ProcessState | undefined;
   let sequence = 0;
   let runId: string | undefined;
+  let stopProjectionUpdates: (() => void) | undefined;
 
   const restoreTrial = (twin: Twin) => restoreProjection(restoreProjection(twin, scenarioProjection), trialPlantProjection);
+
+  function withdrawProposals() {
+    stopProjectionUpdates?.();
+    stopProjectionUpdates = undefined;
+    replaceSimulationProposals([]);
+  }
+
+  function followProjection(run: SimRun) {
+    const refresh = (twin: Twin) => replaceSimulationProposals(projectScenarioMitigations(run.id, restoreTrial(twin)));
+    stopProjectionUpdates = useTwinStore.subscribe((current, previous) => {
+      // Configuration actions publish a new risk report. Quiet replay and telemetry ticks keep it.
+      if (current.risk !== previous.risk) refresh(current.twin);
+    });
+    refresh(useTwinStore.getState().twin);
+  }
 
   function paintStages(twin: Twin, stages: SimStage[]) {
     let changed = twin;
@@ -99,6 +118,7 @@ export const useSimStore = create<SimState>((set, get) => {
     alerts: [],
     speed: 1,
     start(scenarioId) {
+      withdrawProposals();
       clearScenarioProjection();
       const { twin, mitigations } = useTwinStore.getState();
       const appliedEffects = mitigations.filter(({ status }) => status === "applied").flatMap(({ effects }) => effects);
@@ -139,15 +159,17 @@ export const useSimStore = create<SimState>((set, get) => {
         next.outcome = `${state.run.consequence.summary}. Counterfactual · ${counterfactualText(state.run)}`;
       }
       set(next);
-      if (finished) {
-        const { twin, mitigations, proposeMitigations } = useTwinStore.getState();
-        const baseline = restoreTrial(twin);
-        const pending = new Set(mitigations.filter(({ status }) => status === "proposed")
-          .map(({ effects }) => JSON.stringify(effects)));
-        const proposals = projectScenarioMitigations(state.run.id, baseline)
-          .filter(({ effects }) => !pending.has(JSON.stringify(effects)));
-        if (proposals.length) proposeMitigations(proposals);
-      }
+      if (finished && get().run === state.run) followProjection(state.run);
+    },
+    seek(stageIndex) {
+      const { run } = get();
+      const stage = run?.stages[stageIndex];
+      if (!run || !stage) return;
+      withdrawProposals();
+      const last = stageIndex === run.stages.length - 1;
+      set({ mode: "playing", elapsed: stage.t, currentStage: -1, outcome: null });
+      get().advance(0);
+      if (!last) set({ mode: "paused" });
     },
     tickPlant() {
       const { run, currentStage } = get();
@@ -178,6 +200,7 @@ export const useSimStore = create<SimState>((set, get) => {
       if (alerts.length || get().alerts.length) set({ alerts });
     },
     reset() {
+      withdrawProposals();
       clearScenarioProjection();
       runId = undefined;
       set({ ...idle, alerts: readMonitors(useTwinStore.getState().twin) });

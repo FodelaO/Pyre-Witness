@@ -9,13 +9,14 @@ export function formatSimTime(seconds: number): string {
   return minutes + ":" + (whole % 60).toString().padStart(2, "0");
 }
 
-export default function Timeline({ stages, current, elapsed, outcome, outcomeDetail, contained }: {
+export default function Timeline({ stages, current, elapsed, outcome, outcomeDetail, contained, onSeek }: {
   stages: SimStage[];
   current: number;
   elapsed: number;
   outcome: string | null;
   outcomeDetail: string | null;
   contained: boolean;
+  onSeek?: (stageIndex: number) => void;
 }) {
   const active = stages[current];
 
@@ -26,10 +27,13 @@ export default function Timeline({ stages, current, elapsed, outcome, outcomeDet
         <ol className="pw-sim-stages" aria-label="Simulation stages">
           {stages.map((stage, index) => (
             <li key={stage.t + ":" + index} data-state={index > current ? "waiting" : stage.outcome}
-              aria-current={index === current ? "step" : undefined} title={formatSimTime(stage.t) + " · " + stage.title}>
-              <span className="pw-sim-sr-only">
-                {formatSimTime(stage.t) + " " + stage.title + (index > current ? ", upcoming" : stage.outcome === "blocked" ? ", contained" : "")}
-              </span>
+              aria-current={index === current ? "step" : undefined}>
+              <button type="button" className="pw-sim-stage-hit" onClick={() => onSeek?.(index)} disabled={!onSeek}
+                data-pw-tip={formatSimTime(stage.t) + " · " + stage.title} data-pw-tip-side="top">
+                <span className="pw-sim-sr-only">
+                  {"Jump to " + formatSimTime(stage.t) + " " + stage.title + (index > current ? ", upcoming" : stage.outcome === "blocked" ? ", contained" : "")}
+                </span>
+              </button>
             </li>
           ))}
         </ol>

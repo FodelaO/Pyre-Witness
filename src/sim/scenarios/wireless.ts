@@ -2,7 +2,7 @@
 import { areaById, assetById, distance, entryPointById, UNITS_PER_METRE } from "@/twin/geometry";
 import type { MitigationEffect, Twin } from "@/twin/types";
 import type { ScenarioContext, ScenarioDefinition, StageDefinition } from "../types";
-import { editAsset, enforceBoundary, inspect, proposal, reachFrom, reading } from "./evidence";
+import { editAsset, enforceBoundary, inspect, proposal, reachFrom, reading, reportArea } from "./evidence";
 
 const ORIGIN = "parking_rf";
 const HMI = "HMI-F3";
@@ -72,7 +72,11 @@ export const wireless: ScenarioDefinition = {
     const flow = reading(assetById(twin, "FT-403"), "FT-403", 18);
     return [
       {
-        t: 0, title: endpoint ? `${endpoint.id} within parking RF reach` : "Parking-lot RF exposure checked",
+        t: 0, title: "Untrusted RF activity reported", where: [ORIGIN, "parking_lot"],
+        effects: reportArea(twin, "parking_lot"),
+      },
+      {
+        t: 4, title: endpoint ? `${endpoint.id} within parking RF reach` : "Parking-lot RF exposure checked",
         where: endpoint ? [ORIGIN, endpoint.id] : [ORIGIN],
         technique: "T0860",
         control: { label: "No exposed OT radio in range", where: [ORIGIN], ...radioControl, holds: () => !endpoint },

@@ -3,7 +3,7 @@ import { areaById, assetById } from "@/twin/geometry";
 import type { MitigationEffect, Twin } from "@/twin/types";
 import type { ScenarioDefinition, SimAssetEffect, StageDefinition } from "../types";
 import {
-  available, editAsset, exposedControl, hasProtection, inspect, proposal, removeRemoteAccess, unenrolledRemoteEndpoints,
+  available, editAsset, exposedControl, hasProtection, inspect, proposal, removeRemoteAccess, reportArea, unenrolledRemoteEndpoints,
   withoutProtection,
 } from "./evidence";
 
@@ -24,6 +24,8 @@ export const ammonia: ScenarioDefinition = {
   stages(twin: Twin): StageDefinition[] {
     const { context, graph, findings } = inspect(twin);
     const source = assetById(twin, SOURCE);
+    const sourcePresent = source && context.areasFor(source).some((area) => area.id === ZONE) &&
+      areaById(twin, ZONE)?.attrs.hazard === "NH3";
     const detector = assetById(twin, DETECTOR);
     const safety = assetById(twin, SAFETY);
     const exposure = exposedControl(graph, SAFETY);
@@ -44,11 +46,15 @@ export const ammonia: ScenarioDefinition = {
 
     return [
       {
-        t: 0, title: "Simulated release reported", where: [SOURCE, ZONE],
-        control: { label: "Machinery room source absent", where: [ZONE], holds: () =>
-          !source || !context.areasFor(source).some((area) => area.id === ZONE) ||
-          areaById(twin, ZONE)?.attrs.hazard !== "NH3" },
-        effects: { assets: { [SOURCE]: { status: "attention" } }, areas: { [ZONE]: "attention" }, visual: plume(0.18, 0) },
+        t: 0, title: "Machinery-room release reported", where: [SOURCE, ZONE],
+        effects: {
+          ...reportArea(twin, ZONE),
+          ...(sourcePresent ? { visual: plume(0.18, 0) } : {}),
+        },
+      },
+      {
+        t: 4, title: "Machinery-room source checked", where: [SOURCE, ZONE],
+        control: { label: "Machinery room source absent", where: [ZONE], holds: () => !sourcePresent },
       },
       {
         t: 8, title: localResponse ? "Local alarm responding" : "Local response unconfirmed",
@@ -107,7 +113,6 @@ export const ammonia: ScenarioDefinition = {
   },
   consequence(_twin, stages) {
     const advanced = stages.filter((stage) => stage.outcome === "advanced");
-    const started = advanced.length > 0;
     const unrated = advanced.at(-1)?.title === "Equipment suitability unresolved";
     const peakPpm = Math.max(0, ...advanced.map(({ effects }) =>
       effects?.visual?.kind === "ammonia" ? effects.visual.estimatedPpm : 0));
@@ -116,7 +121,7 @@ export const ammonia: ScenarioDefinition = {
       summary: reachedEvacuation
         ? `${peakPpm} ppm vs ${IDLH_PPM} ppm IDLH · simulated evacuation`
         : unrated ? `${peakPpm} ppm peak · equipment suitability unresolved`
-          : started ? `${peakPpm} ppm peak · release response held` : "0 ppm simulated · source absent",
+          : peakPpm > 0 ? `${peakPpm} ppm peak · release response held` : "0 ppm simulated · source absent",
       metrics: { peakPpm, idlhPpm: IDLH_PPM, evacuation: reachedEvacuation, unratedEquipment: unrated },
     };
   },

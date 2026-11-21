@@ -1,8 +1,8 @@
 /** Draws the illustrative ammonia plume and caustic front from replay state. */
 import { useId } from "react";
-import { nodePosition } from "@/twin/geometry";
+import { containsPoint } from "@/twin/geometry";
 import type { Twin } from "@/twin/types";
-import { causticPath } from "./floorGeometry";
+import { causticPath, floorAreaBounds, floorNode, insetFloorPoint } from "./floorGeometry";
 import type { SimEffects } from "./types";
 
 function FloorTag({ text, x, y }: { text: string; x: number; y: number }) {
@@ -34,11 +34,15 @@ export default function IncidentEffects({ twin, visual }: { twin: Twin; visual: 
   }
 
   const hazard = twin.areas.find((area) => visual.where.includes(area.id) && area.attrs.hazard === "NH3");
-  const origin = visual.where.map((id) => nodePosition(twin, id)).find((point) => !!point);
-  if (!hazard || !origin || !intensity) return null;
+  const origin = visual.where.map((id) => floorNode(twin, id)).find((point) => !!point);
+  if (!hazard || !origin || !intensity || !containsPoint(hazard, origin.x, origin.y)) return null;
 
-  const { x, y, w, h } = hazard.bounds;
+  const bounds = floorAreaBounds(twin, hazard);
+  if (!bounds) return null;
+  const { x, y, w, h } = bounds;
   const reading = `NH₃ ${Math.round(visual.estimatedPpm)} / 300 ppm`;
+  // Hangs on the zone's lower edge: the zone's own name and status chip fill the row just inside it.
+  const label = insetFloorPoint(twin, { x: x + w / 2, y: y + h + 10 }, reading.length * 3.8 + 8, 12);
 
   return (
     <g aria-label="Simulated ammonia plume">
@@ -59,7 +63,7 @@ export default function IncidentEffects({ twin, visual }: { twin: Twin; visual: 
         fill={`url(#${gradientId})`}
         clipPath={`url(#${clipId})`}
       />
-      <FloorTag text={reading} x={x + w / 2} y={y + h - 14} />
+      <FloorTag text={reading} x={label.x} y={label.y} />
     </g>
   );
 }

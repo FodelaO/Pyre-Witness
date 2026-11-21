@@ -4,7 +4,7 @@ import type { MitigationEffect, Twin } from "@/twin/types";
 import type { ScenarioDefinition, StageDefinition } from "../types";
 import {
   PHYSICAL_INGRESS_PROTECTIONS, available, editAsset, enforceBoundary, exposedControl, hasProtection, inspect, proposal,
-  reading, removeRemoteAccess, unenrolledRemoteEndpoints, withoutBoundary, withoutProtection,
+  reading, removeRemoteAccess, reportArea, unenrolledRemoteEndpoints, withoutBoundary, withoutProtection,
 } from "./evidence";
 
 const VALVE = "V-311";
@@ -52,7 +52,12 @@ export const cip: ScenarioDefinition = {
     const preview = (intensity: number) => ({ kind: "caustic" as const, where: [VALVE, FILLER], intensity });
     return [
       {
-        t: 0, title: "Production permissive challenged", where: exposure ? [exposure.entry, exposure.endpoint, exposure.assetId] : ["PLC-F3"],
+        t: 0, title: "CIP control anomaly reported", where: [VALVE, "blending"],
+        effects: reportArea(twin, "blending"),
+      },
+      {
+        t: 4, title: "Controller exposure checked",
+        where: exposure ? [exposure.entry, exposure.endpoint, exposure.assetId] : ["PLC-F3"],
         control: { label: "Controller isolation", where: ["PLC-F3"], ...credited, holds: () => !exposure },
       },
       {
@@ -129,7 +134,7 @@ export const cip: ScenarioDefinition = {
     );
     const localControls = localAccess ? [...segmentation, localAccess] : segmentation;
     const combined = localControls.length > 1 ? [proposal(
-      "sim-cip-controller", "Isolate controller access", "software",
+      "sim-cip-controller", "Enforce cell boundary and disable HMI service media", "software",
       "Enforce the intercell boundary and remove the modeled HMI service-media exposure.",
       localControls.flatMap(({ targets }) => targets), localControls.flatMap(({ effects }) => effects),
     )] : [];
@@ -142,7 +147,7 @@ export const cip: ScenarioDefinition = {
     const legacyBridge = assetById(twin, "SW-PK")?.physical.connections.some((link) =>
       link.to === "SW-F3" && link.medium === "network" && link.active !== false);
     const physicalIsolation = ingressControls.length && legacyBridge ? [proposal(
-      "sim-cip-physical-ingress", "Physically isolate controller access", "physical",
+      "sim-cip-physical-ingress", "Lock HMI port and disconnect cell bridge", "physical",
       "Lock the operator panel’s service port and remove the modeled legacy intercell bridge.",
       [HMI, "SW-PK", "SW-F3"],
       [...ingressControls[0].effects, { type: "remove_connection", assetId: "SW-PK", to: "SW-F3", medium: "network" }],

@@ -89,10 +89,10 @@ export function microphoneError(error: unknown): string {
   if (error instanceof DOMException) {
     switch (error.name) {
       case "NotAllowedError":
-      case "SecurityError": return "Microphone permission is required. Allow it in your browser and hold again.";
-      case "NotFoundError": return "No microphone is available.";
-      case "NotReadableError": return "The microphone is in use or unavailable.";
+      case "SecurityError": return "Mic blocked. Allow it, then hold again.";
+      case "NotFoundError": return "No microphone found.";
+      case "NotReadableError": return "Mic busy in another app.";
     }
   }
-  return error instanceof Error && error.name === "Error" ? error.message : "The microphone could not start. Hold to try again.";
+  return error instanceof Error && error.name === "Error" ? error.message : "Mic did not start. Hold again.";
 }

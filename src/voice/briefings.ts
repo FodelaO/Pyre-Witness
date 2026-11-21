@@ -1,6 +1,7 @@
 /** Coordinates gesture-gated briefing playback across the panel and Live control. */
 import { create } from "zustand";
 import { pipelineBus } from "@/pipeline/bus";
+import { PcmPlayback } from "./liveAudio";
 
 const PREFERENCE = "pw:chief-auto-speak";
 
@@ -16,7 +17,7 @@ export const useBriefingPlayback = create<{ autoSpeak: boolean; playback: Playba
 }));
 
 let audio: AudioContext | null = null;
-let active: { abort: AbortController; source?: AudioBufferSourceNode } | null = null;
+let active: { abort: AbortController; player?: PcmPlayback } | null = null;
 let liveBusy = false;
 let pending: string | null = null;
 let mounts = 0;
@@ -35,11 +36,7 @@ export function stopBriefing() {
   const previous = active;
   active = null;
   previous?.abort.abort();
-  if (previous?.source) {
-    previous.source.onended = null;
-    previous.source.stop();
-    previous.source.disconnect();
-  }
+  previous?.player?.stop();
   useBriefingPlayback.setState({ playback: null });
 }
 
@@ -53,30 +50,49 @@ export async function playBriefing(text: string, userGesture = false): Promise<v
   try {
     const context = userGesture ? resumeFromGesture() : Promise.resolve(audio!);
     const result = fetch("/api/voice/speak", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }),
+      method: "POST", headers: { "Content-Type": "application/json", Accept: "audio/pcm" }, body: JSON.stringify({ text }),
       signal: playback.abort.signal,
     });
     const [response, output] = await Promise.all([result, context]);
     if (!response.ok) throw new Error(await readVoiceError(response, "The briefing could not be played."));
-    const buffer = await output.decodeAudioData(await response.arrayBuffer());
     if (active !== playback) return;
-    const source = output.createBufferSource();
-    source.buffer = buffer;
-    source.connect(output.destination);
-    source.onended = () => {
-      source.disconnect();
-      if (active === playback) {
+    if (!response.body || !response.headers.get("content-type")?.startsWith("audio/pcm")) {
+      throw new Error("The server returned an unsupported briefing audio format.");
+    }
+    let complete = false;
+    let started = false;
+    const player = new PcmPlayback(output, settle, 0.12);
+    playback.player = player;
+    function settle() {
+      if (complete && active === playback && !player.playing) {
         active = null;
         useBriefingPlayback.setState({ playback: null });
       }
-    };
-    source.start();
-    playback.source = source;
-    useBriefingPlayback.setState({ playback: { text, status: "playing" } });
+    }
+    const reader = response.body.getReader();
+    try {
+      while (active === playback) {
+        const chunk = await reader.read();
+        if (active !== playback) return;
+        if (chunk.done) break;
+        player.enqueuePcm(chunk.value);
+        if (!started && player.playing) {
+          started = true;
+          useBriefingPlayback.setState({ playback: { text, status: "playing" } });
+        }
+      }
+    } finally {
+      await reader.cancel().catch(() => undefined);
+      reader.releaseLock();
+    }
+    if (!started) throw new Error("Gemini returned no briefing audio.");
+    complete = true;
+    settle();
   } catch (error) {
     if (active !== playback) return;
     active = null;
     playback.abort.abort();
+    playback.player?.stop();
     const message = error instanceof Error && error.name === "Error" && error.message
       ? error.message : "The briefing could not be played. Press play to try again.";
     useBriefingPlayback.setState({ playback: { text, status: "error", error: message } });

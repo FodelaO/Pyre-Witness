@@ -1,5 +1,5 @@
 /* Compact side-by-side illustrations and a full-size fit lightbox. */
-.pw-fit { display: grid; gap: 8px; min-width: 0; }
+.pw-fit { display: grid; gap: 8px; min-width: 0; padding: 15px 18px; border-bottom: 1px solid var(--pw-line); }
 .pw-fit-heading { display: flex; justify-content: space-between; align-items: center; }
 .pw-fit-heading h2 { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; }
 .pw-fit-heading svg { color: var(--pw-text-dim); }
@@ -47,7 +47,8 @@
   font-size: 11px;
   color: var(--pw-text-dim);
 }
-.pw-fit-media button:is(:hover, :focus-visible) { color: var(--pw-text); }
+.pw-fit-media button:enabled:is(:hover, :focus-visible) { color: var(--pw-text); }
+.pw-fit-generate:disabled { opacity: .7; cursor: default; }
 .pw-fit-skeleton {
   background: linear-gradient(105deg, var(--pw-floor) 25%, var(--pw-line) 50%, var(--pw-floor) 75%);
   background-size: 220% 100%;

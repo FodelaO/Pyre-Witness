@@ -28,7 +28,7 @@ function add(twin: Twin, asset: ReturnType<typeof capturedCamera>): Twin {
 
 describe("RF exposure from a captured camera", () => {
   it("uses the modeled placement path for an added camera beside the stock HMI", () => {
-    expect(runScenario("wireless", SEED_TWIN)).toMatchObject({ contained: true, containedAt: 0 });
+    expect(runScenario("wireless", SEED_TWIN)).toMatchObject({ contained: true, containedAt: 4 });
     const camera = capturedCamera();
     expect(camera.physical.connections).toEqual([]);
     expect(camera.network.area).toBe(assetById(SEED_TWIN, "HMI-F3")?.network.area);
@@ -36,8 +36,9 @@ describe("RF exposure from a captured camera", () => {
     const twin = add(SEED_TWIN, camera);
     const run = runScenario("wireless", twin);
     expect(run.contained).toBe(false);
-    expect(run.stages[0]).toMatchObject({ where: ["parking_rf", camera.id], title: expect.stringContaining(camera.id) });
-    expect(run.stages[1]).toMatchObject({ title: "Modeled Wi-Fi path reaches HMI-F3", where: expect.arrayContaining([camera.id, "HMI-F3"]) });
+    expect(run.stages[1]).toMatchObject({ t: 4, where: ["parking_rf", camera.id], title: expect.stringContaining(camera.id) });
+    expect(run.stages[2]).toMatchObject({ t: 8, title: "Modeled Wi-Fi path reaches HMI-F3",
+      where: expect.arrayContaining([camera.id, "HMI-F3"]) });
     expect(run.consequence.metrics.fillerRateBph).toBe(29520);
 
     const physicalLocks = applyEffects(twin, [
@@ -46,7 +47,7 @@ describe("RF exposure from a captured camera", () => {
     ]);
     expect(runScenario("wireless", physicalLocks)).toEqual(run);
     const radioOff = applyEffect(physicalLocks, { type: "disable_radio", assetId: camera.id, radio: "wifi" });
-    expect(runScenario("wireless", radioOff)).toMatchObject({ contained: true, containedAt: 0 });
+    expect(runScenario("wireless", radioOff)).toMatchObject({ contained: true, containedAt: 4 });
   });
 
   it("credits an enforced boundary only when removing it restores modeled reach", () => {

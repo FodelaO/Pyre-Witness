@@ -5,6 +5,7 @@ export type ScenarioId = "cip" | "ammonia" | "ransomware" | "wireless" | "chille
 export type SimScenarioId = ScenarioId | "carbonation";
 
 export interface SimulationMitigation extends Mitigation {
+  simulationScenario: SimScenarioId;
   simulationContainment: {
     before: number | null;
     after: number;

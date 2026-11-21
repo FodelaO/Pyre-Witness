@@ -2,12 +2,11 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { FOOTPRINT } from "@/equipment/types";
-import { assetById, type Point } from "@/twin/geometry";
+import type { Point } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
-import type { Twin } from "@/twin/types";
-import { markerPosition, markerRoute, traceTo } from "./floorGeometry";
+import { floorAreaBounds, markerAnchor, replayRoute } from "./floorGeometry";
 import IncidentEffects from "./IncidentEffects";
+import { scenarioLens } from "./scenarioLens";
 import { useSimStore } from "./simStore";
 import type { SimEffects, SimStage } from "./types";
 
@@ -22,15 +21,6 @@ function subscribeMotion(listener: () => void) {
 
 function reducedMotion() {
   return window.matchMedia(MOTION_QUERY).matches;
-}
-
-function markerAnchor(twin: Twin, id: string, point: Point): Point {
-  const asset = assetById(twin, id);
-  if (!asset) return point;
-
-  const footprint = FOOTPRINT[asset.physical.kind];
-  const scale = asset.physical.scale ?? 1;
-  return { x: point.x + footprint.w * scale / 2 + 5, y: point.y - footprint.h * scale / 2 - 5 };
 }
 
 function Marker({ point, state, label }: { point: Point; state: "blocked" | "alarm" | "attention"; label: string }) {
@@ -67,40 +57,44 @@ export default function SimLayer() {
   const elapsed = useSimStore((state) => state.elapsed);
   const visualState = useSimStore((state) => state.visual);
 
-  const stage = run?.stages[current];
-  const next = run?.stages[current + 1];
-  const completed = run?.stages.slice(0, current + 1) ?? [];
-  const completedPath = markerRoute(twin, completed.flatMap((step) => step.where));
-  const end = completedPath.at(-1);
-  const activePath = end && next ? [end, ...markerRoute(twin, next.where)] : [];
+  if (!run) return null;
+  const lens = scenarioLens[run.id];
+  const stage = run.stages[current];
+  const next = run.stages[current + 1];
+  const completed = run.stages.slice(0, current + 1);
   const progress = stage && next && !reduced && next.t > stage.t
     ? Math.max(0, Math.min(1, (elapsed - stage.t) / (next.t - stage.t)))
     : 0;
-  const trail = [...completedPath, ...traceTo(activePath, progress).slice(1)];
-  const pulse = trail.at(-1);
-  const blocked = stage?.outcome === "blocked";
-  const holdId = blocked ? [...stage.where].reverse().find((id) => markerPosition(twin, id)) : undefined;
+  const { trails, pulse, hold } = replayRoute(twin, run.stages, current, reduced || !next ? 1 : progress, lens);
   const affectedAssets = new Set(completed.flatMap((step) => Object.keys(step.effects?.assets ?? {})));
   const affectedAreas = new Set(completed.flatMap((step) => Object.keys(step.effects?.areas ?? {})));
   const visual = stage ? currentVisual(visualState, stage, next, progress) : undefined;
 
   return (
-    <g className="pw-sim-layer" aria-label={stage ? "Simulated incident overlay" : undefined}>
+    <g className={`pw-sim-layer lens-${lens}-only`} aria-label={stage ? "Simulated incident overlay" : undefined}>
       {stage && (
         <>
           {visual && <IncidentEffects twin={twin} visual={visual} />}
-          {twin.areas.filter((area) => affectedAreas.has(area.id) && area.status !== "normal").map((area) => (
-            <rect key={area.id} className="pw-sim-area-ring" data-state={area.status}
-              x={area.bounds.x + 1} y={area.bounds.y + 1} width={area.bounds.w - 2} height={area.bounds.h - 2} rx={6} />
+          {twin.areas.filter((area) => affectedAreas.has(area.id) && area.status !== "normal").map((area) => {
+            const bounds = floorAreaBounds(twin, area);
+            if (!bounds || bounds.w <= 2 || bounds.h <= 2) return null;
+            // Three sides only: the room title sits on the top boundary, which the floor already recolours.
+            const x1 = bounds.x + 1, x2 = bounds.x + bounds.w - 1, y1 = bounds.y + 1, y2 = bounds.y + bounds.h - 1;
+            const r = Math.min(6, (x2 - x1) / 2, (y2 - y1) / 2);
+            return <path key={area.id} className="pw-sim-area-ring" data-state={area.status}
+              d={`M${x1} ${y1}V${y2 - r}Q${x1} ${y2} ${x1 + r} ${y2}H${x2 - r}Q${x2} ${y2} ${x2} ${y2 - r}V${y1}`} />;
+          })}
+          {trails.map((trail, index) => trail.length > 1 && (
+            <polyline key={index} className="pw-sim-route" points={trail.map(({ x, y }) => `${x},${y}`).join(" ")} />
           ))}
-          {trail.length > 1 && <polyline className="pw-sim-route" points={trail.map(({ x, y }) => `${x},${y}`).join(" ")} />}
-          {twin.assets.filter((asset) => affectedAssets.has(asset.id) && asset.status !== "ok" && asset.id !== holdId).map((asset) => (
-            <Marker key={asset.id} point={markerAnchor(twin, asset.id, asset.physical)}
-              state={asset.status === "attention" ? "attention" : "alarm"} label={`${asset.id} · ${asset.status} in simulation`} />
-          ))}
-          {pulse && blocked && <Marker point={holdId ? markerAnchor(twin, holdId, pulse) : pulse}
+          {twin.assets.filter((asset) => affectedAssets.has(asset.id) && asset.status !== "ok" && asset.id !== hold?.id).map((asset) => {
+            const point = markerAnchor(twin, asset.id);
+            return point && <Marker key={asset.id} point={point}
+              state={asset.status === "attention" ? "attention" : "alarm"} label={`${asset.id} · ${asset.status} in simulation`} />;
+          })}
+          {hold?.point && <Marker point={hold.point}
             state="blocked" label={`Contained by ${stage.by ?? "plant safeguard"}`} />}
-          {pulse && !blocked && (
+          {pulse && (
             <g className="pw-sim-probe" transform={`translate(${pulse.x} ${pulse.y})`}>
               <circle r={7} /><circle r={2.7} />
             </g>

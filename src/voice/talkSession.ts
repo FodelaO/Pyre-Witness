@@ -3,7 +3,7 @@ import type { FunctionResponse, LiveServerMessage, Transcription } from "@google
 import { setLiveAudioBusy } from "./briefings";
 import { actForChief, readChiefSnapshot } from "./chiefActions";
 import { buildVoiceContext } from "./context";
-import { audioBase64, LiveAudio } from "./liveAudio";
+import { audioBase64, PcmPlayback } from "./liveAudio";
 import { openChiefLink, type ChiefLink } from "./liveWire";
 import { microphoneError, openMicrophone, type MicBlock, type Microphone } from "./microphone";
 
@@ -43,7 +43,7 @@ function appendText(previous: string, transcription: Transcription): string {
 
 export class TalkSession {
   private audio?: AudioContext;
-  private output?: LiveAudio;
+  private output?: PcmPlayback;
   private link?: ChiefLink;
   private connection?: AbortController;
   private turn?: Turn;
@@ -77,7 +77,7 @@ export class TalkSession {
     setLiveAudioBusy(true);
     try {
       const audio = this.audio ??= new AudioContext();
-      this.output ??= new LiveAudio(audio, () => this.syncPhase());
+      this.output ??= new PcmPlayback(audio, () => this.syncPhase());
       this.unlockAudio();
       this.connect();
       this.holdTimer = window.setTimeout(() => this.release(), 30_000);

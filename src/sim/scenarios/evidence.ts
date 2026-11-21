@@ -2,7 +2,8 @@
 import { createContext } from "@/rules/context";
 import { buildGraph, type AttackGraph } from "@/rules/graph";
 import { placementFindings } from "@/rules/registry";
-import type { Asset, Mitigation, MitigationEffect, Twin } from "@/twin/types";
+import type { AreaId, Asset, Mitigation, MitigationEffect, Twin } from "@/twin/types";
+import type { SimEffects } from "../types";
 
 export const PHYSICAL_INGRESS_PROTECTIONS = ["port-lock", "locked-cabinet"] as const;
 
@@ -24,6 +25,11 @@ export function withoutProtection(twin: Twin, id: string, protection: string): T
 export function withoutBoundary(twin: Twin, id: string): Twin {
   return { ...twin, conduits: twin.conduits.map((conduit) =>
     conduit.id === id ? { ...conduit, enforcedBy: null } : conduit) };
+}
+
+export function reportArea(twin: Twin, id: AreaId): SimEffects {
+  const area = twin.areas.find((candidate) => candidate.id === id);
+  return area ? { areas: { [id]: area.status === "alarm" ? "alarm" : "attention" } } : {};
 }
 
 export function inspect(twin: Twin) {

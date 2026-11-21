@@ -10,7 +10,12 @@ import type { FitRequest, FitResult } from "./types";
 
 const GENERATION_ERROR = "Couldn't generate the fit image. Try again.";
 
-export function FitTile({ request, areaName, findings }: { request: FitRequest; areaName: string; findings: string[] }) {
+export function FitTile({ request, areaName, findings, pendingAnalysis }: {
+  request: FitRequest;
+  areaName: string;
+  findings: string[];
+  pendingAnalysis: boolean;
+}) {
   const [image, setImage] = useState<CaptureImage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -24,7 +29,7 @@ export function FitTile({ request, areaName, findings }: { request: FitRequest; 
   useEffect(() => () => active.current?.abort(), []);
 
   async function generate(regenerate = false) {
-    if (active.current) return;
+    if (active.current || pendingAnalysis) return;
     const controller = new AbortController();
     active.current = controller;
     setLoading(true);
@@ -66,8 +71,8 @@ export function FitTile({ request, areaName, findings }: { request: FitRequest; 
             <Maximize2 className="pw-fit-enlarge-icon" size={15} aria-hidden />
           </button>
         ) : (
-          <button className="pw-fit-generate" type="button" onClick={() => void generate()}>
-            <ImagePlus size={19} aria-hidden />{error ? "Try again" : "Generate preview"}
+          <button className="pw-fit-generate" type="button" disabled={pendingAnalysis} onClick={() => void generate()}>
+            <ImagePlus size={19} aria-hidden />{pendingAnalysis ? "After briefing" : error ? "Try again" : "Generate preview"}
           </button>
         )}
         {!!findings.length && (
@@ -81,7 +86,7 @@ export function FitTile({ request, areaName, findings }: { request: FitRequest; 
         <p>AI-generated visualisation</p>
         {src && image && (
           <div className="pw-fit-actions">
-            <button className="pw-fit-icon" type="button" disabled={loading} onClick={() => void generate(true)}
+            <button className="pw-fit-icon" type="button" disabled={loading || pendingAnalysis} onClick={() => void generate(true)}
               aria-label={`Regenerate ${title.toLowerCase()} fit image`} title="Regenerate">
               <RotateCw size={15} aria-hidden />
             </button>

@@ -4,26 +4,22 @@
 import { Info, PanelsTopLeft } from "lucide-react";
 import { useId, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useRunStore, type RunState } from "@/pipeline/runStore";
-import type { CaptureImage } from "@/pipeline/types";
+import { useRunStore } from "@/pipeline/runStore";
 import { assetById } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import { FitTile } from "./FitTile";
 import { fitOptions } from "./placements";
 import "./fit.css";
 
-function referencePhoto(run: RunState & { captureThumbnail?: CaptureImage | null }): CaptureImage | undefined {
-  return run.captureThumbnail ?? undefined;
-}
-
 export default function FitPreview() {
-  const { runId, profile, assessment, selfCheck, placedAssetId, image } = useRunStore(useShallow((run) => ({
+  const { status, runId, profile, assessment, selfCheck, placedAssetId, image } = useRunStore(useShallow((run) => ({
+    status: run.status,
     runId: run.runId,
     profile: run.profile,
     assessment: run.assessment,
     selfCheck: run.selfCheck,
     placedAssetId: run.placedAssetId,
-    image: referencePhoto(run),
+    image: run.captureThumbnail ?? undefined,
   })));
   const { twin, risk } = useTwinStore(useShallow((state) => ({ twin: state.twin, risk: state.risk })));
   const heading = useId();
@@ -54,6 +50,7 @@ export default function FitPreview() {
             request={{ profile, image, variant, placement, scene }}
             areaName={scene.areaName}
             findings={findings}
+            pendingAnalysis={status === "running"}
           />
         ))}
       </div>

@@ -18,7 +18,7 @@ it("publishes each newly observed simulated alarm to Inspector's feed", () => {
   expect(entries).toEqual(expect.arrayContaining([
     expect.objectContaining({ crew: "inspector", engine: "rules engine", kind: "sim",
       text: expect.stringMatching(/^Simulated plant · GT-401 detector high/), runId: expect.stringMatching(/^sim-\d+$/) }),
-    expect.objectContaining({ kind: "sim", text: "Simulated release reported" }),
+    expect.objectContaining({ kind: "sim", text: "Simulated incident · Machinery-room release reported" }),
   ]));
   tickPlant();
   tickPlant();

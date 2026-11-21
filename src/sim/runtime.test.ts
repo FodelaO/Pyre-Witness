@@ -46,6 +46,17 @@ it("resumes visible plant ticks and replay without catching up hidden time", () 
   expect(useSimStore.getState().elapsed - elapsed).toBeCloseTo(1.2);
 });
 
+it("holds the opening report on screen before fast containment at 4×", () => {
+  const { setSpeed, start } = useSimStore.getState();
+  setSpeed(4);
+  start("wireless");
+  expect(useSimStore.getState()).toMatchObject({ mode: "playing", currentStage: 0, elapsed: 0, outcome: null });
+  vi.advanceTimersByTime(900);
+  expect(useSimStore.getState()).toMatchObject({ mode: "playing", currentStage: 0, outcome: null });
+  vi.advanceTimersByTime(220);
+  expect(useSimStore.getState()).toMatchObject({ mode: "finished", currentStage: 1, elapsed: 4, run: { containedAt: 4 } });
+});
+
 it("finishes the approved CIP branch replay at six seconds on the same running clock", () => {
   const { setSpeed, start, togglePlayback } = useSimStore.getState();
   setSpeed(4);

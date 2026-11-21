@@ -3,7 +3,7 @@ import { assetById } from "@/twin/geometry";
 import type { Twin } from "@/twin/types";
 import type { ScenarioDefinition, StageDefinition } from "../types";
 import {
-  available, editAsset, enforceBoundary, exposedControl, hasProtection, inspect, proposal, reading, removeRemoteAccess,
+  available, editAsset, enforceBoundary, exposedControl, hasProtection, inspect, proposal, reading, removeRemoteAccess, reportArea,
   unenrolledRemoteEndpoints, withoutProtection,
 } from "./evidence";
 
@@ -19,6 +19,7 @@ export const chiller: ScenarioDefinition = {
   label: "Chiller Trip",
   stages(twin: Twin): StageDefinition[] {
     const { graph } = inspect(twin);
+    const dutyPresent = !!assetById(twin, DUTY) && !!assetById(twin, "CC-301");
     const standby = assetById(twin, STANDBY);
     const safety = assetById(twin, SAFETY);
     const evaporator = assetById(twin, "EV-401");
@@ -37,10 +38,15 @@ export const chiller: ScenarioDefinition = {
 
     return [
       {
-        t: 0, title: "Duty compressor trip", where: [DUTY, "EV-401"],
-        control: { label: "Duty cooling unavailable to exercise", holds: () =>
-          !assetById(twin, DUTY) || !assetById(twin, "CC-301") },
-        effects: { assets: { [DUTY]: { status: "alarm", running: false } }, areas: { utilities: "attention" } },
+        t: 0, title: "Duty compressor trip reported", where: [DUTY, "EV-401"],
+        effects: {
+          ...reportArea(twin, "utilities"),
+          ...(dutyPresent ? { assets: { [DUTY]: { status: "alarm", running: false } } } : {}),
+        },
+      },
+      {
+        t: 4, title: "Duty cooling equipment checked", where: [DUTY, "EV-401"],
+        control: { label: "Duty cooling unavailable to exercise", holds: () => !dutyPresent },
       },
       {
         t: 6, title: backupHolds ? "Standby cooling engaged" : "Standby readiness checked",

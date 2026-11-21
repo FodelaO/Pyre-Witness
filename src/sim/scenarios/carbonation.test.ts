@@ -16,13 +16,13 @@ function openBlendBoundary(twin: Twin): Twin {
 describe("carbonation exercise", () => {
   it("uses the seed's enforced blend boundary and advances when just that control is absent", () => {
     const seed = runScenario("carbonation", SEED_TWIN);
-    expect(seed).toMatchObject({ contained: true, containedAt: 0, consequence: { metrics: {
+    expect(seed).toMatchObject({ contained: true, containedAt: 4, consequence: { metrics: {
       peakPressureBar: 2.6, reliefDemand: false, foaming: false, heldL: 0, lineStopped: false,
     } } });
-    expect(seed.stages[0]).toMatchObject({ outcome: "blocked", by: "Blend cell segmentation", where: ["SW-OT"] });
+    expect(seed.stages.at(-1)).toMatchObject({ t: 4, outcome: "blocked", by: "Blend cell segmentation", where: ["SW-OT"] });
     expect(seed.counterfactual).toMatchObject({ removedControl: "Blend cell segmentation", consequence: { metrics: { heldL: 60 } } });
 
-    const without = carbonation.stages(SEED_TWIN)[0].control?.without;
+    const without = carbonation.stages(SEED_TWIN).find(({ t }) => t === 4)?.control?.without;
     const exposed = openBlendBoundary(SEED_TWIN);
     expect(without?.(SEED_TWIN)).toEqual(exposed);
     expect(without?.(SEED_TWIN).assets).toBe(SEED_TWIN.assets);
@@ -59,7 +59,7 @@ describe("carbonation exercise", () => {
     expect(assetById(removed!, "CC-301")?.protections).toEqual(["maintenance-isolation"]);
     expect(runScenario("carbonation", removed!).contained).toBe(false);
 
-    expect(runScenario("carbonation", applyEffects(exposed, software!.effects))).toMatchObject({ contained: true, containedAt: 0 });
+    expect(runScenario("carbonation", applyEffects(exposed, software!.effects))).toMatchObject({ contained: true, containedAt: 4 });
     expect(exposed).toEqual(snapshot);
   });
 

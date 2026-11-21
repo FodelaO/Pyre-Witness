@@ -2,7 +2,7 @@
 import { assetById } from "@/twin/geometry";
 import type { Twin } from "@/twin/types";
 import type { ScenarioDefinition, StageDefinition } from "../types";
-import { available, enforceBoundary, exposedControl, inspect, proposal, reachFrom, reading, removeRemoteAccess, unenrolledRemoteEndpoints } from "./evidence";
+import { available, enforceBoundary, exposedControl, inspect, proposal, reachFrom, reading, removeRemoteAccess, reportArea, unenrolledRemoteEndpoints } from "./evidence";
 
 const SUPERVISION = "SCADA-03";
 const CONTROLLER = "PLC-BL";
@@ -67,7 +67,11 @@ export const carbonation: ScenarioDefinition<"carbonation"> = {
 
     return [
       {
-        t: 0, title: "Carbonation supervision challenged", where: [exposedFrom ?? SUPERVISION, CONTROLLER],
+        t: 0, title: "Carbonation supervision anomaly reported", where: [SUPERVISION, "blending"],
+        effects: reportArea(twin, "blending"),
+      },
+      {
+        t: 4, title: "Blend controller exposure checked", where: [exposedFrom ?? SUPERVISION, CONTROLLER],
         control: {
           label: creditedSegmentation ? "Blend cell segmentation" : "Blend controller isolated", where: [creditedSegmentation ? "SW-OT" : CONTROLLER],
           holds: () => !exposedFrom,

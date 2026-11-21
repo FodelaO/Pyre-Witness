@@ -33,7 +33,13 @@
   font-size: 10px;
   line-height: 1.15;
   text-align: center;
+  /* Whole words only: a narrow card must not split "camera" or "Access". */
+  overflow-wrap: normal;
+  word-break: normal;
+  letter-spacing: -0.01em;
 }
+
+.photo > span:last-child { overflow-wrap: normal; word-break: normal; justify-self: center; }
 
 .photo:hover:not(:disabled), .photo:focus-visible {
   border-color: var(--pw-line-strong);
@@ -41,7 +47,7 @@
   color: var(--pw-text);
 }
 
-.photo[data-pw-tip]::after { max-width: min(140px, 56vw); }
+.photo[data-pw-tip]::after { max-width: min(216px, 56vw); }
 .photo[data-pw-tip-align="end"]::after { translate: 50% 0; }
 
 .frame {

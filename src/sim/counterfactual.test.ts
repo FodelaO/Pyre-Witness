@@ -6,6 +6,18 @@ import { projectScenarioMitigations, runScenario } from "./engine";
 import { ALL_SCENARIOS } from "./scenarios";
 
 describe("counterfactual comparison", () => {
+  it("shows an incident report before any stock safeguard resolves", () => {
+    for (const { id } of Object.values(ALL_SCENARIOS)) {
+      const run = runScenario(id, SEED_TWIN);
+      const [report, next] = run.stages;
+      expect(report).toMatchObject({ t: 0, outcome: "advanced", title: expect.stringMatching(/reported$/) });
+      expect(report.effects).toBeDefined();
+      expect(next.title).not.toBe(report.title);
+      expect(next.t).toBeGreaterThan(0);
+      expect(run.containedAt).toBeGreaterThan(0);
+    }
+  });
+
   it("quantifies actual and comparison outcomes for all six exercises without changing the seed", () => {
     const before = structuredClone(SEED_TWIN);
     for (const { id } of Object.values(ALL_SCENARIOS)) {
@@ -45,10 +57,10 @@ describe("independent physical controls", () => {
     const twin = applyEffects(SEED_TWIN, [{
       type: "enforce_conduit", conduitId: "C-F3-PACK", enforcedBy: "SW-F3", allows: [],
     }]);
-    const item = projectScenarioMitigations("cip", twin).find(({ id }) => id === `sim-cip-${protection}`);
+    const item = ALL_SCENARIOS.cip.mitigations(twin).find(({ id }) => id === `sim-cip-${protection}`);
     expect(item).toMatchObject({ kind: "physical", effects: [{ type: "add_protection", assetId: "HMI-F3", protection }] });
     const run = runScenario("cip", applyEffects(twin, item!.effects));
-    expect(run).toMatchObject({ containedAt: 0, counterfactual: { containedAt: 12 } });
+    expect(run).toMatchObject({ containedAt: 4, counterfactual: { containedAt: 12 } });
   });
 
   it("credits added ammonia safeguards without losing documented protection on unrelated approval", () => {

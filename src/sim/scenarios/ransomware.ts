@@ -2,7 +2,7 @@
 import { applyEffect } from "@/twin/effects";
 import type { AreaId } from "@/twin/types";
 import type { ScenarioDefinition, StageDefinition } from "../types";
-import { enforceBoundary, inspect, proposal, reachFrom, withoutBoundary } from "./evidence";
+import { enforceBoundary, inspect, proposal, reachFrom, reportArea, withoutBoundary } from "./evidence";
 
 const CELLS: ReadonlyArray<{ area: AreaId; controller: string; equipment: string; conduit: string }> = [
   { area: "water_treatment", controller: "PLC-WT", equipment: "RO-101", conduit: "C-OPS-WATER" },
@@ -41,22 +41,31 @@ export const ransomware: ScenarioDefinition = {
       (origin?.routes.get(a.controller)?.length ?? 0) - (origin?.routes.get(b.controller)?.length ?? 0),
     );
     if (managed && !hasViewLoss && stopped.length === 0) {
-      return [{
-        t: 0, title: "Transient admission checked", where: [managed.id], technique: "T0864",
-        control: {
-          label: `${managed.id} managed admission`, where: [managed.id], holds: () => true,
-          without: (current) => applyEffect(current, { type: "patch_cyber", assetId: managed.id, patch: { managed: false } }),
+      return [
+        {
+          t: 0, title: "Transient endpoint reported", where: [managed.id],
+          effects: reportArea(twin, managed.physical.area),
         },
-      }];
+        {
+          t: 4, title: "Transient admission checked", where: [managed.id], technique: "T0864",
+          control: {
+            label: `${managed.id} managed admission`, where: [managed.id], holds: () => true,
+            without: (current) => applyEffect(current, { type: "patch_cyber", assetId: managed.id, patch: { managed: false } }),
+          },
+        },
+      ];
     }
     const activeBoundary = origin?.asset === enterprise ? boundary : undefined;
     const defense = activeBoundary?.enforcedBy;
     const stages: StageDefinition[] = [
       {
-        t: 0, title: "Endpoint availability lost", where: [origin?.asset.id ?? "corporate_office"],
-        control: { label: "No modeled entry endpoint", holds: () => !origin },
+        t: 0, title: "Endpoint outage reported", where: [origin?.asset.id ?? "corporate_office"],
         ...(origin?.asset.physical.kind === "laptop" ? { technique: "T0864" } : {}),
-        effects: { assets: origin ? { [origin.asset.id]: { status: "alarm" } } : {} },
+        effects: origin ? { assets: { [origin.asset.id]: { status: "alarm" } } } : reportArea(twin, "corporate_office"),
+      },
+      {
+        t: 4, title: "Endpoint route checked", where: [origin?.asset.id ?? "corporate_office"],
+        control: { label: "No modeled entry endpoint", holds: () => !origin },
       },
       {
         t: 8, title: hasViewLoss ? "Site supervision unavailable"
