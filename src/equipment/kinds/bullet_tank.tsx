@@ -2,7 +2,7 @@
 "use client";
 
 import { EQ, SymbolFrame } from "../primitives";
-import { VesselShell } from "../process/VesselShell";
+import { VesselPercent, VesselShell } from "../process/VesselShell";
 import { FOOTPRINT, type EquipmentProps } from "../types";
 
 const shell = "M-39-14 H39 C49-14 55-7 55 1 S49 16 39 16 H-39 C-49 16-55 9-55 1 S-49-14-39-14 Z";
@@ -24,6 +24,7 @@ export default function BulletTank(props: EquipmentProps) {
           <path d="M23-4h4 M-34 12v4m12-4v4m44-4v4m12-4v4" />
         </g>
       )}
+      <VesselPercent props={props} x={-3} y={9} />
     </SymbolFrame>
   );
 }

@@ -2,9 +2,10 @@
 import { memo, useId, useMemo } from "react";
 import { containsPoint, distance, entryPointById, nodePosition, type Point } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
-import { MEDIA, type Asset, type AttackStep, type Twin } from "@/twin/types";
+import { MEDIA, type Asset, type AttackPath, type AttackStep, type Twin } from "@/twin/types";
 import { chooseLabelBox, type LabelBox } from "./labelPlacement";
 import { roundedPath, routeMidpoint, routePoints } from "./routing";
+import { pathHasFocus } from "./twinFocus";
 
 function connectionRoute(assets: ReadonlyMap<string, Asset>, step: AttackStep, from: Point, to: Point): Point[] {
   const mediumMatches = (medium: keyof typeof MEDIA) => step.via === "network" ? medium === "network" : MEDIA[medium].process;
@@ -75,29 +76,34 @@ interface Segment {
   step: AttackStep;
   d: string;
   label: Point;
+  techniqueLabel?: Point;
   from: Point;
   to: Point;
-  origins: Set<string>;
+  paths: Set<AttackPath>;
 }
 
 function placeTechniqueLabels(segments: Segment[]) {
   const occupied: LabelBox[] = [];
+  const techniquePositions = new Map<string, Point[]>();
   for (const segment of segments) {
     const technique = segment.step.technique;
     if (!technique) continue;
-    const w = technique.id.length * 7.1 + 6;
-    const h = 13;
+    const nearby = techniquePositions.get(technique.id) ?? [];
+    if (nearby.some((point) => distance(point, segment.label) < 140)) continue;
+    const w = technique.id.length * 12 + 8;
+    const h = 24;
     const { x, y } = segment.label;
     const at = (dx: number, dy: number): LabelBox => ({ x: x - w / 2 + dx, y: y - h + dy, w, h });
     const box = chooseLabelBox(at(0, -7), [at(0, -21), at(0, 11), at(14, -35), at(-14, 25)], occupied);
     occupied.push(box);
-    segment.label = { x: box.x + w / 2, y: box.y + h };
+    segment.techniqueLabel = { x: box.x + w / 2, y: box.y + h };
+    nearby.push(segment.label);
+    techniquePositions.set(technique.id, nearby);
   }
 }
 
-export default memo(function AttackPathLayer({ twin }: { twin: Twin }) {
+export default memo(function AttackPathLayer({ twin, focused }: { twin: Twin; focused: ReadonlySet<string> }) {
   const paths = useTwinStore((state) => state.risk.paths);
-  const selected = useTwinStore((state) => state.selectedId);
   const arrow = `${useId()}-risk-arrow`;
 
   const segments = useMemo(() => {
@@ -109,7 +115,7 @@ export default memo(function AttackPathLayer({ twin }: { twin: Twin }) {
         const key = JSON.stringify([step.from, step.to, step.via, step.technique?.id]);
         const existing = byStep.get(key);
         if (existing) {
-          if (path.causedBy) existing.origins.add(path.causedBy);
+          existing.paths.add(path);
           continue;
         }
         const from = nodePosition(twin, step.from);
@@ -119,35 +125,44 @@ export default memo(function AttackPathLayer({ twin }: { twin: Twin }) {
         const points = finishBeforeTarget(pointsFor(step, twin, assets, from, to));
         const d = roundedPath(points, 9);
         if (!d) continue;
-        byStep.set(key, { step, from, to, d, label: routeMidpoint(points), origins: new Set(path.causedBy ? [path.causedBy] : []) });
+        byStep.set(key, { step, from, to, d, label: routeMidpoint(points), paths: new Set([path]) });
       }
     }
 
-    placeTechniqueLabels([...byStep.values()]);
     return [...byStep.entries()];
   }, [twin, paths]);
 
-  if (!segments.length) return null;
-  const emphasis = (segment: Segment) => !selected ? "default" : segment.origins.has(selected) ? "selected" : "dim";
-  const visible = selected
-    ? [...segments.filter(([, segment]) => !segment.origins.has(selected)), ...segments.filter(([, segment]) => segment.origins.has(selected))]
-    : segments;
+  const [dim, emphasized] = useMemo(() => {
+    const active = new Set(paths.filter((path) => pathHasFocus(path, focused)));
+    const dim: typeof segments = [];
+    const emphasized: typeof segments = [];
+    for (const [key, segment] of segments) {
+      if ([...segment.paths].some((path) => active.has(path))) emphasized.push([key, { ...segment }]);
+      else dim.push([key, segment]);
+    }
+    placeTechniqueLabels(emphasized.map(([, segment]) => segment));
+    return [dim, emphasized];
+  }, [segments, paths, focused]);
 
+  if (!segments.length) return null;
   return (
     <g className="pw-floor-attacks" pointerEvents="none" role="group" aria-label="Simulated attack paths">
       <defs>
-        <marker id={arrow} viewBox="0 0 9 8" refX={8} refY={4} markerWidth={9} markerHeight={8} orient="auto" markerUnits="userSpaceOnUse">
+        <marker id={arrow} viewBox="0 0 9 8" refX={8} refY={4} markerWidth={4.5} markerHeight={4} orient="auto">
           <path className="pw-floor-attack-arrow" d="M0 0 9 4 0 8 2 4Z" />
         </marker>
       </defs>
-      {visible.map(([key, segment]) => (
-        <g key={key} className="pw-floor-attack" data-via={segment.step.via} data-emphasis={emphasis(segment)}>
+      {dim.map(([key, segment]) => (
+        <path key={key} className="pw-floor-attack-route pw-floor-attack-base" d={segment.d} data-via={segment.step.via} />
+      ))}
+      {emphasized.map(([key, segment]) => (
+        <g key={key} className="pw-floor-attack" data-via={segment.step.via} data-emphasis="selected">
           {segment.step.via === "rf" && <RadioWaves from={segment.from} to={segment.to} />}
           <path className="pw-floor-attack-route" d={segment.d} markerEnd={`url(#${arrow})`} />
-          {segment.step.technique && (
-            <text className="pw-floor-attack-technique" x={segment.label.x} y={segment.label.y} textAnchor="middle">
-              {segment.step.technique.id}
-            </text>
+          {segment.step.technique && segment.techniqueLabel && (
+            <g transform={`translate(${segment.techniqueLabel.x} ${segment.techniqueLabel.y})`}>
+              <text className="pw-floor-attack-technique pw-floor-screen-label" textAnchor="middle">{segment.step.technique.id}</text>
+            </g>
           )}
         </g>
       ))}

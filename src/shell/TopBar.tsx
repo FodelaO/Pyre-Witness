@@ -1,90 +1,87 @@
+/** Brand, plant disclosure and controls shared across drawing views. */
 "use client";
 
-/**
- * Top bar: brand, the "simulated plant" disclosure, the view switch and the live risk score.
- * Deliberately quiet: three icon buttons and one number.
- */
+import Link from "next/link";
 import { Factory, Network, SquareSplitHorizontal } from "lucide-react";
+import type { KeyboardEvent } from "react";
 import { useTwinStore } from "@/twin/store";
-import type { RiskBand, ViewMode } from "@/twin/types";
+import type { ViewMode } from "@/twin/types";
+import { useWatchStore } from "@/watch/watchStore";
+import { BrandMark } from "./BrandMark";
+import { watchStatus } from "./watchStatus";
 
-const VIEWS: { id: ViewMode; label: string; icon: typeof Factory }[] = [
-  { id: "floor", label: "Plant floor", icon: Factory },
-  { id: "purdue", label: "Purdue network map", icon: Network },
-  { id: "split", label: "Side by side", icon: SquareSplitHorizontal },
+const VIEWS: readonly { id: ViewMode; label: string; short: string; icon: typeof Factory }[] = [
+  { id: "floor", label: "Plant floor", short: "Floor", icon: Factory },
+  { id: "purdue", label: "Purdue network map", short: "Purdue", icon: Network },
+  { id: "split", label: "Side by side", short: "Split", icon: SquareSplitHorizontal },
 ];
 
-const BAND_COLOR: Record<RiskBand, string> = {
-  low: "var(--pw-ok)",
-  guarded: "var(--pw-ok)",
-  elevated: "var(--pw-attention)",
-  high: "var(--pw-ember)",
-  critical: "var(--pw-alarm)",
+function viewKeys(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+  const keys: Record<string, number> = {
+    ArrowLeft: (index + VIEWS.length - 1) % VIEWS.length,
+    ArrowRight: (index + 1) % VIEWS.length,
+    Home: 0,
+    End: VIEWS.length - 1,
+  };
+  const next = VIEWS[keys[event.key]];
+  if (!next) return;
+  event.preventDefault();
+  useTwinStore.getState().setView(next.id);
+  event.currentTarget.parentElement?.querySelector<HTMLButtonElement>('[data-view="' + next.id + '"]')?.focus();
+}
+
+type Props = {
+  drawerOpen: boolean;
+  watchOpen: boolean;
+  onToggleDrawer: (trigger: HTMLButtonElement) => void;
+  onToggleWatch: (trigger: HTMLButtonElement) => void;
 };
 
-export function TopBar() {
-  const view = useTwinStore((s) => s.view);
-  const setView = useTwinStore((s) => s.setView);
-  const plant = useTwinStore((s) => s.twin.plant);
-  const risk = useTwinStore((s) => s.risk);
-  const baseline = useTwinStore((s) => s.baselineScore);
+export function TopBar({ drawerOpen, watchOpen, onToggleDrawer, onToggleWatch }: Props) {
+  const view = useTwinStore((state) => state.view);
+  const setView = useTwinStore((state) => state.setView);
+  const plant = useTwinStore((state) => state.twin.plant);
+  const risk = useTwinStore((state) => state.risk);
+  const baseline = useTwinStore((state) => state.baselineScore);
+  const watch = useWatchStore((state) => watchStatus(state.local));
   const delta = Math.round(risk.score - baseline);
 
+  const riskReadout = (
+    <>
+      <span>Risk</span>
+      <strong className="pw-mono">{Math.round(risk.score)}</strong>
+      {delta !== 0 && <span className="pw-top-delta pw-mono" data-increased={delta > 0}>{delta > 0 ? "+" : ""}{delta}</span>}
+    </>
+  );
+  const band = "Plant risk " + Math.round(risk.score) + " of 100, " + risk.band;
+
   return (
-    <header className="flex h-11 shrink-0 items-center gap-4 border-b border-pw-line bg-pw-panel px-4">
-      <div className="flex items-center gap-2">
-        <span
-          aria-hidden
-          className="h-2.5 w-2.5 rounded-full"
-          style={{ background: "var(--pw-ember)", boxShadow: "0 0 10px var(--pw-ember)" }}
-        />
-        <span className="text-[13px] font-semibold tracking-[0.22em]">PYRE WITNESS</span>
+    <header className="pw-top">
+      <div className="pw-top-context"><BrandMark /></div>
+      <p className="pw-top-disclosure"><strong>Simulated plant:</strong> {plant.name}, {plant.line} (fictional)</p>
+      <div className="pw-top-views" role="tablist" aria-label="Twin view">
+        {VIEWS.map(({ id, label, short, icon: Icon }, index) => (
+          <button key={id} className="pw-tool-button" role="tab" type="button" data-view={id}
+            id={"pw-view-" + id} aria-controls="pw-drawing"
+            aria-selected={view === id} aria-label={label} tabIndex={view === id ? 0 : -1}
+            data-pw-tip={label} onKeyDown={(event) => viewKeys(event, index)} onClick={() => setView(id)}>
+            <Icon size={17} strokeWidth={1.65} aria-hidden /><span>{short}</span>
+          </button>
+        ))}
       </div>
-
-      <span className="pw-mono hidden text-[10.5px] text-pw-faint md:inline">
-        Simulated plant: {plant.name}, {plant.line} (fictional)
-      </span>
-
-      <div className="ml-auto flex items-center gap-3">
-        <div
-          className="flex items-center overflow-hidden rounded-md border border-pw-line"
-          role="tablist"
-          aria-label="Twin view"
-        >
-          {VIEWS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={view === id}
-              aria-label={label}
-              title={label}
-              onClick={() => setView(id)}
-              className={`flex h-7 w-9 items-center justify-center transition-colors ${
-                view === id ? "bg-pw-panel-2 text-pw-text" : "text-pw-faint hover:text-pw-dim"
-              }`}
-            >
-              <Icon size={15} strokeWidth={1.6} />
-            </button>
-          ))}
-        </div>
-
-        <div
-          className="flex items-baseline gap-1.5 rounded-md border border-pw-line px-2.5 py-1"
-          title={`Plant risk score (${risk.band})`}
-        >
-          <span className="text-[9.5px] uppercase tracking-[0.18em] text-pw-faint">Risk</span>
-          <span className="pw-mono text-[15px] font-semibold leading-none" style={{ color: BAND_COLOR[risk.band] }}>
-            {Math.round(risk.score)}
-          </span>
-          {delta !== 0 && (
-            <span
-              className="pw-mono text-[10.5px] leading-none"
-              style={{ color: delta > 0 ? "var(--pw-alarm)" : "var(--pw-ok)" }}
-            >
-              {delta > 0 ? `+${delta}` : delta}
-            </span>
-          )}
-        </div>
+      <div className="pw-top-actions">
+        <button type="button" className="pw-top-watch" aria-expanded={watchOpen} aria-controls="pw-watch"
+          aria-label={"Threat watch · " + watch} data-pw-tip={"Threat watch · " + watch}
+          onClick={(event) => onToggleWatch(event.currentTarget)}>
+          <span className="pw-status-dot" data-status={watch} aria-hidden /><span className="pw-top-watch-label">Watch</span>
+        </button>
+        <Link className="pw-top-proof" href="/proof">Proof</Link>
+        <span className="pw-top-risk pw-top-risk-desktop" data-band={risk.band} title={band}>{riskReadout}</span>
+        <button className="pw-top-risk pw-top-risk-mobile" type="button" data-band={risk.band}
+          aria-controls="pw-results" aria-expanded={drawerOpen} aria-label={"Plant details · " + band}
+          data-pw-tip="Plant details" data-pw-tip-align="end" onClick={(event) => onToggleDrawer(event.currentTarget)}>
+          {riskReadout}
+        </button>
       </div>
     </header>
   );

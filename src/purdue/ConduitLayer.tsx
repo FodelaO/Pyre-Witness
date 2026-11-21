@@ -1,4 +1,5 @@
 /** Shows zone boundary gates and the allowed flows for an inspected conduit. */
+import { ShieldCheck } from "lucide-react";
 import type { Conduit } from "@/twin/types";
 import type { ConduitRoute } from "./conduits";
 import type { PurdueLayout } from "./layout";
@@ -57,13 +58,15 @@ export function ConduitLayer({ layout, routes, inspected, detailsId, onInspect }
           />
         ))}
       </svg>
-      {routes.map(({ conduit, gate }) => (
+      {routes.map(({ conduit, gate, enforcerKind }) => (
         <button
           key={conduit.id}
           className="pw-purdue-gate"
           type="button"
           style={{ left: gate.x, top: gate.y }}
           data-open={!conduit.enforcedBy}
+          data-switch={enforcerKind === "network_switch"}
+          data-firewall={enforcerKind === "firewall"}
           data-conduit={conduit.id}
           data-inspected={conduit.id === inspected}
           aria-label={`${conduit.name} · ${conduit.enforcedBy ? `Enforced by ${conduit.enforcedBy}` : "Unenforced"}`}
@@ -79,7 +82,7 @@ export function ConduitLayer({ layout, routes, inspected, detailsId, onInspect }
           onClick={() => onInspect(conduit.id, true)}
           onKeyDown={(event) => { if (event.key === "Escape") onInspect(conduit.id, false); }}
         >
-          <GateGlyph open={!conduit.enforcedBy} />
+          {enforcerKind === "firewall" ? <ShieldCheck size={13} aria-hidden="true" /> : <GateGlyph open={!conduit.enforcedBy} />}
           {conduit.enforcedBy && <span>{conduit.enforcedBy}</span>}
         </button>
       ))}

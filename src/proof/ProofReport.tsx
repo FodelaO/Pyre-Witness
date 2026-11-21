@@ -4,7 +4,6 @@ import type { Proportion } from "../../eval/statistics";
 import type { EvaluationReport } from "../../eval/report";
 import { FailureGallery } from "./FailureGallery";
 import { formatPercent, MetricBars, SIDE_NAME } from "./MetricBars";
-import styles from "./proof.module.css";
 
 function proportionText({ value, n }: Proportion) {
   return value === null ? "—" : `${formatPercent(value)} (n=${n})`;
@@ -19,38 +18,44 @@ export function ProofReport({ report }: { report: EvaluationReport }) {
   const date = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(report.date));
   return (
     <>
-      <div className={styles.runInfo}>
-        <span><strong>{report.dataset.selected}</strong> of {report.dataset.available} items</span>
+      <div className="pw-proof-run-info">
+        <span><strong>n={report.dataset.selected}</strong> of {report.dataset.available} available</span>
         <time dateTime={report.date}>{date} UTC</time>
         {report.reused > 0 && <span>{report.reused} cached artifacts</span>}
       </div>
-      <div className={styles.dashboard}>
+      <div className="pw-proof-dashboard">
         <MetricBars summary={overall} sides={sides} />
-        <aside className={styles.runDetails} aria-label="Run details">
+        <aside className="pw-proof-run-details" aria-label="Run details">
           {SIDES.map((side) => {
             const result = overall.sides[side];
             return (
-              <section className={styles.panel} key={side}>
+              <section className="pw-proof-panel" key={side}>
                 <h2>{SIDE_NAME[side]}</h2>
-                <p className={styles.models}>
-                  {side === "baseline" ? models.baseline : [models.gate, models.perception, models.reasoning, models.chief].join(" · ")}
-                </p>
+                {side === "baseline" ? <p className="pw-proof-models">{models.baseline}</p> : (
+                  <dl className="pw-proof-models pw-proof-model-list">
+                    <div><dt>Gate</dt><dd>{models.gate}</dd></div>
+                    <div><dt>Scout</dt><dd>{models.perception}</dd></div>
+                    <div><dt>Architect</dt><dd>{models.reasoning}</dd></div>
+                    <div><dt>Inspector</dt><dd>Rules engine</dd></div>
+                    <div><dt>Chief</dt><dd>{models.chief}</dd></div>
+                  </dl>
+                )}
                 {sides.includes(side) ? (
-                  <dl className={styles.runStats}>
+                  <dl className="pw-proof-run-stats">
                     <div><dt>False accepts / rejects</dt><dd>{result.gate.falseAccepts} / {result.gate.falseRejects}</dd></div>
                     <div><dt>Run errors / timeouts</dt><dd>{result.failures} / {result.timeouts}</dd></div>
                     <div><dt>Latency p50 / p95</dt><dd>{latency(result.latencyMs.p50)} / {latency(result.latencyMs.p95)}</dd></div>
                   </dl>
-                ) : <p className={styles.models}>Not run</p>}
+                ) : <p className="pw-proof-models">Not run</p>}
               </section>
             );
           })}
-          <p className={styles.judge}>Type judge <code>{models.judge}</code></p>
+          <p className="pw-proof-judge">Type judge <code>{models.judge}</code></p>
         </aside>
       </div>
-      <details className={styles.breakdown}>
+      <details className="pw-proof-breakdown">
         <summary>Results by difficulty</summary>
-        <div className={styles.tableScroll}>
+        <div className="pw-proof-table-scroll">
           <table>
             <thead><tr><th>Group</th><th>Items</th><th>Baseline kind / area</th><th>Pyre Witness kind / area</th></tr></thead>
             <tbody>
@@ -67,7 +72,7 @@ export function ProofReport({ report }: { report: EvaluationReport }) {
           </table>
         </div>
       </details>
-      {report.dataset.warnings.length > 0 && <ul className={styles.warnings}>{report.dataset.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
+      {report.dataset.warnings.length > 0 && <ul className="pw-proof-warnings">{report.dataset.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
       <FailureGallery cases={report.failures} />
     </>
   );

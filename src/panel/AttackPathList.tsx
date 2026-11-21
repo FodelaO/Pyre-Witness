@@ -31,29 +31,31 @@ function Hop({ step }: { step: AttackStep }) {
 }
 
 function PathRow({ path, twin }: { path: AttackPath; twin: Twin }) {
-  const highlighted = useRef<string | null>(null);
+  const highlighted = useRef<string[] | null>(null);
   const hopDetails = useId();
   const target = assetById(twin, path.target) ?? entryPointById(twin, path.target);
   const targetLabel = target?.id ?? readableId(path.target);
   const hops = path.steps.map(({ via, technique }) => [VIA[via].label, technique?.id].filter(Boolean).join(" ")).join(", ");
 
-  function highlight(id: string | null) {
-    const state = useTwinStore.getState();
-    if (id !== null || (highlighted.current !== null && state.hoveredId === highlighted.current)) state.hover(id);
-    highlighted.current = id;
+  function highlight() {
+    const nodes = [...new Set([path.entry, ...path.steps.flatMap(({ from, to }) => [from, to]), path.target])];
+    highlighted.current = nodes;
+    useTwinStore.getState().setHighlight(nodes);
   }
 
-  useEffect(() => () => {
-    const state = useTwinStore.getState();
-    if (highlighted.current !== null && state.hoveredId === highlighted.current) state.hover(null);
-  }, []);
+  function clearHighlight() {
+    const { highlightIds, setHighlight } = useTwinStore.getState();
+    if (highlightIds === highlighted.current) setHighlight([]);
+    highlighted.current = null;
+  }
+
+  useEffect(() => clearHighlight, []);
 
   function node(id: string) {
     const asset = assetById(twin, id);
     const entry = entryPointById(twin, id);
     return (
-      <span className="pw-panel-node" data-target={id === path.target} title={asset?.name ?? entry?.name ?? id}
-        onMouseEnter={() => highlight(id)} onMouseLeave={() => highlight(path.target)}>
+      <span className="pw-panel-node" data-target={id === path.target} title={asset?.name ?? entry?.name ?? id}>
         {asset ? <span className="pw-mono">{asset.id}</span> : entry?.name ?? readableId(id)}
       </span>
     );
@@ -65,9 +67,8 @@ function PathRow({ path, twin }: { path: AttackPath; twin: Twin }) {
       {hops && <span id={hopDetails} hidden>{hops}</span>}
       <button type="button" className="pw-panel-path" title={path.title} aria-label={`${path.title}. Select target ${targetLabel}`}
         aria-describedby={hops ? hopDetails : undefined}
-        disabled={!target} onClick={() => useTwinStore.getState().select(path.target)}
-        onMouseEnter={() => highlight(path.target)} onMouseLeave={() => highlight(null)}
-        onFocus={() => highlight(path.target)} onBlur={() => highlight(null)}>
+        aria-disabled={!target} onClick={() => { if (target) useTwinStore.getState().select(path.target); }}
+        onPointerEnter={highlight} onPointerLeave={clearHighlight} onFocus={highlight} onBlur={clearHighlight}>
         <span className="pw-panel-path-heading">
           <span className="pw-panel-path-source" data-source={path.source}>{path.source === "rules" ? "Rules engine" : "Model proposal"}</span>
           <span className="pw-mono pw-panel-path-target" title={target?.name}>{targetLabel}</span>
@@ -100,7 +101,9 @@ export function AttackPathList({ paths, selfCheck }: { paths: AttackPath[]; self
   return (
     <>
       <PanelHeading icon={Route}>New attack paths {unique.size > 0 && <span className="pw-panel-muted pw-mono">{unique.size}</span>}</PanelHeading>
-      {unique.size > 0 && <ul className="pw-panel-list">{Array.from(unique, ([key, path]) => <PathRow key={key} path={path} twin={twin} />)}</ul>}
+      {unique.size > 0 ? (
+        <ul className="pw-panel-list">{Array.from(unique, ([key, path]) => <PathRow key={key} path={path} twin={twin} />)}</ul>
+      ) : <p className="pw-panel-muted">No new paths reported.</p>}
       {selfCheck && (
         <div className="pw-panel-selfcheck">
           <p><Network size={13} aria-hidden />

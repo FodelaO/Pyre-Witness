@@ -1,6 +1,7 @@
 /** Projects existing risk-report steps onto diagram routes and marks crossed boundaries. */
 import type { Point } from "@/twin/geometry";
 import type { AttackPath, AttackStep } from "@/twin/types";
+import { pathHasFocus } from "@/floor/twinFocus";
 import { type ConduitRoute, conduitForStep } from "./conduits";
 import type { Anchor, PurdueLayout } from "./layout";
 import { center, wirePoints } from "./routing";
@@ -45,12 +46,12 @@ export function buildRiskSegments(
   layout: PurdueLayout,
   routes: readonly ConduitRoute[],
   paths: readonly AttackPath[],
-  selectedId: string | null,
+  focused: ReadonlySet<string>,
 ): RiskSegment[] {
   const dmz = layout.bands.find(({ level }) => level === 3.5);
   const segments = new Map<string, RiskSegment>();
   for (const path of paths) {
-    const emphasis = !selectedId ? "normal" : path.causedBy === selectedId ? "selected" : "muted";
+    const emphasis = !focused.size ? "normal" : pathHasFocus(path, focused) ? "selected" : "muted";
     for (const step of path.steps) {
       const a = layout.anchors.get(step.from);
       const b = layout.anchors.get(step.to);

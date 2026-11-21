@@ -1,105 +1,111 @@
-/** Mountable daily threat watch panel for the plant results rail. */
+/** Collapsible daily advisory review with source and provider status. */
 "use client";
 
-import { Radar, RefreshCw } from "lucide-react";
-import { useEffect } from "react";
+import { ChevronDown, Radar, RefreshCw } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { watchStatus } from "@/shell/watchStatus";
 import { WATCH_SOURCES } from "./sources";
 import type { ThreatSource, WatchStage } from "./types";
 import { useWatchStore, watchDay, type WatchRunState } from "./watchStore";
-import { WatchRecommendations, WatchThreats } from "./WatchResults";
+import { WatchThreats } from "./WatchResults";
 
-const stages: Record<WatchStage["name"], string> = {
+const stageLabel: Record<WatchStage["name"], string> = {
   feeds: "Reading live feeds", matches: "Matching inventory", triage: "Triaging candidates",
   reassessment: "Reassessing plant risk", rules: "Measuring proposals", managed: "Running Antigravity",
 };
 const sourceIds = Object.keys(WATCH_SOURCES) as ThreatSource[];
 
 export function WatchRun({ run }: { run: WatchRunState }) {
-  const lastRun = run.report && new Date(run.report.finishedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const models = run.stages.filter(({ name, model }) => name !== "rules" && model).map(({ model }) => model);
+  const keyMissing = run.stages.some(({ state, detail }) => state === "failed" && /GEMINI_API_KEY/i.test(detail));
+  const modelUnavailable = run.stages.some(({ name, state }) => name !== "feeds" && state === "failed");
+  const status = watchStatus(run);
+  const elapsedSeconds = (run.stages.reduce((total, stage) => total + stage.ms, 0) / 1000).toFixed(1);
+  const report = run.report;
+
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1" aria-label="Threat sources">
+    <div className="pw-watch-run">
+      <div className="pw-panel-chips" aria-label="Threat sources">
         {sourceIds.map((source) => {
           const result = run.sources.find((item) => item.source === source);
           const label = WATCH_SOURCES[source].label;
           return (
-            <span key={source} title={result?.error ?? (result ? `${result.ms} ms${result.cached ? " · cached" : ""}` : label)}
-              className={`rounded border border-pw-line px-1.5 py-0.5 font-mono text-[10px] ${result?.error ? "text-pw-attention" : "text-pw-dim"}`}>
-              {label} {result?.error ? "unavailable" : result?.count ?? "–"}
+            <span className="pw-panel-chip pw-mono" key={source} data-tone={result?.error ? "attention" : undefined}
+              title={result?.error ? label + " offline" : undefined}>
+              {label} {result?.error ? "offline" : result?.count ?? "–"}
             </span>
           );
         })}
       </div>
-      <div aria-live="polite" className="space-y-1">
-        {run.working && <p className="text-pw-dim">{stages[run.working]}…</p>}
-        {run.report?.headline && <p>{run.report.headline}</p>}
-        {run.message && <p className="text-pw-attention">{run.message}</p>}
-        {run.stages.filter(({ state }) => state === "failed").map((stage) => (
-          <p className="text-[11px] text-pw-attention" key={stage.name}>{stage.detail}</p>
-        ))}
+      <div aria-live="polite">
+        {run.working && <p className="pw-watch-note">{stageLabel[run.working]}…</p>}
+        {run.status === "error" ? (
+          <p className="pw-watch-note" data-attention>{status === "Key missing" ? "Gemini key missing." : "Feed offline."}</p>
+        ) : keyMissing || modelUnavailable ? (
+          <p className="pw-watch-note" data-attention>{keyMissing ? "Gemini key missing." : "Model review unavailable."}</p>
+        ) : report?.headline ? <p>{report.headline}</p> : null}
       </div>
-      <WatchThreats candidates={run.candidates} report={run.report} />
-      {run.report && <WatchRecommendations report={run.report} />}
-      {!!run.report?.warnings.length && (
-        <details className="text-[11px] text-pw-attention">
-          <summary className="cursor-pointer">Run notes · {run.report.warnings.length}</summary>
-          <ul className="space-y-1 pt-1">{run.report.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+      <WatchThreats candidates={run.candidates} report={report} />
+      {!!report?.warnings.length && (
+        <details className="pw-watch-notes">
+          <summary>Run notes · {report.warnings.length}</summary>
+          <ul>{report.warnings.map((warning, index) => <li key={index}>{warning.split("\n")[0].slice(0, 180)}</li>)}</ul>
         </details>
       )}
-      {lastRun && (
-        <details className="font-mono text-[10px] text-pw-dim">
-          <summary className="cursor-pointer">
-            Last run {lastRun} · {(run.stages.reduce((sum, stage) => sum + stage.ms, 0) / 1000).toFixed(1)} s
-            {models.length > 0 && <span className="block">{models.join(" · ")}</span>}
+      {report && (
+        <details className="pw-watch-notes">
+          <summary>
+            Last check <time dateTime={new Date(report.finishedAt).toISOString()}>{new Date(report.finishedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+            {" · "}{elapsedSeconds} s
           </summary>
-          <ul className="space-y-1 pt-1">
-            {run.stages.map((stage) => <li key={stage.name}>{stage.model ?? stages[stage.name]} · {stage.ms} ms · {stage.state}</li>)}
-          </ul>
+          <ul>{run.stages.map((stage) => (
+            <li key={stage.name}>{stage.model ?? stageLabel[stage.name]} · {stage.ms} ms · {stage.state}</li>
+          ))}</ul>
         </details>
       )}
     </div>
   );
 }
 
-export default function WatchPanel() {
+export default function WatchPanel({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const run = useWatchStore((state) => state.local);
   const managed = useWatchStore((state) => state.managed);
   const runDaily = useWatchStore((state) => state.runDaily);
   const runNow = useWatchStore((state) => state.runNow);
+  const summary = useRef<HTMLElement>(null);
+
   useEffect(() => { runDaily(); }, [runDaily]);
+  useEffect(() => {
+    if (open) summary.current?.scrollIntoView({ block: "nearest" });
+  }, [open]);
 
-  const limited = run.stages.some(({ state }) => state === "failed") || run.sources.some(({ error }) => error);
-  const status = run.status === "running" ? "Running" : run.status === "error" ? "Failed"
-    : run.status === "idle" ? "Ready" : limited ? "Partial" : "Complete";
-  const dot = status === "Complete" ? "bg-pw-ok" : status === "Running" ? "bg-pw-info"
-    : status === "Failed" || status === "Partial" ? "bg-pw-attention" : "bg-pw-faint";
-
+  const status = watchStatus(run);
   return (
-    <section className="min-w-0 space-y-2 border-t border-pw-line px-3 py-3 text-xs text-pw-text" aria-label="Threat watch">
-      <div className="flex flex-wrap items-center justify-between gap-1.5">
-        <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Radar size={15} aria-hidden />Threat watch</h3>
-        <button type="button" disabled={run.status === "running"} onClick={() => void runNow()}
-          className="flex items-center gap-1 rounded border border-pw-line-strong px-2 py-1 text-[11px] hover:border-pw-info disabled:opacity-50">
-          <RefreshCw size={12} aria-hidden />Run now
-        </button>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-2 font-mono text-[10px] text-pw-dim">
-        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
-        <span>{status}</span><time dateTime={watchDay()}>{watchDay()} UTC</time>
-      </div>
-      <p className="text-[11px] text-pw-dim">assumed BOM (simulated plant)</p>
-      <WatchRun run={run} />
-      <details className="border-t border-pw-line pt-2">
-        <summary className="cursor-pointer text-[11px] text-pw-dim">Antigravity · Google-hosted comparison</summary>
-        <div className="mt-2 space-y-2">
-          <button type="button" disabled={managed.status === "running"} onClick={() => void runNow("managed")}
-            className="rounded border border-pw-line-strong px-2 py-1 text-[11px] hover:border-pw-info disabled:opacity-50">
-            Run managed watch
+    <details id="pw-watch" className="pw-watch pw-panel-disclosure" open={open}
+      onToggle={(event) => { if (event.target === event.currentTarget) onOpenChange(event.currentTarget.open); }}>
+      <summary ref={summary}>
+        <span><Radar size={16} aria-hidden />Threat watch</span>
+        <span className="pw-watch-state"><i className="pw-status-dot" data-status={status} aria-hidden />{status}</span>
+        <ChevronDown size={14} className="pw-panel-disclosure-caret" aria-hidden />
+      </summary>
+      <div className="pw-watch-body">
+        <div className="pw-watch-meta">
+          <span>Assumed inventory · simulated plant</span>
+          <button type="button" className="pw-panel-button" disabled={run.status === "running"} onClick={() => void runNow()}>
+            <RefreshCw size={13} aria-hidden />Run now
           </button>
-          {managed.status !== "idle" && <WatchRun run={managed} />}
         </div>
-      </details>
-    </section>
+        <WatchRun run={run} />
+        <details className="pw-watch-notes">
+          <summary>Antigravity comparison</summary>
+          <div className="pw-watch-managed">
+            <button type="button" className="pw-panel-button" disabled={managed.status === "running"} onClick={() => void runNow("managed")}>
+              Run Google-hosted watch
+            </button>
+            {managed.status !== "idle" && <WatchRun run={managed} />}
+          </div>
+        </details>
+        <time className="pw-mono pw-watch-date" dateTime={watchDay()}>{watchDay()} UTC</time>
+      </div>
+    </details>
   );
 }

@@ -14,17 +14,7 @@
   }
 }
 
-.pw-vessel-agitator {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: pw-vessel-agitator 2s linear infinite;
-}
-
-@keyframes pw-vessel-agitator {
-  to {
-    transform: rotateY(360deg);
-  }
-}
+.pw-agitator-rotor { animation-duration: 1.8s; }
 
 .pw-vessel-bubble {
   opacity: 0.6;
@@ -56,7 +46,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pw-conveyor-bottles {
-    animation: none;
-  }
+  .pw-vessel-liquid { transition: none; }
+  .pw-agitator-rotor, .pw-vessel-shimmer, .pw-vessel-bubble, .pw-conveyor-bottles { animation: none; }
 }

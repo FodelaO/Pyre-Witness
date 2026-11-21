@@ -20,10 +20,11 @@ const ENTRY_ICONS = {
 interface NodeLayerProps {
   layout: PurdueLayout;
   selectedId: string | null;
-  hoveredId: string | null;
-  activeZone: string | null;
+  highlighted: ReadonlySet<string>;
+  linkedEntries: ReadonlySet<string>;
+  activeZones: ReadonlySet<string>;
   draggedId?: string;
-  onSelect: (id: string) => void;
+  onSelect: (id: string | null) => void;
   onHover: (id: string, entered: boolean) => void;
   onToggleFields: (area: string) => void;
   onDragStart?: (event: PointerEvent<HTMLButtonElement>, asset: Asset) => void;
@@ -32,8 +33,9 @@ interface NodeLayerProps {
 export function NodeLayer({
   layout,
   selectedId,
-  hoveredId,
-  activeZone,
+  highlighted,
+  linkedEntries,
+  activeZones,
   draggedId,
   onSelect,
   onHover,
@@ -45,19 +47,24 @@ export function NodeLayer({
       {layout.entries.map(({ entry, external, ...box }) => {
         const Icon = ENTRY_ICONS[entry.kind];
         return (
-          <div
+          <button
             key={entry.id}
+            type="button"
             className="pw-purdue-entry"
             data-external={external}
             data-entry={entry.id}
-            role="img"
+            data-highlighted={highlighted.has(entry.id) || linkedEntries.has(entry.id)}
+            aria-pressed={entry.id === selectedId}
             aria-label={entry.name}
             title={entry.name}
+            onClick={() => onSelect(entry.id)}
+            onPointerEnter={(event) => { if (event.pointerType !== "touch") onHover(entry.id, true); }}
+            onPointerLeave={() => onHover(entry.id, false)}
             style={position(box)}
           >
             <Icon size={13} strokeWidth={1.5} aria-hidden="true" />
             {external && <span>{entry.name}</span>}
-          </div>
+          </button>
         );
       })}
       {layout.fieldGroups.map(({ zone, count, expanded, ...box }) => (
@@ -68,7 +75,7 @@ export function NodeLayer({
           aria-expanded={expanded}
           aria-label={`${zone}, ${count} field devices`}
           title={`${count} field devices`}
-          data-zone-active={activeZone === zone}
+          data-zone-active={activeZones.has(zone)}
           style={position(box)}
           onClick={() => onToggleFields(zone)}
         >
@@ -80,6 +87,10 @@ export function NodeLayer({
       {layout.cards.map(({ asset, mini, ...box }) => {
         const { id, name, origin, placement, physical, status, network } = asset;
         const footprint = FOOTPRINT[physical.kind];
+        const letters = physical.kind === "instrument" ? id.match(/^([A-Z]{1,3})-(\d{1,4})$/) : null;
+        const fieldGlyph = mini && letters && box.w >= 36;
+        const selected = id === selectedId;
+        const linked = highlighted.has(id);
         return (
           <button
             key={id}
@@ -87,12 +98,13 @@ export function NodeLayer({
             className="pw-purdue-node"
             data-asset={id}
             data-mini={mini}
+            data-firewall={physical.kind === "firewall"}
             data-added={origin === "added"}
             data-dragging={id === draggedId}
             data-placement={placement}
-            data-hovered={id === hoveredId}
-            data-zone-active={network.area === activeZone}
-            aria-pressed={id === selectedId}
+            data-hovered={linked}
+            data-zone-active={activeZones.has(network.area)}
+            aria-pressed={selected}
             aria-label={`${id} · ${name}`}
             title={`${id} · ${name}`}
             onClick={() => onSelect(id)}
@@ -101,16 +113,16 @@ export function NodeLayer({
             onPointerDown={origin === "added" && onDragStart ? (event) => onDragStart(event, asset) : undefined}
             style={position(box)}
           >
-            {(!mini || !layout.compact) && (
+            {(!mini || !layout.compact || fieldGlyph) && (
               <svg
                 className="pw-purdue-symbol"
-                viewBox={`${-footprint.w / 2 - 8} ${-footprint.h / 2 - 8} ${footprint.w + 16} ${footprint.h + 16}`}
+                viewBox={fieldGlyph ? "-10 -10 20 20" : `${-footprint.w / 2 - 3} ${-footprint.h / 2 - 3} ${footprint.w + 6} ${footprint.h + 6}`}
                 aria-hidden="true"
               >
-                <Equipment kind={physical.kind} status={status} compact />
+                <Equipment kind={physical.kind} status={status} selected={selected} highlighted={linked} letters={letters?.[1]} compact />
               </svg>
             )}
-            <span className="pw-purdue-tag">{id}</span>
+            <span className="pw-purdue-tag">{fieldGlyph ? letters[2] : id}</span>
           </button>
         );
       })}

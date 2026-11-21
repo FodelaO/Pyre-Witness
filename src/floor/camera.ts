@@ -46,8 +46,8 @@ export function worldToLocal(point: Point, camera: Camera, viewport: Viewport): 
   };
 }
 
-export function zoomBetween(camera: Camera, from: Point, to: Point, factor: number): Camera {
+export function zoomBetween(camera: Camera, from: Point, to: Point, factor: number, min = 0.55, max = 6): Camera {
   const world = stageToWorld(from, camera);
-  const scale = Math.max(0.55, Math.min(6, camera.scale * factor));
+  const scale = Math.max(min, Math.min(max, camera.scale * factor));
   return { x: to.x - world.x * scale, y: to.y - world.y * scale, scale };
 }

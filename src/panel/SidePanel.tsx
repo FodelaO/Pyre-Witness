@@ -1,12 +1,10 @@
-/** Results rail for the active analysis, mitigation decisions and selected assets. */
+/** Pinned risk, assessment and watch readouts for the plant. */
 "use client";
 
-import { AudioLines, List, Volume2, X } from "lucide-react";
-import { AnimatePresence } from "motion/react";
-import { useEffect, useRef, useState } from "react";
-import ActivityFeed from "@/crew/ActivityFeed";
+import { AudioLines, Crosshair, List, Radio } from "lucide-react";
+import { lazy, useEffect, useRef, useState } from "react";
 import { useRunStore, type RunState } from "@/pipeline/runStore";
-import type { CaptureImage } from "@/pipeline/types";
+import { Slot } from "@/shell/Slot";
 import { useTwinStore } from "@/twin/store";
 import { AssetInspector } from "./AssetInspector";
 import { AttackPathList } from "./AttackPathList";
@@ -15,13 +13,25 @@ import { DeviceCard } from "./DeviceCard";
 import { MitigationQueue } from "./MitigationQueue";
 import { NeverPlace } from "./NeverPlace";
 import { Disclosure, PanelHeading, PanelSection, TextPreview } from "./PanelParts";
+import { PanelWorkspace } from "./PanelWorkspace";
 import { PlacementAnswer } from "./PlacementAnswer";
 import { RiskDial } from "./RiskDial";
 import { RiskList } from "./RiskList";
-import { RunProgress } from "./RunProgress";
+import { RunError, RunProgress } from "./RunProgress";
+import { SimulationComparison } from "./SimulationComparison";
 import "./panel.css";
 
-function productThumbnail(source: string | null | undefined) {
+const ActivityFeed = lazy(() => import("@/crew/ActivityFeed"));
+const FitPreview = lazy(() => import(/* turbopackOptional: true */ "@/fit/FitPreview"));
+const SpeakButton = lazy(() => import(/* turbopackOptional: true */ "@/voice/SpeakButton"));
+const WatchPanel = lazy(() => import("@/watch/WatchPanel"));
+
+function runThumbnail(run: RunState) {
+  const photo = run.captureThumbnail;
+  if (photo?.dataBase64 && /^image\/(jpeg|png|webp)$/i.test(photo.mimeType)) {
+    return "data:" + photo.mimeType + ";base64," + photo.dataBase64;
+  }
+  const source = run.events.findLast((event) => event.type === "link.fetched")?.snapshot.imageUrl;
   if (!source) return undefined;
   try {
     const url = new URL(source);
@@ -31,15 +41,14 @@ function productThumbnail(source: string | null | undefined) {
   }
 }
 
-function runThumbnail(run: RunState & { captureThumbnail?: CaptureImage | null }) {
-  const photo = run.captureThumbnail;
-  if (photo?.dataBase64 && /^image\/(jpeg|png|webp)$/i.test(photo.mimeType)) {
-    return `data:${photo.mimeType};base64,${photo.dataBase64}`;
-  }
-  return productThumbnail(run.events.findLast((event) => event.type === "link.fetched")?.snapshot.imageUrl);
-}
+type Props = {
+  captureOpen: boolean;
+  setCaptureEditor: (editor: HTMLDivElement | null) => void;
+  watchOpen: boolean;
+  onWatchOpen: (open: boolean) => void;
+};
 
-export default function SidePanel() {
+export default function SidePanel({ captureOpen, setCaptureEditor, watchOpen, onWatchOpen }: Props) {
   const run = useRunStore();
   const { runId, status, stage, events, gate, error, summary, profile, assessment, selfCheck, placedAssetId } = run;
   const mitigations = useTwinStore((state) => state.mitigations);
@@ -62,39 +71,56 @@ export default function SidePanel() {
   }
 
   return (
-    <div className="pw-panel pw-scroll" ref={scroll} role="region" aria-label="Plant results" tabIndex={0}>
-      <RiskDial action={hasRun && !running && (
+    <div className="pw-panel" role="region" aria-label="Plant results">
+      <RiskDial action={hasRun && !running && !captureOpen && (
         <button className="pw-panel-link pw-panel-run-toggle" type="button" onClick={toggleResults}>
-          {focused ? <><X size={13} aria-hidden />Hide results</> : <><List size={13} aria-hidden />Show results</>}
+          {focused ? <><Crosshair size={14} aria-hidden />Inspect</> : <><List size={14} aria-hidden />Results</>}
         </button>
       )} />
-      <AnimatePresence initial={false}>
-        {focused && summary && (
-          <PanelSection key="briefing">
-            <PanelHeading icon={AudioLines} aside={
-              <button type="button" className="pw-panel-icon-button" disabled aria-label="Play Chief briefing" title="Voice unavailable">
-                <Volume2 size={15} aria-hidden />
-              </button>
-            }>Chief briefing</PanelHeading>
-            <div className="pw-panel-briefing"><TextPreview text={summary} label="Full briefing" lines={3} /></div>
-          </PanelSection>
+      <PanelWorkspace captureOpen={captureOpen} setCaptureEditor={setCaptureEditor} readoutsRef={scroll}>
+        {focused ? (
+          <>
+            {summary && (
+              <PanelSection>
+                <PanelHeading icon={AudioLines} aside={
+                  <span className="pw-panel-voice">
+                    <Slot name="Chief briefing audio" quiet><SpeakButton text={summary} /></Slot>
+                  </span>
+                }>Chief briefing</PanelHeading>
+                <div className="pw-panel-briefing"><TextPreview text={summary} label="Full briefing" lines={3} /></div>
+              </PanelSection>
+            )}
+            {error && <PanelSection><RunError message={error.message} /></PanelSection>}
+            {profile && <PanelSection><DeviceCard profile={profile} thumbnail={thumbnail} /></PanelSection>}
+            {assessment && (
+              <>
+                <PanelSection><PlacementAnswer assessment={assessment} placedAssetId={placedAssetId} pending={pendingPlacement} /></PanelSection>
+                <PanelSection><NeverPlace places={assessment.never_place} /></PanelSection>
+                <PanelSection><RiskList risks={assessment.risks} />
+                  {assessment.compliance.length > 0 && (
+                    <Disclosure label="Compliance references"><ComplianceChips items={assessment.compliance} /></Disclosure>
+                  )}
+                </PanelSection>
+                <PanelSection><AttackPathList paths={assessment.attack_paths} selfCheck={checked} /></PanelSection>
+              </>
+            )}
+            {!profile && (running || gate) && (
+              <PanelSection><RunProgress {...{ status, stage, events, gate, error }} /></PanelSection>
+            )}
+          </>
+        ) : <PanelSection><AssetInspector /></PanelSection>}
+        {mitigations.length > 0 && <PanelSection><MitigationQueue items={mitigations} /></PanelSection>}
+        <SimulationComparison />
+        {focused && profile && assessment && <Slot name="Fit preview" quiet><FitPreview /></Slot>}
+        {focused && profile && (
+          <PanelSection><Disclosure label="Analysis details"><RunProgress {...{ status, stage, events, gate, error }} /></Disclosure></PanelSection>
         )}
-        {focused && <PanelSection key="progress"><RunProgress {...{ status, stage, events, gate, error }} /></PanelSection>}
-        {focused && profile && <PanelSection key="device"><DeviceCard profile={profile} thumbnail={thumbnail} /></PanelSection>}
-        {focused && assessment && (
-          <PanelSection key="placement"><PlacementAnswer assessment={assessment} placedAssetId={placedAssetId} pending={pendingPlacement} /></PanelSection>
-        )}
-        {focused && !!assessment?.never_place.length && <PanelSection key="never"><NeverPlace places={assessment.never_place} /></PanelSection>}
-        {focused && !!assessment?.risks.length && <PanelSection key="risks"><RiskList risks={assessment.risks} /></PanelSection>}
-        {focused && (!!assessment?.attack_paths.length || checked) && (
-          <PanelSection key="paths"><AttackPathList paths={assessment?.attack_paths ?? []} selfCheck={checked} /></PanelSection>
-        )}
-        {focused && !!assessment?.compliance.length && <PanelSection key="compliance"><ComplianceChips items={assessment.compliance} /></PanelSection>}
-        {mitigations.length > 0 && <PanelSection key="mitigations"><MitigationQueue items={mitigations} /></PanelSection>}
-        {!focused && <PanelSection key="inspector"><AssetInspector /></PanelSection>}
-      </AnimatePresence>
+        <Slot name="Threat watch" quiet><WatchPanel open={watchOpen} onOpenChange={onWatchOpen} /></Slot>
+      </PanelWorkspace>
       <div className="pw-panel-feed">
-        <Disclosure label={<span><List size={14} aria-hidden />Crew activity</span>}><ActivityFeed /></Disclosure>
+        <Disclosure label={<span><Radio size={15} aria-hidden />Crew activity</span>}>
+          <Slot name="Crew activity"><ActivityFeed /></Slot>
+        </Disclosure>
       </div>
     </div>
   );

@@ -1,15 +1,18 @@
-/** The plant's floating photo, product-link and description intake. */
+/** Preserves the capture draft as the dock switches between editing, progress and completion. */
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
-import { Aperture, ArrowRight, Camera, Check, ChevronDown, Link, RotateCcw, Square, TextAlignStart } from "lucide-react";
+import { useEffect, useEffectEvent, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
+import { Aperture, ArrowRight, Camera, Check, CircleAlert, Link, RotateCcw, Square, TextAlignStart, X } from "lucide-react";
+import { createPortal } from "react-dom";
 import { HANDOFF_NOTE_MAX, type HandoffPacket } from "@/handoff/types";
 import { analyze, cancelRun } from "@/pipeline/client";
 import { useRunStore } from "@/pipeline/runStore";
 import type { CaptureInput } from "@/pipeline/types";
 import { DEFAULT_DROP, useDropStore } from "@/twin/dropPoint";
 import CaptureLocation from "./CaptureLocation";
-import CaptureProgress, { captureStageLabel } from "./CaptureProgress";
+import CaptureProgress from "./CaptureProgress";
+import CaptureToolbar, { toggleFloorPin, type CaptureTool } from "./CaptureToolbar";
+import { captureErrorMessage } from "./captureError";
 import { MAX_CAPTURE_PHOTOS } from "./image";
 import PhotoPane from "./PhotoPane";
 import PhonePairing from "./PhonePairing";
@@ -23,7 +26,6 @@ const TABS = [
   { id: "text", label: "Describe", Icon: TextAlignStart },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
-type Failure = { stage: string; message: string };
 
 function productUrl(value: string) {
   const trimmed = value.trim();
@@ -36,22 +38,31 @@ function productUrl(value: string) {
   }
 }
 
-export default function CaptureCard() {
+type Props = {
+  open: boolean;
+  editor: HTMLDivElement | null;
+  onOpenChange: (open: boolean) => void;
+};
+
+export default function CaptureCard({ open, editor, onOpenChange }: Props) {
   const [tab, setTab] = useState<Tab>("photo");
-  const [collapsed, setCollapsed] = useState(false);
+  const [tool, setTool] = useState<CaptureTool>("camera");
+  const [cameraAttempt, setCameraAttempt] = useState(0);
   const [link, setLink] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [failed, setFailed] = useState<Failure | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const [dismissedRun, setDismissedRun] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [phoneNote, setPhoneNote] = useState("");
   const [incoming, setIncoming] = useState<HandoffPacket | null>(null);
   const draft = usePhotoDraft();
-  const formRef = useRef<HTMLFormElement>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const focusNext = useRef(false);
+  const form = useRef<HTMLFormElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const upload = useRef<HTMLInputElement>(null);
+  const returnTo = useRef<CaptureTool>("camera");
+  const focusField = useRef(false);
   const dragDepth = useRef(0);
   const submittingRun = useRef<symbol | null>(null);
 
@@ -61,13 +72,13 @@ export default function CaptureCard() {
   const runError = useRunStore((state) => state.error);
   const busy = submitting || status === "running";
   const finished = !busy && !failed && status === "done" && runId !== dismissedRun;
-  const error = failed ?? runError;
+  const canUpload = !draft.preparing && draft.photos.length < MAX_CAPTURE_PHOTOS;
   const url = tab === "link" ? productUrl(link) : null;
   const invalidLink = tab === "link" && link.trim() !== "" && !url;
   const roomForIncoming = incoming && incoming.images.length + draft.photos.length <= MAX_CAPTURE_PHOTOS;
   let input: CaptureInput | null = null;
   if (tab === "photo" && draft.photos.length) {
-    input = { kind: "photo", images: draft.photos.map((photo) => photo.image), ...(phoneNote && { note: phoneNote }) };
+    input = { kind: "photo", images: draft.photos.map(({ image }) => image), ...(phoneNote && { note: phoneNote }) };
   } else if (tab === "link" && url) {
     input = { kind: "link", url };
   } else if (tab === "text" && description.trim()) {
@@ -87,78 +98,131 @@ export default function CaptureCard() {
     setPhoneNote((previous) => [replace ? "" : previous, packet.note].filter(Boolean).join("\n").slice(0, HANDOFF_NOTE_MAX));
     setIncoming(null);
     setPhoneOpen(false);
+    setCameraAttempt(0);
+    setTool("upload");
     setTab("photo");
-    setCollapsed(false);
+    onOpenChange(true);
     return true;
   }
 
-  useEffect(() => {
-    function handleEscape(event: globalThis.KeyboardEvent) {
-      if (event.key !== "Escape" || event.defaultPrevented || collapsed) return;
-      if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, [contenteditable]")
-        && !rootRef.current?.contains(event.target)) return;
-      focusNext.current = rootRef.current?.contains(document.activeElement) ?? false;
-      useDropStore.getState().disarm();
-      dragDepth.current = 0;
-      setDragging(false);
-      setCollapsed(true);
-    }
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [collapsed]);
-
-  useEffect(() => {
-    if (!focusNext.current) return;
-    rootRef.current?.querySelector<HTMLElement>(collapsed || finished ? "button" : '[role="tab"][aria-selected="true"]')?.focus();
-    focusNext.current = false;
-  }, [collapsed, finished]);
-
-  const preparePhotos = useEffectEvent((files: File[]) => void draft.prepare(files));
-  useEffect(() => {
-    if (collapsed || finished || busy || tab !== "photo") return;
-    function paste(event: ClipboardEvent) {
-      const target = event.target;
-      if (target instanceof HTMLElement && target.closest("input, textarea, [contenteditable]")) return;
-      const data = event.clipboardData;
-      if (!data) return;
-      const files = Array.from(data.files).filter((file) => file.type.startsWith("image/"));
-      if (!files.length) {
-        for (const item of data.items) {
-          const file = item.type.startsWith("image/") ? item.getAsFile() : null;
-          if (file) files.push(file);
-        }
-      }
-      if (!files.length) return;
-      event.preventDefault();
-      preparePhotos(files);
-    }
-    window.addEventListener("paste", paste);
-    return () => window.removeEventListener("paste", paste);
-  }, [busy, collapsed, finished, tab]);
-
-  function toggleCard() {
-    focusNext.current = true;
+  function collapse(restoreFocus: boolean) {
     useDropStore.getState().disarm();
     dragDepth.current = 0;
     setDragging(false);
-    setCollapsed(!collapsed);
+    setPhoneOpen(false);
+    setCameraAttempt(0);
+    onOpenChange(false);
+    if (restoreFocus) requestAnimationFrame(() => {
+      root.current?.querySelector<HTMLElement>('[data-capture-tool="' + returnTo.current + '"], .pw-capture-new')?.focus();
+    });
   }
 
   function newCapture() {
-    focusNext.current = true;
+    focusField.current = true;
     setDismissedRun(runId);
     setTab("photo");
+    setTool("camera");
+    returnTo.current = "camera";
     setLink("");
     setDescription("");
     setFailed(null);
     setPhoneOpen(false);
+    setCameraAttempt(0);
     if (incoming) addPhonePhotos(incoming, true);
     else {
       draft.clear();
       setPhoneNote("");
     }
     useDropStore.getState().setPoint(null);
+    onOpenChange(true);
   }
+
+  function chooseTab(next: Tab) {
+    setTab(next);
+    setTool(next === "photo" ? "camera" : next);
+    setPhoneOpen(false);
+    setCameraAttempt(0);
+  }
+
+  function openPhone() {
+    if (!phoneOpen && (phone.state.status === "idle" || phone.state.status === "error")) phone.start();
+    setPhoneOpen(!phoneOpen);
+    setCameraAttempt(0);
+    setTool(phoneOpen ? "camera" : "phone");
+  }
+
+  function useTool(action: CaptureTool) {
+    if (action === "pin") {
+      toggleFloorPin();
+      return;
+    }
+    focusField.current = true;
+    returnTo.current = action;
+    if (action === "phone") {
+      setTab("photo");
+      openPhone();
+    } else {
+      chooseTab(action === "link" || action === "text" ? action : "photo");
+      setTool(action);
+      if (action === "camera") setCameraAttempt(cameraAttempt + 1);
+      if (action === "upload") upload.current?.click();
+    }
+    onOpenChange(true);
+  }
+
+  const captureKeys = useEffectEvent((event: globalThis.KeyboardEvent) => {
+    if (event.defaultPrevented) return;
+    const target = event.target;
+    const typing = target instanceof Element && !!target.closest("input, textarea, select, [contenteditable]");
+    const inEditor = target instanceof Node && (form.current?.contains(target) ?? false);
+    if (event.key === "Escape" && (open || useDropStore.getState().armed) && (!typing || inEditor)) {
+      event.preventDefault();
+      collapse(inEditor);
+    }
+    if (event.key.toLowerCase() !== "c" || event.repeat || event.metaKey || event.ctrlKey || event.altKey
+      || event.isComposing || typing || busy) return;
+    event.preventDefault();
+    if (open) collapse(inEditor);
+    else if (finished) newCapture();
+    else {
+      focusField.current = true;
+      onOpenChange(true);
+    }
+  });
+
+  const pastePhotos = useEffectEvent((event: ClipboardEvent) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest("input, textarea, [contenteditable]")) return;
+    const data = event.clipboardData;
+    if (!data || !open || busy || tab !== "photo") return;
+    const files = Array.from(data.files).filter((file) => file.type.startsWith("image/"));
+    if (!files.length) {
+      for (const item of data.items) {
+        const file = item.type.startsWith("image/") ? item.getAsFile() : null;
+        if (file) files.push(file);
+      }
+    }
+    if (!files.length) return;
+    event.preventDefault();
+    void draft.prepare(files);
+  });
+
+  useEffect(() => {
+    function keydown(event: globalThis.KeyboardEvent) { captureKeys(event); }
+    function paste(event: ClipboardEvent) { pastePhotos(event); }
+    window.addEventListener("keydown", keydown);
+    window.addEventListener("paste", paste);
+    return () => {
+      window.removeEventListener("keydown", keydown);
+      window.removeEventListener("paste", paste);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open || !editor || !focusField.current || useDropStore.getState().armed) return;
+    focusField.current = false;
+    form.current?.querySelector<HTMLElement>(tab === "photo" ? '[role="tab"][aria-selected="true"]' : "input, textarea")?.focus();
+  }, [open, editor, tab, tool]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,19 +232,15 @@ export default function CaptureCard() {
     setSubmitting(true);
     setFailed(null);
     const previousError = useRunStore.getState().error;
-    const drop = useDropStore.getState();
-    drop.disarm();
+    collapse(false);
+    requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>(".pw-capture-run button")?.focus());
     try {
-      await analyze(input, drop.point ?? DEFAULT_DROP);
+      await analyze(input, useDropStore.getState().point ?? DEFAULT_DROP);
     } catch (cause) {
-      if (submittingRun.current !== attempt) return;
-      if (cause instanceof Error && cause.name === "AbortError") return;
-      const latest = useRunStore.getState();
-      if (latest.error && latest.error !== previousError) return;
-      setFailed({
-        stage: latest.stage ?? "submission",
-        message: cause instanceof Error ? cause.message : "Could not start analysis.",
-      });
+      if (submittingRun.current !== attempt || (cause instanceof Error && cause.name === "AbortError")) return;
+      const { error } = useRunStore.getState();
+      if (error && error !== previousError) return;
+      setFailed(cause instanceof Error ? captureErrorMessage(cause.message) : "Could not start analysis.");
     } finally {
       if (submittingRun.current === attempt) {
         submittingRun.current = null;
@@ -189,11 +249,12 @@ export default function CaptureCard() {
     }
   }
 
-  function cancel(event: MouseEvent<HTMLButtonElement>) {
-    event.preventDefault();
+  function cancel() {
     submittingRun.current = null;
     cancelRun();
     setSubmitting(false);
+    focusField.current = true;
+    onOpenChange(true);
   }
 
   function tabKeys(event: KeyboardEvent<HTMLButtonElement>) {
@@ -207,8 +268,8 @@ export default function CaptureCard() {
     const next = TABS[keys[event.key]];
     if (!next) return;
     event.preventDefault();
-    setTab(next.id);
-    formRef.current?.querySelector<HTMLElement>(`#capture-tab-${next.id}`)?.focus();
+    chooseTab(next.id);
+    form.current?.querySelector<HTMLElement>("#capture-tab-" + next.id)?.focus();
   }
 
   function dropFiles(event: DragEvent<HTMLFormElement>) {
@@ -219,123 +280,146 @@ export default function CaptureCard() {
     if (busy || draft.preparing) return;
     const files = Array.from(event.dataTransfer.files);
     if (!files.length) return;
-    setTab("photo");
+    chooseTab("photo");
     void draft.prepare(files);
   }
 
-  return (
-    <div className="pw-capture-root" ref={rootRef}>
-      {collapsed ? (
-        <button type="button" className="pw-capture-round" title="Open capture" aria-label="Open capture"
-          aria-expanded={false} onClick={toggleCard}>
-          <Camera size={21} aria-hidden="true" />
+  const error = failed ?? (runError && captureErrorMessage(runError.message));
+
+  function reopenDraft() {
+    focusField.current = true;
+    onOpenChange(true);
+  }
+
+  function errorReadout(message: string, belowDesktop = false) {
+    return (
+      <div className="pw-capture-summary pw-tool-rail" data-failed="true" data-below-desktop={belowDesktop}>
+        <CircleAlert size={16} aria-hidden />
+        <span role="alert" title={message}>{message}</span>
+        <button type="button" className="pw-tool-button pw-capture-new" aria-label="Edit capture"
+          data-pw-tip="Edit capture (C)" data-pw-tip-side="top" onClick={reopenDraft}>
+          <RotateCcw size={17} aria-hidden />
         </button>
-      ) : finished ? (
-        <div className="pw-capture-summary">
-          <Check size={16} aria-hidden="true" />
-          <span role="status" title={deviceType ?? undefined}>{deviceType || "Capture complete"}</span>
-          <button type="button" onClick={newCapture}><Camera size={14} aria-hidden="true" /> New capture</button>
+      </div>
+    );
+  }
+
+  const composer = open && !busy && editor && createPortal(
+    <form className="pw-capture-card" aria-label="Capture device" data-dragging={dragging} ref={form} noValidate
+      onSubmit={submit} onDrop={dropFiles}
+      onDragEnter={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        dragDepth.current++;
+        setDragging(!draft.preparing);
+      }}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = draft.preparing ? "none" : "copy";
+      }}
+      onDragLeave={() => {
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (!dragDepth.current) setDragging(false);
+      }}>
+      <header className="pw-capture-header">
+        <h2><Aperture size={17} aria-hidden /> Capture device</h2>
+        <button type="button" className="pw-capture-icon-button" title="Collapse capture (Esc)" aria-label="Collapse capture"
+          onClick={() => collapse(true)}><X size={17} aria-hidden /></button>
+      </header>
+      <div className="pw-capture-tabs" role="tablist" aria-label="Capture method">
+        {TABS.map(({ id, label, Icon }) => (
+          <button key={id} type="button" role="tab" id={"capture-tab-" + id} aria-selected={tab === id}
+            aria-controls="capture-pane" tabIndex={tab === id ? 0 : -1}
+            onClick={() => chooseTab(id)} onKeyDown={tabKeys}>
+            <Icon size={14} aria-hidden /> {label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id="capture-pane" aria-labelledby={"capture-tab-" + tab} className="pw-capture-pane">
+        {tab === "photo" && (
+          <PhotoPane draft={draft} cameraAttempt={cameraAttempt}
+            phonePreview={phoneOpen ? <PhonePairing state={phone.state} onStart={phone.start} /> : null}
+            onTogglePhone={openPhone} onUpload={() => upload.current?.click()}
+            onRemove={(id) => {
+              draft.remove(id);
+              if (draft.photos.length === 1) setPhoneNote("");
+            }}>
+            {incoming && (
+              <div className="pw-capture-incoming">
+                <span role="status">{incoming.images.length} from phone</span>
+                <button type="button" disabled={draft.preparing} onClick={() => addPhonePhotos(incoming, !roomForIncoming)}>
+                  {roomForIncoming ? "Add photos" : "Replace photos"}
+                </button>
+              </div>
+            )}
+            {phoneNote && <p className="pw-capture-phone-note" title={phoneNote}>{phoneNote}</p>}
+          </PhotoPane>
+        )}
+        {tab === "link" && (
+          <label className="pw-capture-field">
+            <span>Product URL</span>
+            <input name="url" type="url" value={link} placeholder="https://…" autoComplete="url"
+              autoCapitalize="none" spellCheck={false} aria-invalid={invalidLink}
+              aria-describedby={invalidLink ? "capture-link-error" : undefined} onChange={(event) => setLink(event.target.value)} />
+            <span id="capture-link-error" className="pw-capture-field-error" aria-live="polite">
+              {invalidLink ? "Enter a valid http:// or https:// URL." : ""}
+            </span>
+          </label>
+        )}
+        {tab === "text" && (
+          <label className="pw-capture-field">
+            <span>Device and intended location</span>
+            <textarea name="description" rows={3} maxLength={1200} value={description}
+              placeholder="What is it? Where will it go?"
+              onChange={(event) => setDescription(event.target.value)} onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }} />
+          </label>
+        )}
+      </div>
+      {error && <p className="pw-capture-failure" role="alert"><CircleAlert size={15} aria-hidden />{error}</p>}
+      <footer className="pw-capture-footer">
+        <CaptureLocation disabled={false} />
+        <button type="submit" className="pw-capture-analyze" disabled={!canSubmit}>
+          {error ? "Retry" : "Analyze"} <ArrowRight size={15} aria-hidden />
+        </button>
+      </footer>
+    </form>,
+    editor,
+  );
+
+  return (
+    <div className="pw-capture-root" ref={root}>
+      <input type="file" ref={upload} accept="image/*" multiple hidden disabled={busy}
+        onChange={(event) => {
+          const files = Array.from(event.currentTarget.files ?? []);
+          event.currentTarget.value = "";
+          if (files.length && !busy) void draft.prepare(files);
+        }} />
+      {busy ? (
+        <div className="pw-capture-run pw-tool-rail">
+          <CaptureProgress />
+          <button type="button" className="pw-tool-button" aria-label="Cancel analysis"
+            data-pw-tip="Cancel analysis" data-pw-tip-side="top" onClick={cancel}><Square size={15} aria-hidden /></button>
         </div>
-      ) : (
-        <form className="pw-capture-card" aria-label="Capture device" data-dragging={dragging} ref={formRef} noValidate
-          onSubmit={submit} onDrop={dropFiles}
-          onDragEnter={(event) => {
-            if (!event.dataTransfer.types.includes("Files")) return;
-            event.preventDefault();
-            dragDepth.current++;
-            setDragging(!busy && !draft.preparing);
-          }}
-          onDragOver={(event) => {
-            if (!event.dataTransfer.types.includes("Files")) return;
-            event.preventDefault();
-            event.dataTransfer.dropEffect = busy || draft.preparing ? "none" : "copy";
-          }}
-          onDragLeave={() => {
-            dragDepth.current = Math.max(0, dragDepth.current - 1);
-            if (!dragDepth.current) setDragging(false);
-          }}>
-          <header className="pw-capture-header">
-            <h2><Aperture size={15} aria-hidden="true" /> Capture device</h2>
-            <button type="button" className="pw-capture-icon-button" title="Collapse capture" aria-label="Collapse capture"
-              aria-expanded={true} onClick={toggleCard}><ChevronDown size={18} aria-hidden="true" /></button>
-          </header>
-          <div className="pw-capture-tabs" role="tablist" aria-label="Capture method">
-            {TABS.map(({ id, label, Icon }) => (
-              <button key={id} type="button" role="tab" id={`capture-tab-${id}`} aria-selected={tab === id}
-                aria-controls={`capture-pane-${id}`} tabIndex={tab === id ? 0 : -1}
-                onClick={() => setTab(id)} onKeyDown={tabKeys} disabled={busy}>
-                <Icon size={14} aria-hidden="true" /> {label}
-              </button>
-            ))}
-          </div>
-
-          <div role="tabpanel" id={`capture-pane-${tab}`} aria-labelledby={`capture-tab-${tab}`} className="pw-capture-pane">
-            {tab === "photo" && (
-              <PhotoPane draft={draft} busy={busy}
-                phonePreview={phoneOpen ? <PhonePairing state={phone.state} onStart={phone.start} /> : null}
-                onTogglePhone={() => {
-                  if (!phoneOpen && (phone.state.status === "idle" || phone.state.status === "error")) phone.start();
-                  setPhoneOpen(!phoneOpen);
-                }}
-                onRemove={(id) => {
-                  draft.remove(id);
-                  if (draft.photos.length === 1) setPhoneNote("");
-                }}>
-                {incoming && (
-                  <div className="pw-capture-incoming">
-                    <span role="status">{incoming.images.length} from phone</span>
-                    <button type="button" disabled={busy || draft.preparing}
-                      onClick={() => addPhonePhotos(incoming, !roomForIncoming)}>
-                      {roomForIncoming ? "Add photos" : "Replace photos"}
-                    </button>
-                  </div>
-                )}
-                {phoneNote && <p className="pw-capture-phone-note" title={phoneNote}>{phoneNote}</p>}
-              </PhotoPane>
-            )}
-            {tab === "link" && (
-              <label className="pw-capture-field">
-                <span>Product URL</span>
-                <input name="url" type="url" value={link} placeholder="https://…" autoComplete="url"
-                  autoCapitalize="none" spellCheck={false} disabled={busy} aria-invalid={invalidLink}
-                  aria-describedby={invalidLink ? "capture-link-error" : undefined} onChange={(event) => setLink(event.target.value)} />
-                <span id="capture-link-error" className="pw-capture-field-error" aria-live="polite">
-                  {invalidLink ? "Enter a valid http:// or https:// URL." : ""}
-                </span>
-              </label>
-            )}
-            {tab === "text" && (
-              <label className="pw-capture-field">
-                <span>Device and intended location</span>
-                <textarea name="description" rows={3} maxLength={1200} value={description}
-                  placeholder="What is it? Where will it go?" disabled={busy}
-                  onChange={(event) => setDescription(event.target.value)} onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
-                      event.preventDefault();
-                      event.currentTarget.form?.requestSubmit();
-                    }
-                  }} />
-              </label>
-            )}
-          </div>
-
-          {busy && <CaptureProgress />}
-          {!busy && error && (
-            <div className="pw-capture-failure">
-              <div role="alert"><strong>{captureStageLabel(error.stage)}</strong><p>{error.message}</p></div>
-              <button type="submit" disabled={!canSubmit}><RotateCcw size={13} aria-hidden="true" /> Retry</button>
-            </div>
-          )}
-          <footer className="pw-capture-footer">
-            <CaptureLocation disabled={busy} />
-            {busy ? (
-              <button type="button" className="pw-capture-cancel" onClick={cancel}><Square size={13} aria-hidden="true" /> Cancel</button>
-            ) : (
-              <button type="submit" className="pw-capture-analyze" disabled={!canSubmit}>Analyze <ArrowRight size={15} aria-hidden="true" /></button>
-            )}
-          </footer>
-        </form>
+      ) : finished ? (
+        <div className="pw-capture-summary pw-tool-rail">
+          <Check size={16} aria-hidden />
+          <span role="status" title={deviceType ?? undefined}>{deviceType || "Capture complete"}</span>
+          <button type="button" className="pw-tool-button pw-capture-new" aria-label="New capture"
+            data-pw-tip="New capture (C)" data-pw-tip-side="top" onClick={newCapture}><Camera size={18} aria-hidden /></button>
+        </div>
+      ) : failed && !open ? errorReadout(failed) : (
+        <>
+          <CaptureToolbar active={open ? tool : null} onTool={useTool} uploadDisabled={!canUpload} />
+          {error && !open && errorReadout(error, true)}
+        </>
       )}
+      {composer}
     </div>
   );
 }

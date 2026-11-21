@@ -9,15 +9,20 @@ import { PanelHeading, PurdueBadge, TextPreview } from "./PanelParts";
 
 export function NeverPlace({ places }: { places: NeverPlacement[] }) {
   const twin = useTwinStore((state) => state.twin);
+  const select = useTwinStore((state) => state.select);
   return (
     <>
       <PanelHeading icon={Ban}>Never here</PanelHeading>
+      {!places.length && <p className="pw-panel-muted">No extra placement restrictions reported.</p>}
       <ul className="pw-panel-never">
         {places.map((place, index) => {
           const area = place.area ? areaById(twin, place.area) : undefined;
           return (
             <li key={`${place.where}-${index}`}>
-              <div><strong>{area?.name ?? place.where}</strong>{place.level != null && <PurdueBadge level={place.level} />}</div>
+              <div>
+                {area ? <button type="button" className="pw-panel-link" onClick={() => select(area.id)}>{area.name}</button> : <strong>{place.where}</strong>}
+                {place.level != null && <PurdueBadge level={place.level} />}
+              </div>
               {place.why && <TextPreview text={place.why} label="Restriction rationale" />}
             </li>
           );

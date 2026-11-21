@@ -1,6 +1,8 @@
 /** Verifies that floor coordinates stay stable through fitting, wheel zoom and pinch. */
 import { describe, expect, it } from "vitest";
 import { clientToStage, FIT, stageToWorld, viewportFor, worldToLocal, zoomBetween } from "./camera";
+import { drawingBounds, fitDrawing } from "./fit";
+import { SEED_TWIN } from "@/twin/seed";
 
 describe("plant viewport coordinates", () => {
   it("accounts for SVG letterboxing when finding the world location under the cursor", () => {
@@ -23,5 +25,28 @@ describe("plant viewport coordinates", () => {
     const end = { x: 360, y: 550 };
     const next = zoomBetween(FIT, start, end, 2);
     expect(stageToWorld(end, next)).toEqual(start);
+  });
+
+  it.each([610, 1068, 1548])("fits the building and parking clear of the floating controls in a %ipx pane", (width) => {
+    const viewport = viewportFor({ left: 0, top: 44, width, height: 856 }, SEED_TWIN.plant.canvas);
+    const bounds = drawingBounds(SEED_TWIN.plant, SEED_TWIN.areas, SEED_TWIN.entryPoints);
+    const overlays = [
+      { left: 16, right: 350, top: 60, bottom: 191 },
+      { left: 16, right: 322, top: 500, bottom: 884 },
+    ];
+    const fit = fitDrawing(viewport, bounds, overlays);
+    const top = worldToLocal(bounds, fit, viewport);
+    const bottom = worldToLocal({ x: bounds.x + bounds.w, y: bounds.y + bounds.h }, fit, viewport);
+    expect(top.x).toBeGreaterThanOrEqual(11.99);
+    expect(top.y).toBeGreaterThanOrEqual(11.99);
+    expect(bottom.x).toBeLessThanOrEqual(width - 11.99);
+    expect(bottom.y).toBeLessThanOrEqual(viewport.height - 11.99);
+    expect(bounds.y + bounds.h).toBe(980);
+    for (const overlay of overlays) {
+      expect(
+        bottom.x <= overlay.left || top.x >= overlay.right
+        || bottom.y + viewport.top <= overlay.top || top.y + viewport.top >= overlay.bottom,
+      ).toBe(true);
+    }
   });
 });

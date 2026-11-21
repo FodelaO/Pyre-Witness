@@ -2,8 +2,10 @@
 
 /** Connects the resizable Purdue diagram to the shared twin and floor selection. */
 import { Network } from "lucide-react";
-import { type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useTwinFocus } from "@/floor/twinFocus";
 import { useTwinStore } from "@/twin/store";
+import { linkPhysicalAreas, physicalRoomForZone } from "./areaLinks";
 import { ConduitDetails, ConduitLayer, MapLegend } from "./ConduitLayer";
 import { LevelBands } from "./LevelBands";
 import { LinkLayer } from "./LinkLayer";
@@ -50,13 +52,12 @@ function useScrollToNode(
 export default function PurdueMap() {
   const twin = useTwinStore((state) => state.twin);
   const paths = useTwinStore((state) => state.risk.paths);
-  const selectedId = useTwinStore((state) => state.selectedId);
-  const hoveredId = useTwinStore((state) => state.hoveredId);
+  const { selectedId, hoveredId, highlightIds, selectedArea, focusedAreas, highlighted, focused } = useTwinFocus(twin);
   const select = useTwinStore((state) => state.select);
   const hover = useTwinStore((state) => state.hover);
   const [width, setWidth] = useState(850);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
-  const [activeZone, setActiveZone] = useState<string | null>(null);
+  const [localZone, setLocalZone] = useState<string | null>(null);
   const [inspectedId, setInspectedId] = useState<string | null>(null);
   const [reassessmentError, setReassessmentError] = useState<string | null>(null);
   const conduitDetailsId = useId();
@@ -68,12 +69,23 @@ export default function PurdueMap() {
   ).map((asset) => asset.id)), [twin.assets, expanded]);
   const selectedField = selectedId && hiddenFields.has(selectedId) ? selectedId : null;
   const hoveredField = hoveredId && hiddenFields.has(hoveredId) ? hoveredId : null;
+  const revealed = useMemo(() => new Set([
+    ...(selectedField ? [selectedField] : []),
+    ...(hoveredField ? [hoveredField] : []),
+    ...highlightIds.filter((id) => hiddenFields.has(id)),
+  ]), [selectedField, hoveredField, highlightIds, hiddenFields]);
   const layout = useMemo(() => buildPurdueLayout(
     twin,
     width,
     expanded,
-    new Set([selectedField, hoveredField].filter((id): id is string => id !== null)),
-  ), [twin, width, expanded, selectedField, hoveredField]);
+    revealed,
+  ), [twin, width, expanded, revealed]);
+  const physicalLinks = useMemo(() => linkPhysicalAreas(twin), [twin]);
+  const linkedZones = new Set(focusedAreas.flatMap(({ id }) => [...(physicalLinks.get(id)?.zones ?? [])]));
+  const linkedEntries = new Set(focusedAreas.flatMap(({ id }) => physicalLinks.get(id)?.entries ?? []));
+  const activeZones = new Set(selectedArea ? physicalLinks.get(selectedArea.id)?.zones : undefined);
+  if (localZone && !selectedId) activeZones.add(localZone);
+  const remainingAreas = focusedAreas.filter(({ id }) => !physicalLinks.get(id)?.zones.size);
   const wires = useMemo(() => networkWires(twin.assets), [twin.assets]);
   const routes = useMemo(() => buildConduitRoutes(layout, twin.conduits, twin.assets, wires), [layout, twin, wires]);
   const gated = useMemo(() => new Set(routes.flatMap(({ wireKey }) => wireKey ? [wireKey] : [])), [routes]);
@@ -90,16 +102,29 @@ export default function PurdueMap() {
     return () => observer.disconnect();
   }, []);
 
-  const selected = selectedId ? layout.anchors.get(selectedId) : undefined;
+  function anchor(id: string | null): Box | undefined {
+    if (!id) return;
+    const point = layout.anchors.get(id);
+    if (point) return point;
+    const area = focusedAreas.find((area) => area.id === id);
+    const link = area && physicalLinks.get(area.id);
+    const zone = link && layout.zones.find(({ name }) => link.zones.has(name));
+    return zone ? { ...zone, w: Math.min(zone.head?.w ?? zone.w, 105), h: 22 }
+      : link?.entries.length ? layout.anchors.get(link.entries[0]) : undefined;
+  }
+
+  const selected = anchor(selectedId);
   const hovered = hoveredId ? layout.anchors.get(hoveredId) : undefined;
   useScrollToNode(scrollerRef, selectedId, selected, layout.railWidth);
   useScrollToNode(scrollerRef, hoveredId, hovered, layout.railWidth, localHover);
+  const firstHighlight = !selected && !hovered ? highlightIds.find((id) => anchor(id)) ?? null : null;
+  useScrollToNode(scrollerRef, firstHighlight, anchor(firstHighlight), layout.railWidth);
 
   useEffect(() => () => {
     if (localHover.current && useTwinStore.getState().hoveredId === localHover.current) hover(null);
   }, [hover]);
 
-  function handleHover(id: string, entered: boolean) {
+  const handleHover = useCallback((id: string, entered: boolean) => {
     if (entered) {
       localHover.current = id;
       hover(id);
@@ -107,6 +132,12 @@ export default function PurdueMap() {
       localHover.current = null;
       if (useTwinStore.getState().hoveredId === id) hover(null);
     }
+  }, [hover]);
+
+  function selectZone(name: string) {
+    const room = physicalRoomForZone(twin, name);
+    setLocalZone((current) => room || current === name ? null : name);
+    select(room && room.id !== selectedId ? room.id : null);
   }
 
   function toggleFields(zone: string) {
@@ -137,6 +168,11 @@ export default function PurdueMap() {
       <header className="pw-purdue-header">
         <h2><Network size={15} strokeWidth={1.6} aria-hidden="true" />Purdue network</h2>
         <MapLegend />
+        {remainingAreas.length > 0 && (
+          <ul className="pw-purdue-physical-focus" aria-label="Highlighted physical zones">
+            {remainingAreas.map(({ id, name }) => <li key={id}>{name}</li>)}
+          </ul>
+        )}
         {inspected && !drag.preview && <ConduitDetails conduit={inspected} id={conduitDetailsId} />}
       </header>
       {reassessmentError && <div className="pw-purdue-reassessment" role="status">{reassessmentError}</div>}
@@ -157,10 +193,11 @@ export default function PurdueMap() {
           <LevelBands bands={layout.bands} railWidth={layout.railWidth} />
           <ZoneBoxes
             zones={layout.zones}
-            active={activeZone}
-            onSelect={(name) => setActiveZone((value) => value === name ? null : name)}
+            active={activeZones}
+            highlighted={linkedZones}
+            onSelect={selectZone}
           />
-          <LinkLayer layout={layout} wires={wires} gated={gated} focused={hoveredId ?? selectedId} />
+          <LinkLayer layout={layout} wires={wires} gated={gated} focused={focused} />
           <ConduitLayer
             layout={layout}
             routes={routes}
@@ -168,12 +205,13 @@ export default function PurdueMap() {
             detailsId={conduitDetailsId}
             onInspect={inspectConduit}
           />
-          <PathOverlay layout={layout} routes={routes} paths={paths} selectedId={selectedId} />
+          <PathOverlay layout={layout} routes={routes} paths={paths} focused={focused} />
           <NodeLayer
             layout={layout}
             selectedId={selectedId}
-            hoveredId={hoveredId}
-            activeZone={activeZone}
+            highlighted={highlighted}
+            linkedEntries={linkedEntries}
+            activeZones={activeZones}
             draggedId={drag.preview?.id}
             onSelect={select}
             onHover={handleHover}

@@ -1,6 +1,6 @@
 /** Places the declared conduit gates on the edges of their destination zones. */
 import type { Point } from "@/twin/geometry";
-import { PURDUE_LEVELS, type Asset, type Conduit } from "@/twin/types";
+import { PURDUE_LEVELS, type Asset, type Conduit, type EquipmentKind } from "@/twin/types";
 import { type Anchor, type PurdueLayout, type Zone, zoneWidthAt } from "./layout";
 import { center, type NetworkWire, pairKey } from "./routing";
 
@@ -11,6 +11,7 @@ export interface ConduitRoute {
   fromId?: string;
   toId?: string;
   wireKey?: string;
+  enforcerKind?: EquipmentKind;
 }
 
 interface Port {
@@ -115,7 +116,10 @@ export function buildConduitRoutes(
     const geometry = useVertical
       ? verticalRoute(layout, from, to, a?.box, b?.box)
       : horizontalRoute(from, to, a?.box, b?.box);
-    routes.push({ ...geometry, conduit, fromId: a?.id, toId: b?.id, wireKey: wire && pairKey(wire.from, wire.to) });
+    routes.push({
+      ...geometry, conduit, fromId: a?.id, toId: b?.id, wireKey: wire && pairKey(wire.from, wire.to),
+      enforcerKind: conduit.enforcedBy ? assetsById.get(conduit.enforcedBy)?.physical.kind : undefined,
+    });
   }
   return routes;
 }

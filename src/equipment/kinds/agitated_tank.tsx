@@ -6,6 +6,7 @@ import { uprightShell, VesselPercent, VesselShell } from "../process/VesselShell
 import { FOOTPRINT, type EquipmentProps } from "../types";
 
 const shell = uprightShell(25, -19, 27, 8);
+const blade = "M2-1 Q7-2 11-6 L12-3 Q9 2 2 2Z";
 
 export default function AgitatedTank(props: EquipmentProps) {
   return (
@@ -23,8 +24,14 @@ export default function AgitatedTank(props: EquipmentProps) {
         {!props.compact && <path d="M-4-32v6m4-6v6m4-6v6" fill="none" stroke={EQ.accent} strokeWidth={EQ.sw * 0.55} />}
         <path d="M0-19V15" fill="none" stroke={EQ.accent} />
         <g transform="translate(0 14)">
-          <g className={props.running ? "pw-vessel-agitator" : undefined}>
-            <path d="M-1 0l-12-5v4l12 2zm2 0l12 5V1L1-1z" stroke={EQ.accent} />
+          <ellipse rx={14} ry={6} fill={EQ.fill} fillOpacity={0.63} stroke={EQ.stroke} strokeWidth={0.6} />
+          <g transform="scale(1 .44)">
+            <g className={props.running ? "pw-agitator-rotor pw-spin" : undefined} stroke={EQ.accent}>
+              <circle r={13} fill="none" stroke="none" />
+              <path d={blade} />
+              <path d={blade} transform="rotate(120)" />
+              <path d={blade} transform="rotate(240)" />
+            </g>
           </g>
           <circle r="2" />
         </g>

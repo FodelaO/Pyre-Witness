@@ -92,6 +92,7 @@ export function VesselPercent({ props, x = 0, y }: { props: EquipmentProps; x?: 
 
   return (
     <text
+      className="pw-vessel-readout"
       x={x}
       y={y}
       fill={EQ.accent}

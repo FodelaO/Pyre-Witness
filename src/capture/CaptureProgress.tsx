@@ -31,10 +31,11 @@ export default function CaptureProgress() {
   const status = useRunStore((state) => state.status);
   const stage = useRunStore((state) => state.stage);
   const events = useRunStore((state) => state.events);
-  const active = stage && stageCrew[stage];
+  const activeStage = status === "running" ? stage : null;
+  const active = activeStage && stageCrew[activeStage];
   return (
     <div className="pw-capture-progress" aria-label="Analysis progress">
-      <span className="pw-capture-sr-only" role="status">{stage ? captureStageLabel(stage) : "Starting analysis"}</span>
+      <span className="pw-capture-sr-only" role="status">{activeStage ? captureStageLabel(activeStage) : "Starting analysis"}</span>
       {CREW_ORDER.map((id) => {
         const crew = CREW[id];
         const done = status === "running" && events.some((event) => event.type === finishedEvent[id]);

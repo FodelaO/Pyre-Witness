@@ -10,23 +10,23 @@ interface PathOverlayProps {
   layout: PurdueLayout;
   routes: ConduitRoute[];
   paths: AttackPath[];
-  selectedId: string | null;
+  focused: ReadonlySet<string>;
 }
 
 function overlaps(a: Box, b: Box): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
-export function PathOverlay({ layout, routes, paths, selectedId }: PathOverlayProps) {
+export function PathOverlay({ layout, routes, paths, focused }: PathOverlayProps) {
   const arrow = useId();
-  const segments = useMemo(() => buildRiskSegments(layout, routes, paths, selectedId), [layout, routes, paths, selectedId]);
+  const segments = useMemo(() => buildRiskSegments(layout, routes, paths, focused), [layout, routes, paths, focused]);
   const labels = useMemo(() => {
     const labels: { text: string; box: Box; emphasis: string; key: string }[] = [];
     const obstacles: Box[] = [...layout.cards, ...layout.fieldGroups, ...layout.entries];
     for (const segment of segments.slice().reverse()) {
-      if (!segment.techniques.size) continue;
+      if (segment.emphasis !== "selected" || !segment.techniques.size) continue;
       const text = Array.from(segment.techniques).join(" · ");
-      const w = text.length * 5.4 + 8;
+      const w = text.length * 5.7 + 8;
       const { x, y } = routeLabelPoint(segment.points);
       for (const offset of [-9, 12, -24, 27]) {
         const box = {
@@ -53,11 +53,11 @@ export function PathOverlay({ layout, routes, paths, selectedId }: PathOverlayPr
           </marker>
         </defs>
         {segments.map(({ key, points, emphasis }) => (
-          <path key={key} d={wirePath(points)} data-emphasis={emphasis} markerEnd={`url(#${arrow})`} />
+          <path key={key} d={wirePath(points)} data-emphasis={emphasis} markerEnd={emphasis === "selected" ? `url(#${arrow})` : undefined} />
         ))}
       </svg>
       <svg className="pw-purdue-attack-marks" width={layout.width} height={layout.height} aria-hidden="true">
-        {segments.flatMap(({ key, breaches, emphasis }) => breaches.map(({ x, y }, index) => (
+        {segments.filter(({ emphasis }) => emphasis === "selected").flatMap(({ key, breaches, emphasis }) => breaches.map(({ x, y }, index) => (
           <g className="pw-purdue-breach" key={`${key}:${index}`} transform={`translate(${x} ${y})`} data-emphasis={emphasis}>
             <circle r="8" />
             <path d="M-5 4 0 -3 1 1 5 -4" />

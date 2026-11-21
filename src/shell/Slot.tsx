@@ -21,7 +21,7 @@ class Boundary extends Component<Props, { error: Error | null }> {
   }
 
   componentDidCatch(error: Error) {
-    console.error(`[slot:${this.props.name}]`, error);
+    if (!this.props.quiet) console.warn("[slot:" + this.props.name + "]", error.message);
   }
 
   render() {
@@ -30,7 +30,7 @@ class Boundary extends Component<Props, { error: Error | null }> {
       return (
         <div className="flex h-full w-full items-center justify-center p-4">
           <div className="rounded-md border border-pw-line bg-pw-panel px-3 py-2 text-xs text-pw-dim">
-            <span className="text-pw-alarm">{this.props.name}</span> failed to render
+            {this.props.name} unavailable.
             <button
               className="ml-3 rounded border border-pw-line-strong px-2 py-0.5 text-pw-text hover:bg-pw-panel-2"
               onClick={() => this.setState({ error: null })}

@@ -6,7 +6,7 @@ interface LinkLayerProps {
   layout: PurdueLayout;
   wires: NetworkWire[];
   gated: ReadonlySet<string>;
-  focused: string | null;
+  focused: ReadonlySet<string>;
 }
 
 export function LinkLayer({ layout, wires, gated, focused }: LinkLayerProps) {
@@ -25,7 +25,7 @@ export function LinkLayer({ layout, wires, gated, focused }: LinkLayerProps) {
             key={key}
             d={wirePath(points)}
             data-active={active}
-            data-focused={focused === from || focused === to}
+            data-focused={focused.has(from) || focused.has(to)}
           />
         );
       })}

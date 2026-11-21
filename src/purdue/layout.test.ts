@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { SEED_TWIN } from "@/twin/seed";
 import { PURDUE_LEVELS, type Asset, type AttackPath, type PurdueLevel, type Twin } from "@/twin/types";
+import { linkPhysicalAreas, physicalRoomForZone } from "./areaLinks";
 import { buildConduitRoutes } from "./conduits";
 import { buildPurdueLayout, networkDropAt, zoneWidthAt } from "./layout";
 import { buildRiskSegments } from "./pathGeometry";
@@ -43,7 +44,14 @@ const fixture: Twin = {
 };
 
 describe("Purdue diagram layout", () => {
-  it.each([520, 1200])("fits the seed horizontally in %ipx and packs each asset within its zone", (width) => {
+  it("links a physical room across network zones and an asset-free area through its entries", () => {
+    const links = linkPhysicalAreas(SEED_TWIN);
+    expect(links.get("control_room")?.zones).toEqual(new Set(["Site operations", "OT DMZ"]));
+    expect(links.get("parking_lot")?.entries).toEqual(["parking_rf", "supply_chain"]);
+    expect(physicalRoomForZone(SEED_TWIN, "Cell Utilities")?.id).toBe("utilities");
+  });
+
+  it.each([480, 520, 1200])("fits the seed horizontally in %ipx and packs each asset within its zone", (width) => {
     const layout = buildPurdueLayout(SEED_TWIN, width);
     expect(layout.width).toBe(width);
     expect(layout.bands.map(({ level }) => level)).toEqual(PURDUE_LEVELS.map(({ level }) => level));
@@ -149,13 +157,14 @@ describe("Conduits and risk paths", () => {
         { from: "controller", to: "other", via: "network", technique: { id: "T0886", name: "Remote Services" }, note: "" },
       ],
     };
-    const segments = buildRiskSegments(layout, routes, [path, { ...path, id: "two", causedBy: "new-device" }], "new-device");
+    const segments = buildRiskSegments(layout, routes, [path, { ...path, id: "two", causedBy: "new-device" }], new Set(["new-device"]));
     const dmz = layout.bands.find(({ level }) => level === 3.5)!;
     expect(segments).toHaveLength(2);
     expect(segments.map(({ emphasis }) => emphasis)).toEqual(["selected", "selected"]);
     expect(segments[0].breaches.map(({ y }) => y)).toEqual([dmz.y, dmz.y + dmz.h]);
     expect(segments[1].breaches).toContainEqual(routes.find(({ conduit }) => conduit.id === "flat")!.gate);
     expect(segments[1].techniques).toEqual(new Set(["T0886"]));
-    expect(buildRiskSegments(layout, routes, [path], "new-device")[0].emphasis).toBe("muted");
+    expect(buildRiskSegments(layout, routes, [path], new Set(["new-device"]))[0].emphasis).toBe("muted");
+    expect(buildRiskSegments(layout, routes, [path], new Set(["controller", "internet"]))[0].emphasis).toBe("selected");
   });
 });

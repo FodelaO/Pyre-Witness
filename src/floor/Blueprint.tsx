@@ -23,7 +23,7 @@ export default memo(function Blueprint({ plant }: { plant: Twin["plant"] }) {
           <path d={`M${major} 0H0V${major}`} className="pw-floor-grid-major" />
         </pattern>
       </defs>
-      <rect width={plant.canvas.w} height={plant.canvas.h} fill={`url(#${id}-major)`} />
+      <rect x={-plant.canvas.w} y={-plant.canvas.h} width={3 * plant.canvas.w} height={3 * plant.canvas.h} fill={`url(#${id}-major)`} />
       <rect x={x} y={y} width={w} height={h} className="pw-floor-wall" />
       <rect
         x={x + wallInset}
@@ -34,7 +34,9 @@ export default memo(function Blueprint({ plant }: { plant: Twin["plant"] }) {
       />
       <g transform={`translate(${scaleX} ${scaleY})`} className="pw-floor-scale">
         <path d={`M0 -4V4M0 0H${major}M${major / 2} -3V3M${major} -4V4`} />
-        <text x={major + 10} y={4}>10 m</text>
+        <g transform={`translate(${major + 10} 0)`}>
+          <text className="pw-floor-screen-label" y={3}>10 m</text>
+        </g>
       </g>
     </g>
   );

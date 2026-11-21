@@ -2,7 +2,6 @@
 "use client";
 
 import { ChevronDown, ExternalLink, type LucideIcon } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
 import { type ReactNode } from "react";
 import { techniqueById } from "@/data/attack-ics";
 import type { PurdueLevel, Technique } from "@/twin/types";
@@ -28,18 +27,7 @@ export function readableId(value: string) {
 }
 
 export function PanelSection({ children }: { children: ReactNode }) {
-  const reducedMotion = useReducedMotion();
-  return (
-    <motion.section
-      className="pw-panel-reveal"
-      initial={{ height: 0, opacity: 0 }}
-      animate={{ height: "auto", opacity: 1 }}
-      exit={{ height: 0, opacity: 0 }}
-      transition={{ duration: reducedMotion ? 0 : 0.22, ease: "easeOut" }}
-    >
-      <div className="pw-panel-section">{children}</div>
-    </motion.section>
-  );
+  return <section className="pw-panel-section">{children}</section>;
 }
 
 export function PanelHeading({ icon: Icon, children, aside }: { icon: LucideIcon; children: ReactNode; aside?: ReactNode }) {

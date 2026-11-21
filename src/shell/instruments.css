@@ -1,0 +1,100 @@
+/* Brand, instrument buttons and shared states for the shell and proof page. */
+:root { --pw-ease: 175ms ease-out; }
+.pw-shell, .pw-proof { --pw-text-dim: #a0afbf; --pw-text-faint: #75879b; }
+
+:where(button, a, input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--pw-info);
+  outline-offset: 3px;
+}
+
+[data-band] { --pw-risk-color: var(--pw-ok); }
+[data-band="elevated"] { --pw-risk-color: var(--pw-attention); }
+[data-band="high"] { --pw-risk-color: var(--pw-ember); }
+[data-band="critical"] { --pw-risk-color: var(--pw-alarm); }
+
+.pw-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 680;
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+}
+.pw-brand img { display: block; flex: none; object-fit: contain; }
+
+.pw-tool-rail {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 48px;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--pw-line);
+  border-radius: 8px;
+  background: var(--pw-panel);
+}
+
+.pw-tool-button {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--pw-text-dim);
+  cursor: pointer;
+  transition: color var(--pw-ease), background var(--pw-ease), border-color var(--pw-ease);
+}
+
+.pw-tool-button:hover:not(:disabled),
+.pw-tool-button:is([aria-selected="true"], [aria-expanded="true"], [aria-pressed="true"]) {
+  border-color: var(--pw-line-strong);
+  background: var(--pw-panel-2);
+  color: var(--pw-text);
+}
+.pw-tool-button:focus-visible { outline-offset: 0; }
+.pw-tool-button:disabled { opacity: 0.48; cursor: default; }
+
+
+.pw-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--pw-text-faint);
+}
+.pw-status-dot[data-status="Checking"] { background: var(--pw-info); }
+.pw-status-dot[data-status="Complete"] { background: var(--pw-ok); }
+.pw-status-dot:is([data-status="Feed offline"], [data-status="Partial"], [data-status="Key missing"]) { background: var(--pw-attention); }
+
+[data-pw-tip] { position: relative; }
+[data-pw-tip]::after {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  max-width: min(235px, 88vw);
+  padding: 6px 9px;
+  border: 1px solid var(--pw-line-strong);
+  border-radius: 6px;
+  background: var(--pw-panel-2);
+  color: var(--pw-text);
+  box-shadow: 0 4px 12px #0005;
+  content: attr(data-pw-tip);
+  font: 500 12px/1.3 var(--font-geist-sans), system-ui, sans-serif;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -3px);
+  transition: opacity var(--pw-ease), transform var(--pw-ease);
+}
+[data-pw-tip-side="top"]::after { inset-block: auto calc(100% + 8px); transform: translate(-50%, 3px); }
+[data-pw-tip-align="start"]::after { left: 0; translate: 50% 0; }
+[data-pw-tip-align="end"]::after { left: auto; right: 0; translate: -50% 0; }
+[data-pw-tip]:is(:hover, :focus-visible):not(:disabled)::after { opacity: 1; transform: translate(-50%, 0); }
+

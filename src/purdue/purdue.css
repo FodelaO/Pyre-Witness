@@ -78,6 +78,24 @@
   border-top: 1px dashed var(--pw-alarm);
 }
 
+.pw-purdue-physical-focus {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pw-purdue-physical-focus li {
+  padding: 3px 6px;
+  border: 1px dashed var(--purdue-steel);
+  border-radius: 4px;
+  color: var(--pw-text);
+  font-size: 11px;
+}
+
 .pw-purdue-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -184,9 +202,16 @@
   stroke-dasharray: 3 2.5;
 }
 
-.pw-purdue-zone-box[data-active="true"] {
+.pw-purdue-zone-box[data-highlighted="true"] {
   stroke: var(--purdue-steel);
   fill: rgb(116 151 181 / 13%);
+  stroke-width: 1.5;
+}
+
+.pw-purdue-zone-box[data-active="true"] {
+  stroke: var(--pw-info);
+  stroke-width: 1.65;
+  stroke-dasharray: none;
 }
 
 .pw-purdue-zone-label {
@@ -202,6 +227,7 @@
 }
 
 .pw-purdue-zone-label:hover,
+.pw-purdue-zone-label[data-highlighted="true"],
 .pw-purdue-zone-label[aria-pressed="true"] {
   background: var(--pw-panel-2);
   color: var(--pw-text);
@@ -253,7 +279,7 @@
   position: absolute;
   z-index: 5;
   display: inline-flex;
-  height: 18px;
+  min-height: 20px;
   align-items: center;
   gap: 3px;
   padding: 1px 4px;
@@ -262,10 +288,12 @@
   border-radius: 4px;
   background: #1b2836;
   color: var(--pw-eq-accent);
-  font: 560 8.5px/1 var(--purdue-mono);
+  font: 580 9px/1 var(--purdue-mono);
   white-space: nowrap;
   cursor: help;
 }
+
+.pw-purdue-gate[data-firewall="true"] { border-color: #8aa2b9; background: #223345; }
 
 .pw-purdue-gate[data-open="true"] {
   border-color: var(--pw-alarm);
@@ -342,16 +370,13 @@
 .pw-purdue-attacks {
   z-index: 3;
   stroke: var(--pw-alarm);
-  stroke-width: 1.65;
+  stroke-width: 0.9;
   stroke-dasharray: 5 4;
 }
 
-.pw-purdue-attacks > path {
-  animation: pw-purdue-flow 950ms linear infinite;
-}
-
 .pw-purdue-attacks > path[data-emphasis="selected"] {
-  stroke-width: 2.4;
+  stroke-width: 1.85;
+  animation: pw-purdue-flow 1.5s linear infinite;
 }
 
 .pw-purdue-attack-marks {
@@ -360,11 +385,11 @@
 }
 
 .pw-purdue-canvas [data-emphasis="normal"] {
-  opacity: .52;
+  opacity: .23;
 }
 
 .pw-purdue-canvas [data-emphasis="muted"] {
-  opacity: .17;
+  opacity: .15;
 }
 
 .pw-purdue-breach {
@@ -392,7 +417,7 @@
 
 .pw-purdue-technique > text {
   fill: #ffbdc7;
-  font: 600 8.5px/1 var(--purdue-mono);
+  font: 600 9px/1 var(--purdue-mono);
 }
 
 .pw-purdue-entry,
@@ -415,6 +440,7 @@
   padding: 0 5px;
   font-size: 10px;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .pw-purdue-entry > svg {
@@ -502,6 +528,8 @@
 }
 
 .pw-purdue-node[data-hovered="true"],
+.pw-purdue-entry[data-highlighted="true"],
+.pw-purdue-entry[aria-pressed="true"],
 .pw-purdue-node[aria-pressed="true"],
 .pw-purdue-group:hover {
   z-index: 6;
@@ -510,9 +538,18 @@
   outline-offset: 2px;
 }
 
-.pw-purdue-node[aria-pressed="true"] {
+.pw-purdue-node[data-hovered="true"]:not([aria-pressed="true"]),
+.pw-purdue-entry[data-highlighted="true"]:not([aria-pressed="true"]) {
+  outline-style: dashed;
+}
+
+.pw-purdue-node[aria-pressed="true"],
+.pw-purdue-entry[aria-pressed="true"] {
   outline-color: var(--pw-eq-accent);
 }
+
+.pw-purdue-node[data-firewall="true"] { border-color: #617b93; background: #152331; }
+.pw-purdue-node[data-firewall="true"] .pw-purdue-tag { color: var(--pw-eq-accent); font-weight: 650; }
 
 .pw-purdue-symbol {
   display: block;
@@ -539,8 +576,8 @@
 }
 
 .pw-purdue-node[data-mini="true"] > .pw-purdue-symbol {
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   flex: none;
 }
 
@@ -554,6 +591,7 @@
 }
 
 .pw-purdue-zone-label:focus-visible,
+.pw-purdue-entry:focus-visible,
 .pw-purdue-node:focus-visible,
 .pw-purdue-group:focus-visible {
   outline: 2px solid var(--pw-eq-accent);
@@ -569,12 +607,12 @@
 }
 
 .pw-purdue-canvas[data-compact="true"] .pw-purdue-blurb {
-  font-size: 8.5px;
+  display: none;
 }
 
 .pw-purdue-canvas[data-compact="true"] .pw-purdue-zone-label[data-lower="true"] {
   padding-inline: 2px;
-  font: 620 9px/1.1 var(--font-geist-sans), system-ui, sans-serif;
+  font: 620 9.5px/1.1 var(--font-geist-sans), system-ui, sans-serif;
   overflow-wrap: anywhere;
 }
 
@@ -588,19 +626,17 @@
 }
 
 .pw-purdue-canvas[data-compact="true"] .pw-purdue-tag {
-  font-size: 8.5px;
+  font-size: 9px;
 }
 
 .pw-purdue-canvas[data-compact="true"] .pw-purdue-gate {
-  height: 15px;
-  gap: 2px;
-  padding-inline: 2px;
-  font-size: 7.6px;
+  min-height: 18px;
+  gap: 3px;
+  padding-inline: 3px;
 }
 
-.pw-purdue-canvas[data-compact="true"] .pw-purdue-gate svg {
-  width: 10px;
-}
+.pw-purdue-canvas[data-compact="true"] .pw-purdue-gate[data-switch="true"] > span { display: none; }
+.pw-purdue-canvas[data-compact="true"] .pw-purdue-rail > li { padding-top: 8px; }
 
 @keyframes pw-purdue-arrival {
   from { opacity: 0; transform: translateY(-5px) scale(.94); }

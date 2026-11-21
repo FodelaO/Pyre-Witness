@@ -1,7 +1,7 @@
 /** Selected asset identity, live telemetry and related Inspector findings. */
 "use client";
 
-import { Activity, Cloud, Crosshair, HardDrive, LockKeyhole, Radio, Shield, ShieldAlert, Unplug } from "lucide-react";
+import { Activity, Cloud, Crosshair, HardDrive, LockKeyhole, MapPin, Radio, Shield, ShieldAlert, Unplug } from "lucide-react";
 import { areaById, assetById } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import type { Asset, RuleFinding, TelemetryPoint } from "@/twin/types";
@@ -55,12 +55,28 @@ function FindingRow({ finding }: { finding: RuleFinding }) {
 }
 
 export function AssetInspector() {
+  const selectedArea = useTwinStore((state) => state.twin.areas.find((candidate) => candidate.id === state.selectedId));
   const asset = useTwinStore((state) => state.selectedId ? assetById(state.twin, state.selectedId) : undefined);
   const area = useTwinStore((state) => asset ? areaById(state.twin, asset.physical.area) : undefined);
   const conduit = useTwinStore((state) => state.twin.conduits.find((item) => item.id === asset?.network.conduit));
   const findings = useTwinStore((state) => state.risk.findings);
+  const select = useTwinStore((state) => state.select);
+  if (!asset && selectedArea) return (
+    <>
+      <PanelHeading icon={MapPin}>Selected area</PanelHeading>
+      <div className="pw-panel-asset-identity">
+        <h3>{selectedArea.name}</h3><p>{selectedArea.statusNote ?? selectedArea.kind}</p>
+      </div>
+      <div className="pw-panel-chips" aria-label="Typical Purdue levels">
+        {selectedArea.typicalLevels.map((level) => <PurdueBadge key={level} level={level} />)}
+      </div>
+    </>
+  );
   if (!asset) return (
-    <div className="pw-panel-inspector-hint"><Crosshair size={16} aria-hidden /><p>Select an asset on the floor or Purdue map.</p></div>
+    <>
+      <PanelHeading icon={Crosshair}>Asset inspector</PanelHeading>
+      <p className="pw-panel-muted">Select an asset on the floor or Purdue map.</p>
+    </>
   );
 
   const assetFindings = findings.filter((finding) => finding.assetId === asset.id);
@@ -70,7 +86,9 @@ export function AssetInspector() {
       <PanelHeading icon={Crosshair} aside={<span className="pw-panel-chip pw-mono">{asset.id}</span>}>Asset inspector</PanelHeading>
       <div className="pw-panel-asset-identity"><h3>{asset.name}</h3><p>{readableId(asset.physical.kind)}</p></div>
       <dl className="pw-panel-facts">
-        <dt>Floor</dt><dd>{area?.name ?? readableId(asset.physical.area)}</dd>
+        <dt>Floor</dt><dd>{area ? (
+          <button type="button" className="pw-panel-link" onClick={() => select(area.id)}>{area.name}</button>
+        ) : readableId(asset.physical.area)}</dd>
         <dt>Network</dt><dd><PurdueBadge level={asset.network.level} />{asset.network.area}</dd>
         <dt>Conduit</dt><dd>{conduit?.name ?? asset.network.conduit ?? "None"}</dd>
         <dt>Criticality</dt><dd><span className="pw-mono">{asset.criticality}/5</span>{asset.safetyCritical ? "Safety critical" : ""}</dd>

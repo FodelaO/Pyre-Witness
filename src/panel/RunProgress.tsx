@@ -3,21 +3,11 @@
 
 import { Activity, CircleAlert, ScanLine } from "lucide-react";
 import type { CSSProperties } from "react";
+import { captureErrorMessage } from "@/capture/captureError";
 import { CREW, CREW_ORDER, type CrewId } from "@/crew/types";
 import type { RunState } from "@/pipeline/runStore";
 import type { GateResult, PipelineEvent, PipelineEventType } from "@/pipeline/types";
 import { formatNumber, PanelHeading, percent, TextPreview } from "./PanelParts";
-
-const LABELS: Partial<Record<string, string>> = {
-  link: "Product link",
-  gate: "Decisions gate",
-  perception: "Scout",
-  reasoning: "Architect",
-  selfcheck: "Inspector rules engine",
-  revision: "Architect revision",
-  summary: "Chief",
-  unknown: "Unknown stage",
-};
 
 const EVENT_CREW: Partial<Record<PipelineEventType, CrewId>> = {
   "perception.started": "scout",
@@ -82,6 +72,10 @@ function GateMeter({ gate, showReason }: { gate: GateResult; showReason: boolean
 
 type ProgressProps = Pick<RunState, "status" | "stage" | "events" | "gate" | "error">;
 
+export function RunError({ message }: { message: string }) {
+  return <p className="pw-panel-error" role="alert"><CircleAlert size={15} aria-hidden />{captureErrorMessage(message)}</p>;
+}
+
 export function RunProgress({ status, stage, events, gate, error }: ProgressProps) {
   const stages = crewStages(events);
   const failed = crewForStage(error?.stage ?? null);
@@ -112,12 +106,6 @@ export function RunProgress({ status, stage, events, gate, error }: ProgressProp
         })}
       </ul>
       {gate && !reassess && <GateMeter gate={gate} showReason={error?.message !== gate.reason} />}
-      {error && (
-        <div className="pw-panel-error" role="alert">
-          <strong><CircleAlert size={14} aria-hidden />{LABELS[error.stage] ?? error.stage} error</strong>
-          <TextPreview text={error.message} label="Error details" lines={3} />
-        </div>
-      )}
     </>
   );
 }

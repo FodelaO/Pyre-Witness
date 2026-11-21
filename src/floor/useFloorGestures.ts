@@ -1,8 +1,8 @@
 /** Pointer capture for selection, camera gestures and device movement. */
 import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
-import { distance, type Point } from "@/twin/geometry";
+import { areaCenter, distance, nodePosition, type Point } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
-import { stageToWorld, zoomBetween, type Camera } from "./camera";
+import { stageToWorld, type Camera } from "./camera";
 import type { FloorCamera } from "./useFloorCamera";
 import type { FloorPlacement } from "./useFloorPlacement";
 
@@ -26,8 +26,10 @@ function pointOf(event: { clientX: number; clientY: number }): Point {
   return { x: event.clientX, y: event.clientY };
 }
 
-function assetIdOf(target: EventTarget | null): string | null {
-  return target instanceof Element ? target.closest("[data-floor-asset]")?.getAttribute("data-floor-asset") ?? null : null;
+function targetIdOf(target: EventTarget | null): string | null {
+  return target instanceof Element
+    ? target.closest("[data-floor-target]")?.getAttribute("data-floor-target") ?? null
+    : null;
 }
 
 function centerOf(a: Point, b: Point): Point {
@@ -38,7 +40,7 @@ export default function useFloorGestures(camera: FloorCamera, placement: FloorPl
   const pointers = useRef(new Map<number, Point>());
   const gesture = useRef<Pan | Pinch | null>(null);
   const floorHover = useRef<string | null>(null);
-  const { svgRef, setCamera, stagePoint, startGesture } = camera;
+  const { svgRef, setCamera, stagePoint, startGesture, zoom } = camera;
   const { activate, startMove, updateMove, finishMove } = placement;
 
   useEffect(() => {
@@ -50,11 +52,11 @@ export default function useFloorGestures(camera: FloorCamera, placement: FloorPl
       const pose = startGesture(false);
       const cursor = stagePoint(pointOf(event));
       const units = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? svg.clientHeight : 1;
-      setCamera(zoomBetween(pose, cursor, cursor, Math.exp(-event.deltaY * units * 0.0016)));
+      setCamera(zoom(pose, cursor, cursor, Math.exp(-event.deltaY * units * 0.0016)));
     };
     svg.addEventListener("wheel", wheel, { passive: false });
     return () => svg.removeEventListener("wheel", wheel);
-  }, [svgRef, setCamera, stagePoint, startGesture]);
+  }, [svgRef, setCamera, stagePoint, startGesture, zoom]);
 
   useEffect(() => () => {
     const store = useTwinStore.getState();
@@ -87,7 +89,7 @@ export default function useFloorGestures(camera: FloorCamera, placement: FloorPl
 
   function onPointerDown(event: PointerEvent<SVGSVGElement>) {
     if (event.button !== 0) return;
-    const assetId = assetIdOf(event.target);
+    const assetId = targetIdOf(event.target);
     pointers.current.set(event.pointerId, pointOf(event));
     rebase(false, assetId);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -103,7 +105,7 @@ export default function useFloorGestures(camera: FloorCamera, placement: FloorPl
       const [first, second] = pointers.current.values();
       if (second) {
         const center = stagePoint(centerOf(first, second));
-        setCamera(zoomBetween(active.camera, active.center, center, distance(first, second) / active.span));
+        setCamera(zoom(active.camera, active.center, center, distance(first, second) / active.span));
       }
       return;
     }
@@ -133,7 +135,7 @@ export default function useFloorGestures(camera: FloorCamera, placement: FloorPl
     }
     if (event.pointerType !== "touch" && !pointers.current.size) {
       const target = document.elementFromPoint(event.clientX, event.clientY);
-      hover(event.currentTarget.contains(target) ? assetIdOf(target) : null);
+      hover(event.currentTarget.contains(target) ? targetIdOf(target) : null);
     }
   }
 
@@ -144,16 +146,17 @@ export default function useFloorGestures(camera: FloorCamera, placement: FloorPl
     onPointerCancel: (event: PointerEvent<SVGSVGElement>) => finish(event, true),
     onLostPointerCapture: (event: PointerEvent<SVGSVGElement>) => finish(event, true),
     onPointerOver: (event: PointerEvent<SVGSVGElement>) => {
-      if (!pointers.current.size && event.pointerType !== "touch") hover(assetIdOf(event.target));
+      if (!pointers.current.size && event.pointerType !== "touch") hover(targetIdOf(event.target));
     },
     onPointerLeave: () => hover(null),
     onKeyDown: (event: KeyboardEvent<SVGSVGElement>) => {
-      const assetId = assetIdOf(event.target);
-      if (!assetId || (event.key !== "Enter" && event.key !== " ")) return;
+      const id = targetIdOf(event.target);
+      if (!id || (event.key !== "Enter" && event.key !== " ")) return;
       event.preventDefault();
       const store = useTwinStore.getState();
-      const asset = store.twin.assets.find((item) => item.id === assetId);
-      if (asset) activate(asset.physical, assetId);
+      const area = store.twin.areas.find((item) => item.id === id);
+      const point = area ? areaCenter(area) : nodePosition(store.twin, id);
+      if (point) activate(point, id);
     },
   };
 }

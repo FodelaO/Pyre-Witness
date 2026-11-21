@@ -13,13 +13,14 @@ type CameraResult = { request: CameraRequest } & (
 
 const stop = (stream?: MediaStream) => stream?.getTracks().forEach((track) => track.stop());
 
-export default function CameraPreview({ disabled, canShoot, onShot }: {
+export default function CameraPreview({ autoStart, disabled, canShoot, onShot }: {
+  autoStart: boolean;
   disabled: boolean;
   canShoot: boolean;
   onShot: (video: HTMLVideoElement) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [request, setRequest] = useState<CameraRequest | null>(null);
+  const [request, setRequest] = useState<CameraRequest | null>(() => autoStart ? {} : null);
   const [result, setResult] = useState<CameraResult | null>(null);
   const active = result && result.request === request ? result : null;
   const live = active?.kind === "live";
@@ -35,7 +36,7 @@ export default function CameraPreview({ disabled, canShoot, onShot }: {
     async function openCamera(preview: HTMLVideoElement, choice: CameraRequest) {
       try {
         const media = navigator.mediaDevices;
-        if (!media?.getUserMedia) throw new Error("Camera unavailable on this connection. Choose photos.");
+        if (!media?.getUserMedia) throw new Error("Camera unavailable. Upload a photo.");
 
         stream = await media.getUserMedia({
           audio: false,
@@ -50,7 +51,7 @@ export default function CameraPreview({ disabled, canShoot, onShot }: {
 
         const track = stream.getVideoTracks()[0];
         track?.addEventListener("ended", () => {
-          if (!disposed) setResult({ request: choice, kind: "error", message: "Camera disconnected. Choose photos." });
+          if (!disposed) setResult({ request: choice, kind: "error", message: "Camera disconnected. Upload a photo." });
         }, { once: true });
         preview.srcObject = stream;
         await preview.play();
@@ -65,11 +66,9 @@ export default function CameraPreview({ disabled, canShoot, onShot }: {
       } catch (error) {
         if (disposed) return;
         stop(stream);
-        const message = error instanceof DOMException
-          ? error.name === "NotAllowedError"
-            ? "Camera permission denied. Choose photos."
-            : "Camera unavailable. Choose photos."
-          : error instanceof Error ? error.message : "Camera unavailable. Choose photos.";
+        const message = error instanceof DOMException && error.name === "NotAllowedError"
+          ? "Camera denied. Upload a photo."
+          : "Camera unavailable. Upload a photo.";
         setResult({ request: choice, kind: "error", message });
       }
     }

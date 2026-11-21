@@ -1,7 +1,7 @@
 /** Draws the IEC 62443 zone outlines and selectable labels. */
 import type { Zone } from "./layout";
 
-function ZoneOutline({ zone, active }: { zone: Zone; active: boolean }) {
+function ZoneOutline({ zone, active, highlighted }: { zone: Zone; active: boolean; highlighted: boolean }) {
   const { x, y, w, h, head } = zone;
   const right = (head?.w ?? w) - 0.5;
   const bot = h - 0.5;
@@ -17,6 +17,8 @@ function ZoneOutline({ zone, active }: { zone: Zone; active: boolean }) {
     <svg
       className="pw-purdue-zone-box"
       data-active={active}
+      data-highlighted={highlighted}
+      data-zone={zone.name}
       aria-hidden="true"
       width={right + 0.5}
       height={h}
@@ -29,21 +31,23 @@ function ZoneOutline({ zone, active }: { zone: Zone; active: boolean }) {
 
 interface ZoneBoxesProps {
   zones: Zone[];
-  active: string | null;
+  active: ReadonlySet<string>;
+  highlighted: ReadonlySet<string>;
   onSelect: (name: string) => void;
 }
 
-export function ZoneBoxes({ zones, active, onSelect }: ZoneBoxesProps) {
+export function ZoneBoxes({ zones, active, highlighted, onSelect }: ZoneBoxesProps) {
   return (
     <>
-      {zones.map((zone) => <ZoneOutline key={zone.name} zone={zone} active={zone.name === active} />)}
+      {zones.map((zone) => <ZoneOutline key={zone.name} zone={zone} active={active.has(zone.name)} highlighted={highlighted.has(zone.name)} />)}
       {zones.map(({ name, x, y, w, head, lower }) => (
         <button
           key={name}
           type="button"
           className="pw-purdue-zone-label"
           data-lower={lower}
-          aria-pressed={name === active}
+          data-highlighted={highlighted.has(name)}
+          aria-pressed={active.has(name)}
           title={name}
           onClick={() => onSelect(name)}
           style={{ left: x + 4, top: y + 6, maxWidth: (head?.w ?? w) - 8 }}

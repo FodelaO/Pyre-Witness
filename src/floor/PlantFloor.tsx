@@ -13,11 +13,12 @@ import EntryPoints from "./EntryPoints";
 import FloorStage from "./FloorStage";
 import Legend from "./Legend";
 import PipeLayer from "./PipeLayer";
-import ZoneLayer from "./ZoneLayer";
+import { useTwinFocus } from "./twinFocus";
 import "./floor.css";
 
 export default function PlantFloor() {
   const twin = useTwinStore((state) => state.twin);
+  const { selectedId, highlighted, direct, focused } = useTwinFocus(twin);
   const [hidden, setHidden] = useState<ReadonlySet<Medium>>(() => new Set());
 
   const toggleMedium = useCallback((media: readonly Medium[]) => {
@@ -33,13 +34,17 @@ export default function PlantFloor() {
   }, []);
 
   return (
-    <FloorStage plant={twin.plant} controls={<Legend hidden={hidden} onToggle={toggleMedium} />}>
-      <ZoneLayer areas={twin.areas} />
-      <PipeLayer assets={twin.assets} hidden={hidden} />
-      <EntryPoints points={twin.entryPoints} />
-      <AssetLayer assets={twin.assets} />
+    <FloorStage twin={twin} selectedId={selectedId} highlighted={highlighted}
+      controls={<Legend hidden={hidden} onToggle={toggleMedium} />}
+      schematic={
+        <>
+          <PipeLayer assets={twin.assets} hidden={hidden} />
+          <EntryPoints points={twin.entryPoints} selectedId={selectedId} highlighted={highlighted} />
+          <AssetLayer assets={twin.assets} selectedId={selectedId} highlighted={highlighted} direct={direct} />
+        </>
+      }>
       <SimLayer />
-      <AttackPathLayer twin={twin} />
+      <AttackPathLayer twin={twin} focused={focused} />
       <CrewLayer />
       <DropPin />
     </FloorStage>

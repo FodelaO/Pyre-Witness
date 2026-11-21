@@ -2,17 +2,27 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useState, useSyncExternalStore } from "react";
 import { EQUIPMENT, FOOTPRINT, type EquipmentComponent, type EquipmentProps } from "@/equipment";
 import type { EquipmentKind } from "@/twin/types";
 import "./process/gallery.css";
 
 const kinds = Object.keys(EQUIPMENT) as EquipmentKind[];
 const liquidLevels = [0.55, 0.90, 0.20];
+const motionPreference = "(prefers-reduced-motion: reduce)";
+
+function subscribeMotion(onChange: () => void) {
+  const query = window.matchMedia(motionPreference);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+const reducedMotion = () => window.matchMedia(motionPreference).matches;
+const initialMotion = () => false;
 
 const examples: Partial<Record<EquipmentKind, EquipmentProps>> = {
   vertical_tank: { label: "TK-101", capacityLabel: "8,000 L", medium: "water" },
-  bullet_tank: { label: "TK-210", capacityLabel: "3,000 L", medium: "co2" },
+  bullet_tank: { label: "R-401", medium: "ammonia" },
   agitated_tank: { label: "TK-301", capacityLabel: "2,000 L", medium: "syrup" },
   pump: { label: "P-101", medium: "water" },
   valve: { label: "V-311", medium: "product" },
@@ -29,6 +39,17 @@ const examples: Partial<Record<EquipmentKind, EquipmentProps>> = {
   condenser: { label: "EC-501", medium: "ammonia" },
   plc_cabinet: { label: "PLC-F3" },
   hmi: { label: "HMI-F3" },
+  workstation: { label: "ENG-03" },
+  server_rack: { label: "HIST-03" },
+  firewall: { label: "FW-DMZ" },
+  network_switch: { label: "SW-F3" },
+  wifi_ap: { label: "AP-IT" },
+  ip_camera: { label: "CAM-01" },
+  gateway: { label: "GW-PK" },
+  laptop: { label: "LPT-01" },
+  phone: { label: "MOB-01" },
+  usb_drive: { label: "USB-01" },
+  generic_device: { label: "DEV-01" },
 };
 
 const levelKinds = new Set<EquipmentKind>(["vertical_tank", "bullet_tank", "agitated_tank", "carbo_cooler"]);
@@ -43,7 +64,7 @@ const levelSamples = [
 ];
 const frameSamples = [
   { caption: "Selected", props: { selected: true } },
-  { caption: "Recommended", props: { placement: "recommended" } },
+  { caption: "Good fit", props: { placement: "recommended" } },
   { caption: "Unsafe", props: { placement: "unsafe" } },
   { caption: "Alarm", props: { status: "alarm" } },
   { caption: "Compact", props: { compact: true } },
@@ -71,7 +92,7 @@ function SampleRow({ Symbol, kind, samples }: SampleRowProps) {
           >
             <Symbol letters={letters} medium={medium} level={level} {...props} />
           </svg>
-          <span className="block text-[9px] leading-4 text-pw-dim">{caption}</span>
+          <span className="pw-equipment-sample-label">{caption}</span>
         </li>
       ))}
     </ul>
@@ -98,25 +119,30 @@ const EquipmentCard = memo(function EquipmentCard({ kind, running, level }: { ki
     ? "Wi-Fi AP"
     : kind.replaceAll("_", " ").replace(/^(ro|uv|hmi|plc|ip|usb)\b/, (part) => part.toUpperCase());
   const displayWidth = w + 22;
-  const labelSpace = example?.capacityLabel ? 20 : example?.label ? 11 : 0;
-  const displayHeight = h + 22 + labelSpace;
-  const scale = Math.min(3, 388 / displayWidth, 330 / displayHeight);
+  const displayHeight = h + 22;
+  const scale = Math.min(4.4, 286 / displayWidth, 172 / displayHeight);
 
   return (
-    <article data-kind={kind} aria-labelledby={`gallery-${kind}`} className="min-w-0 overflow-hidden rounded-xl border border-pw-line bg-pw-panel">
-      <h2 id={`gallery-${kind}`} className="border-b border-pw-line px-4 py-3 text-sm font-medium capitalize text-pw-text">
+    <article data-kind={kind} aria-labelledby={`gallery-${kind}`} className="min-w-0 overflow-hidden rounded-lg border border-pw-line bg-pw-panel">
+      <h2 id={`gallery-${kind}`} className="border-b border-pw-line px-3.5 py-2.5 text-sm font-medium capitalize text-pw-text">
         {name}
       </h2>
-      <div className="pw-equipment-gallery-grid flex h-[330px] items-center justify-center border-b border-pw-line px-2" data-preview="">
-        <svg
-          viewBox={`${-displayWidth / 2} ${-h / 2 - 11} ${displayWidth} ${displayHeight}`}
-          width={displayWidth * scale}
-          height={displayHeight * scale}
-          className="h-auto max-h-full max-w-full"
-          aria-hidden="true"
-        >
-          <Symbol {...example} level={level} running={running} />
-        </svg>
+      <div className="pw-equipment-gallery-grid grid h-[196px] grid-rows-[1fr_auto] border-b border-pw-line px-2 pb-2" data-preview="">
+        <div className="grid min-h-0 place-items-center">
+          <svg
+            viewBox={`${-displayWidth / 2} ${-h / 2 - 11} ${displayWidth} ${displayHeight}`}
+            width={displayWidth * scale}
+            height={displayHeight * scale}
+            className="h-auto max-h-full max-w-full"
+            aria-hidden="true"
+          >
+            <g className="pw-equipment-preview-symbol"><Symbol {...example} level={level} running={running} /></g>
+          </svg>
+        </div>
+        {example?.label && <div className="pw-equipment-preview-tag">
+          {example.label}
+          {example.capacityLabel && <span>{example.capacityLabel}</span>}
+        </div>}
       </div>
       <StateSamples kind={kind} />
     </article>
@@ -124,7 +150,9 @@ const EquipmentCard = memo(function EquipmentCard({ kind, running, level }: { ki
 });
 
 export default function Gallery() {
-  const [running, setRunning] = useState(false);
+  const [animate, setAnimate] = useState(true);
+  const reduced = useSyncExternalStore(subscribeMotion, reducedMotion, initialMotion);
+  const running = animate && !reduced;
   const [levelIndex, setLevelIndex] = useState(0);
 
   useEffect(() => {
@@ -136,7 +164,7 @@ export default function Gallery() {
   return (
     <main className="pw-scroll h-full overflow-y-auto bg-pw-bg" data-gallery-motion={running ? "running" : "paused"}>
       <header className="sticky top-0 z-10 border-b border-pw-line bg-pw-panel">
-        <div className="mx-auto flex max-w-[94rem] flex-wrap items-end justify-between gap-x-8 gap-y-5 px-4 py-6 sm:px-7 sm:py-8">
+        <div className="mx-auto flex max-w-[104rem] flex-wrap items-end justify-between gap-x-8 gap-y-4 px-4 py-5 sm:px-7">
           <div>
             <Link href="/" className="text-xs text-pw-dim underline-offset-4 hover:text-pw-text hover:underline">
               Back to plant
@@ -147,8 +175,9 @@ export default function Gallery() {
             type="button"
             role="switch"
             aria-checked={running}
-            onClick={() => setRunning((current) => !current)}
-            className="flex items-center gap-3 rounded-md border border-pw-line-strong bg-pw-panel-2 px-3 py-2 text-xs font-medium text-pw-text hover:border-pw-dim focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-pw-info"
+            disabled={reduced}
+            onClick={() => setAnimate((current) => !current)}
+            className="flex items-center gap-3 rounded-md border border-pw-line-strong bg-pw-panel-2 px-3 py-2 text-xs font-medium text-pw-text hover:border-pw-dim focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-pw-info disabled:opacity-65"
           >
             Animate equipment
             <span
@@ -160,7 +189,7 @@ export default function Gallery() {
           </button>
         </div>
       </header>
-      <div className="mx-auto grid max-w-[94rem] grid-cols-1 gap-4 px-4 py-5 sm:px-7 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mx-auto grid max-w-[104rem] grid-cols-1 gap-4 px-4 py-5 sm:grid-cols-2 sm:px-7 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {kinds.map((kind) => (
           <EquipmentCard key={kind} kind={kind} running={running} level={levelKinds.has(kind) ? liquidLevels[levelIndex] : undefined} />
         ))}

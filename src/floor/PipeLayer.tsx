@@ -8,6 +8,11 @@ interface PipeLayerProps {
   hidden: ReadonlySet<Medium>;
 }
 
+const tierFor = (medium: Medium) => {
+  if (medium === "network") return "network";
+  return medium === "glycol" || medium === "ammonia" || medium === "power" ? "utility" : "process";
+};
+
 export default memo(function PipeLayer({ assets, hidden }: PipeLayerProps) {
   const pipes = useMemo(() => {
     const byId = new Map(assets.map((asset) => [asset.id, asset]));
@@ -42,17 +47,17 @@ export default memo(function PipeLayer({ assets, hidden }: PipeLayerProps) {
           key={key}
           className="pw-floor-pipe"
           data-medium={medium}
+          data-tier={tierFor(medium)}
           data-isolated={isolated || undefined}
           stroke={color}
+          aria-label={detail ? `${label} · ${detail}` : label}
         >
           <path d={d} className="pw-floor-pipe-line" />
           {active && <path d={d} className="pw-floor-pipe-flow pw-flow" />}
-          <path d={d} className="pw-floor-pipe-hit">
-            <title>{detail ? `${label} · ${detail}` : label}</title>
-          </path>
-          <text className="pw-floor-pipe-label" x={center.x} y={center.y - 8} textAnchor="middle">
-            {label}
-          </text>
+          <path d={d} className="pw-floor-pipe-hit" />
+          <g className="pw-floor-pipe-label" transform={`translate(${center.x} ${center.y})`}>
+            <text className="pw-floor-screen-label" y={-7} textAnchor="middle">{label}</text>
+          </g>
         </g>
       ))}
     </g>

@@ -3,6 +3,7 @@ import { MapPin, X } from "lucide-react";
 import { useDropStore } from "@/twin/dropPoint";
 import { areaById } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
+import { toggleFloorPin } from "./CaptureToolbar";
 
 export default function CaptureLocation({ disabled }: { disabled: boolean }) {
   const point = useDropStore((state) => state.point);
@@ -10,16 +11,10 @@ export default function CaptureLocation({ disabled }: { disabled: boolean }) {
   const areaName = useTwinStore((state) => point ? areaById(state.twin, point.area)?.name : undefined);
   const label = armed ? "Pick on floor" : point ? areaName ?? point.area : "Pin location";
 
-  function arm() {
-    const twin = useTwinStore.getState();
-    if (twin.view === "purdue") twin.setView("floor");
-    useDropStore.getState().arm();
-  }
-
   return (
     <div className="pw-capture-pin" data-armed={armed} data-pinned={!!point}>
       <button type="button" aria-label={point && !armed ? `Pin location, ${label}` : label} title={label}
-        aria-pressed={armed} onClick={arm} disabled={disabled}>
+        aria-pressed={armed} onClick={toggleFloorPin} disabled={disabled}>
         <MapPin size={14} aria-hidden="true" />
         <span>{label}</span>
       </button>

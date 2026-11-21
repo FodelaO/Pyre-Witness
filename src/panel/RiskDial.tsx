@@ -65,7 +65,7 @@ export function RiskDial({ action }: { action?: ReactNode }) {
       dialValue.set(score);
       return;
     }
-    const animation = animate(dialValue, score, { duration: 0.48, ease: "easeOut" });
+    const animation = animate(dialValue, score, { duration: 0.18, ease: "easeOut" });
     return () => animation.stop();
   }, [score, dialValue, reducedMotion]);
 

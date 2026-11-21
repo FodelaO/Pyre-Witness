@@ -13,10 +13,10 @@ export default function WifiAp(props: EquipmentProps) {
   return (
     <SymbolFrame {...FOOTPRINT.wifi_ap} props={props} round>
       {active && (
-        <g fill="none" stroke="var(--pw-info)" strokeWidth={1} opacity={0.78}>
-          <circle r={16.4} className="pw-wave" />
-          <circle r={16.4} className="pw-wave" style={{ animationDelay: "-0.73s" }} />
-          <circle r={16.4} className="pw-wave" style={{ animationDelay: "-1.46s" }} />
+        <g fill="none" stroke="var(--pw-info)" strokeWidth={1.1} opacity={0.84}>
+          <circle r={18.8} className="pw-wave" />
+          <circle r={18.8} className="pw-wave" style={{ animationDelay: "-0.73s" }} />
+          <circle r={18.8} className="pw-wave" style={{ animationDelay: "-1.46s" }} />
         </g>
       )}
 

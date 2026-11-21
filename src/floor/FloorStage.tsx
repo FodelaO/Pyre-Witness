@@ -1,26 +1,35 @@
 /** Full-bleed interactive viewport and its fixed drawing controls. */
-import { memo, type ReactNode } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import { Crosshair, Expand, Minus, Plus, X } from "lucide-react";
-import { areaById, assetById } from "@/twin/geometry";
-import { useTwinStore } from "@/twin/store";
+import { areaById, areaCenter, assetById, entryPointById } from "@/twin/geometry";
 import type { Twin } from "@/twin/types";
 import Blueprint from "./Blueprint";
-import { FIT, zoomBetween } from "./camera";
+import { drawingBounds } from "./fit";
 import SelectionCard from "./SelectionCard";
 import useFloorCamera from "./useFloorCamera";
 import useFloorGestures from "./useFloorGestures";
 import useFloorPlacement from "./useFloorPlacement";
+import ZoneLayer, { ZoneLabels } from "./ZoneLayer";
 
 interface FloorStageProps {
-  plant: Twin["plant"];
+  twin: Twin;
+  selectedId: string | null;
+  highlighted: ReadonlySet<string>;
+  schematic: ReactNode;
   children: ReactNode;
   controls: ReactNode;
 }
 
-export default memo(function FloorStage({ plant, children, controls }: FloorStageProps) {
-  const selected = useTwinStore((state) => state.selectedId ? assetById(state.twin, state.selectedId) : undefined);
-  const area = useTwinStore((state) => selected ? areaById(state.twin, selected.physical.area)?.name : undefined);
-  const camera = useFloorCamera(plant.canvas, selected);
+export default memo(function FloorStage({ twin, selectedId, highlighted, schematic, children, controls }: FloorStageProps) {
+  const { plant, areas, entryPoints } = twin;
+  const selected = selectedId ? assetById(twin, selectedId) : undefined;
+  const selectedArea = areas.find(({ id }) => id === selectedId);
+  const area = selected ? areaById(twin, selected.physical.area)?.name : undefined;
+  const selectedPoint = useMemo(() => selected?.physical ?? (
+    selectedArea ? areaCenter(selectedArea) : entryPointById(twin, selectedId ?? "")
+  ), [selected, selectedArea, selectedId, twin]);
+  const bounds = useMemo(() => drawingBounds(plant, areas, entryPoints), [plant, areas, entryPoints]);
+  const camera = useFloorCamera(plant.canvas, bounds, selected, selectedPoint, selectedId);
   const placement = useFloorPlacement();
   const gestures = useFloorGestures(camera, placement);
   const { w, h } = plant.canvas;
@@ -28,20 +37,15 @@ export default memo(function FloorStage({ plant, children, controls }: FloorStag
     ? (placement.notice === "outside" ? "Choose a point inside a marked zone" : "Click a zone to pin a device")
     : placement.notice === "reassess" ? "Device moved. Reassessment failed." : null;
 
-  function zoomBy(factor: number) {
-    const center = { x: w / 2, y: h / 2 };
-    camera.setCamera(zoomBetween(camera.pose.current, center, center, factor), true);
-  }
-
   return (
-    <div className="pw-plant-floor">
+    <div ref={camera.paneRef} className="pw-plant-floor">
       <div className="pw-floor-caption">
         <span>Simulated plant</span><span aria-hidden="true">:</span> {plant.name}, {plant.line} (fictional)
       </div>
       <div className="pw-floor-zoom" role="group" aria-label="Floor zoom">
-        <button type="button" onClick={() => zoomBy(1.3)} aria-label="Zoom in" title="Zoom in"><Plus size={15} /></button>
-        <button type="button" onClick={() => zoomBy(1 / 1.3)} aria-label="Zoom out" title="Zoom out"><Minus size={15} /></button>
-        <button type="button" onClick={() => camera.setCamera(FIT, true)} aria-label="Fit plant" title="Fit plant"><Expand size={14} /></button>
+        <button type="button" onClick={() => camera.zoomAtCenter(1.3)} aria-label="Zoom in" title="Zoom in"><Plus size={15} /></button>
+        <button type="button" onClick={() => camera.zoomAtCenter(1 / 1.3)} aria-label="Zoom out" title="Zoom out"><Minus size={15} /></button>
+        <button type="button" onClick={camera.resetFit} aria-label="Fit plant" title="Fit plant"><Expand size={14} /></button>
       </div>
       {hint && (
         <div className="pw-floor-placement-hint">
@@ -65,6 +69,9 @@ export default memo(function FloorStage({ plant, children, controls }: FloorStag
       >
         <g ref={camera.worldRef} className="pw-floor-world">
           <Blueprint plant={plant} />
+          <ZoneLayer areas={areas} selectedId={selectedId} highlighted={highlighted} />
+          {schematic}
+          <ZoneLabels areas={areas} scale={camera.fitPixelsPerUnit} selectedId={selectedId} highlighted={highlighted} />
           {children}
         </g>
       </svg>

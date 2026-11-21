@@ -1,19 +1,38 @@
 /** Applies the camera to SVG and positions the selected equipment card without React frames. */
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { FOOTPRINT } from "@/equipment/types";
 import type { Point } from "@/twin/geometry";
-import type { Asset, Twin } from "@/twin/types";
-import { clientToStage, FIT, viewportFor, worldToLocal, type Camera, type Viewport } from "./camera";
+import type { Area, Asset, Twin } from "@/twin/types";
+import { clientToStage, FIT, viewportFor, worldToLocal, zoomBetween, type Camera, type Viewport } from "./camera";
+import { fitDrawing, type Rect } from "./fit";
+import { CAPTURE_OVERLAY, observeViewportOverlays } from "./viewportOverlays";
 
-export default function useFloorCamera(canvas: Twin["plant"]["canvas"], selection: Asset | undefined) {
+const FLOOR_CONTROLS = `${CAPTURE_OVERLAY}, .pw-floor-caption, .pw-floor-zoom, .pw-floor-legend, .pw-sim-controls`;
+const coverage = (value: number) => Math.max(0, Math.min(1, value));
+
+export default function useFloorCamera(
+  canvas: Twin["plant"]["canvas"],
+  bounds: Area["bounds"],
+  selection: Asset | undefined,
+  selectedPoint: Point | undefined,
+  selectedId: string | null,
+) {
+  const paneRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const worldRef = useRef<SVGGElement>(null);
   const tagRef = useRef<HTMLDivElement>(null);
   const pose = useRef<Camera>(FIT);
+  const fit = useRef<Camera>(FIT);
+  const fitted = useRef(true);
   const frame = useRef<number | undefined>(undefined);
   const viewport = useRef<Viewport | undefined>(undefined);
+  const observedSize = useRef<Pick<Viewport, "width" | "height"> | undefined>(undefined);
+  const overlays = useRef<Rect[]>([]);
+  const visualScale = useRef({ absolute: 0, relative: 0 });
   const tagSize = useRef({ width: 0, height: 0 });
   const selected = useRef<Asset | undefined>(undefined);
+  const previousSelection = useRef<string | null>(null);
+  const [fitPixelsPerUnit, setFitPixelsPerUnit] = useState(0.5);
   const { w, h } = canvas;
 
   const measure = useCallback(() => {
@@ -57,7 +76,18 @@ export default function useFloorCamera(canvas: Twin["plant"]["canvas"], selectio
     if (!world) return;
     const next = pose.current;
     const view = viewport.current ?? measure();
-    if (view) placeTag(next, view);
+    if (view) {
+      placeTag(next, view);
+      const absolute = next.scale * view.pixelsPerUnit;
+      const relative = next.scale / fit.current.scale;
+      if (absolute !== visualScale.current.absolute || relative !== visualScale.current.relative) {
+        world.style.setProperty("--pw-floor-inverse-scale", String(1 / absolute));
+        world.style.setProperty("--pw-floor-detail", String(coverage((relative - 1.12) / 0.64)));
+        world.style.setProperty("--pw-floor-telemetry", String(coverage((relative - 1.55) / 0.65)));
+        world.style.setProperty("--pw-floor-secondary", String(coverage((absolute - 0.37) / 0.19)));
+        visualScale.current = { absolute, relative };
+      }
+    }
     world.toggleAttribute("data-easing", smooth);
     tagRef.current?.toggleAttribute("data-easing", smooth);
     world.style.transform = `translate(${next.x}px, ${next.y}px) scale(${next.scale})`;
@@ -65,6 +95,8 @@ export default function useFloorCamera(canvas: Twin["plant"]["canvas"], selectio
 
   const setCamera = useCallback((next: Camera, smooth = false) => {
     pose.current = next;
+    fitted.current = Math.abs(next.x - fit.current.x) < 0.01 && Math.abs(next.y - fit.current.y) < 0.01
+      && Math.abs(next.scale - fit.current.scale) < 0.001;
     if (smooth) {
       if (frame.current !== undefined) cancelAnimationFrame(frame.current);
       frame.current = undefined;
@@ -76,6 +108,17 @@ export default function useFloorCamera(canvas: Twin["plant"]["canvas"], selectio
       });
     }
   }, [paint]);
+
+  const resetFit = useCallback(() => setCamera(fit.current, true), [setCamera]);
+  const zoom = useCallback((current: Camera, from: Point, to: Point, factor: number) =>
+    zoomBetween(current, from, to, factor, fit.current.scale, Math.max(6, fit.current.scale * 4)), []);
+
+  const zoomAtCenter = useCallback((factor: number) => {
+    const view = viewport.current ?? measure();
+    if (!view) return;
+    const center = clientToStage({ x: view.left + view.width / 2, y: view.top + view.height / 2 }, view);
+    setCamera(zoom(pose.current, center, center, factor), true);
+  }, [measure, setCamera, zoom]);
 
   const startGesture = useCallback((refreshViewport = true) => {
     if (refreshViewport || !viewport.current) measure();
@@ -94,48 +137,61 @@ export default function useFloorCamera(canvas: Twin["plant"]["canvas"], selectio
   }, [measure]);
 
   useLayoutEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const resize = new ResizeObserver(() => {
+    const pane = paneRef.current;
+    if (!pane) return;
+    const stop = observeViewportOverlays(pane, FLOOR_CONTROLS, (controls) => {
       const view = measure();
-      measureTag();
-      if (view) placeTag(pose.current, view);
+      if (!view || view.width <= 24 || view.height <= 24) return;
+      const resized = view.width !== observedSize.current?.width || view.height !== observedSize.current.height;
+      observedSize.current = view;
+      overlays.current = controls.map((control) => control.getBoundingClientRect()).filter(({ width, height }) => width > 0 && height > 0);
+      fit.current = fitDrawing(view, bounds, overlays.current);
+      setFitPixelsPerUnit(fit.current.scale * view.pixelsPerUnit);
+      if (resized || fitted.current) setCamera(fit.current);
+      else paint(false);
     });
-    measure();
-    resize.observe(svg);
+    const resize = new ResizeObserver(() => {
+      measureTag();
+      if (viewport.current) placeTag(pose.current, viewport.current);
+    });
     if (tagRef.current) resize.observe(tagRef.current);
     return () => {
+      stop();
       resize.disconnect();
       if (frame.current !== undefined) cancelAnimationFrame(frame.current);
       frame.current = undefined;
     };
-  }, [measure, measureTag, placeTag]);
+  }, [bounds, measure, measureTag, paint, placeTag, setCamera]);
 
   useLayoutEffect(() => {
-    const changed = selected.current?.id !== selection?.id;
+    const changed = previousSelection.current !== selectedId;
+    previousSelection.current = selectedId;
     selected.current = selection;
     const view = viewport.current ?? measure();
-    if (!selection || !view) return;
+    if (!selectedPoint || !view) return;
     measureTag();
 
     const next = pose.current;
-    const point = worldToLocal(selection.physical, next, view);
-    // Leave room for the floor controls when revealing an off-screen linked selection.
-    const edgeX = Math.min(34, view.width / 4);
-    const edgeY = Math.min(48, view.height / 4);
-    const offCenter = point.x < edgeX || point.x > view.width - edgeX || point.y < edgeY || point.y > view.height - edgeY;
-    if (changed && offCenter && !svgRef.current?.hasAttribute("data-interaction")) {
+    const point = worldToLocal(selectedPoint, next, view);
+    const onScreen = point.x >= 12 && point.x <= view.width - 12 && point.y >= 12 && point.y <= view.height - 12;
+    const covered = overlays.current.some(({ left, right, top, bottom }) => {
+      const x = point.x + view.left;
+      const y = point.y + view.top;
+      return x >= left && x <= right && y >= top && y <= bottom;
+    });
+    if (changed && (!onScreen || covered) && !svgRef.current?.hasAttribute("data-interaction")) {
+      const center = worldToLocal({ x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 }, fit.current, view);
       setCamera({
         ...next,
-        x: next.x + (view.width / 2 - point.x) / view.pixelsPerUnit,
-        y: next.y + (view.height / 2 - point.y) / view.pixelsPerUnit,
+        x: next.x + (center.x - point.x) / view.pixelsPerUnit,
+        y: next.y + (center.y - point.y) / view.pixelsPerUnit,
       }, true);
     } else {
       placeTag(next, view);
     }
-  }, [selection, measure, measureTag, placeTag, setCamera]);
+  }, [bounds, selectedId, selectedPoint, selection, measure, measureTag, placeTag, setCamera]);
 
-  return { svgRef, worldRef, tagRef, pose, setCamera, startGesture, stagePoint };
+  return { paneRef, svgRef, worldRef, tagRef, pose, fitPixelsPerUnit, resetFit, zoom, zoomAtCenter, setCamera, startGesture, stagePoint };
 }
 
 export type FloorCamera = ReturnType<typeof useFloorCamera>;

@@ -4,7 +4,6 @@ import { FileText } from "lucide-react";
 import type { Answer, CaseResult } from "../../eval/failures";
 import { SIDES } from "../../eval/types";
 import { SIDE_NAME } from "./MetricBars";
-import styles from "./proof.module.css";
 
 function expected(item: CaseResult) {
   const { expected } = item;
@@ -27,25 +26,25 @@ export function FailureGallery({ cases }: { cases: CaseResult[] }) {
   const ranked = [...cases].sort((a, b) => Number(Boolean(b.file)) - Number(Boolean(a.file)));
   const displayed = ranked.slice(0, 6);
   return (
-    <section className={styles.failures} aria-labelledby="failures">
-      <div className={styles.sectionHeading}>
+    <section className="pw-proof-failures" aria-labelledby="failures">
+      <div className="pw-proof-section-heading">
         <h2 id="failures">Where it still fails</h2>
         {cases.length > 0 && <span>{displayed.length} of {cases.length} flagged cases</span>}
       </div>
       {!cases.length && <p>No discrepancies were detected on the measured labels.</p>}
-      <div className={styles.gallery}>
+      <div className="pw-proof-gallery">
         {displayed.map((item) => (
-          <article className={styles.case} key={item.id}>
-            <div className={styles.caseMedia}>
+          <article className="pw-proof-case" key={item.id}>
+            <div className="pw-proof-case-media">
               {item.file ? (
                 <Image src={`/proof/failure-image/${encodeURIComponent(item.id)}`} alt={`Evaluation capture ${item.file}`}
                   fill sizes="(max-width: 640px) 90vw, (max-width: 1024px) 45vw, 340px" unoptimized />
               ) : <FileText size={28} strokeWidth={1.25} aria-hidden="true" />}
             </div>
-            <div className={styles.caseBody}>
-              <div className={styles.caseHeading}><h3>{item.file ?? item.id}</h3><span>{item.group}</span></div>
+            <div className="pw-proof-case-body">
+              <div className="pw-proof-case-heading"><h3>{item.file ?? item.id}</h3><span>{item.group}</span></div>
               {item.file && (
-                <p className={styles.photoCredit}>
+                <p className="pw-proof-photo-credit">
                   {item.credit?.author && <span>{item.credit.author}</span>}
                   {item.credit?.termsUrl ? <a href={item.credit.termsUrl}>{item.license}</a> : <span>{item.license}</span>}
                   {item.sourceUrl && <a href={item.sourceUrl}>Photo source</a>}
@@ -55,7 +54,7 @@ export function FailureGallery({ cases }: { cases: CaseResult[] }) {
                 <dt>Expected</dt><dd>{expected(item)}</dd>
                 {SIDES.map((side) => <div key={side}><dt>{SIDE_NAME[side]}</dt><dd>{answer(item.answers[side])}</dd></div>)}
               </dl>
-              <ul className={styles.diagnoses}>
+              <ul className="pw-proof-diagnoses">
                 {item.diagnoses.map(({ side, category, detail }) => (
                   <li key={`${side}/${category}/${detail}`}><strong>{SIDE_NAME[side]} · {category}</strong><span>{detail}</span></li>
                 ))}

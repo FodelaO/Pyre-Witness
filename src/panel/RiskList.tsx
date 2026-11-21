@@ -22,6 +22,7 @@ export function RiskList({ risks }: { risks: RiskItem[] }) {
   return (
     <>
       <PanelHeading icon={ShieldAlert}>Risks <span className="pw-panel-muted pw-mono">{risks.length}</span></PanelHeading>
+      {!risks.length && <p className="pw-panel-muted">No additional risks reported.</p>}
       <ul className="pw-panel-list">
         {risks.map((risk) => {
           const Icon = RISK_ICONS[risk.kind];

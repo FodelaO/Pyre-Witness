@@ -8,7 +8,8 @@ type ReportState = { state: "ready"; report: EvaluationReport } | { state: "miss
 export async function readProofReport(): Promise<ReportState> {
   try {
     const report = JSON.parse(await readFile(path.join(process.cwd(), "eval", "report", "latest.json"), "utf8"));
-    if (report?.schemaVersion !== REPORT_VERSION || !report.overall?.sides || !report.overall?.paired || !report.breakdown
+    if (report?.schemaVersion !== REPORT_VERSION || !Number.isFinite(Date.parse(report.date))
+      || !report.overall?.sides || !report.overall?.paired || !report.breakdown
       || !report.models || !report.dataset?.selected || !Array.isArray(report.failures) || !Array.isArray(report.sides)) {
       return { state: "invalid" };
     }

@@ -122,6 +122,15 @@ function assignLanes(zones: ZoneContents[]): number {
   const free = (lane: Pick<ZoneContents, "first" | "last">[], zone: Pick<ZoneContents, "first" | "last">) =>
     lane.every((other) => other.last < zone.first || other.first > zone.last);
 
+  // A supervisory zone can use neighboring columns above their first occupied level.
+  for (const zone of lower) {
+    if (zone.first >= LOWER_START || zone.last !== LOWER_START) continue;
+    const supervisory = { first: LOWER_START, last: LOWER_START };
+    for (let lane = zone.lane + 1; lanes[lane] && free(lanes[lane], supervisory); lane++) {
+      zone.span++;
+      lanes[lane].push(supervisory);
+    }
+  }
   for (const zone of upper) {
     const lane = lanes.findIndex((contents) => free(contents, zone));
     zone.lane = lane < 0 ? lanes.length : lane;
@@ -148,10 +157,11 @@ function assignLanes(zones: ZoneContents[]): number {
 const GRID_GAP = 5;
 const MINI_HEIGHT = 24;
 const GROUP_HEIGHT = 27;
-const HEADER = 25;
-const ROW_PAD = 12;
 const MIN_BAND_HEIGHT: Record<PurdueLevel, number> = {
   5: 73, 4: 99, 3.5: 104, 3: 99, 2: 97, 1: 98, 0: 72,
+};
+const COMPACT_BAND_HEIGHT: Record<PurdueLevel, number> = {
+  5: 62, 4: 78, 3.5: 82, 3: 78, 2: 78, 1: 93, 0: 66,
 };
 
 function grid(count: number, width: number, minWidth: number, maxWidth: number, height: number): Box[] {
@@ -176,22 +186,24 @@ export function buildPurdueLayout(
   revealed: ReadonlySet<string> = new Set(),
 ): PurdueLayout {
   const compact = viewportWidth < 850;
-  const railWidth = compact ? 86 : 137;
+  const railWidth = viewportWidth < 575 ? 66 : compact ? 80 : 137;
   const left = railWidth + (compact ? 6 : 14);
   const remote = twin.entryPoints.filter(({ kind }) => kind === "internet" || kind === "remote");
   const side = twin.entryPoints.filter((entry) => !remote.includes(entry));
-  const rightPad = side.length ? (compact ? 31 : 46) : (compact ? 9 : 14);
-  const laneGap = compact ? 5 : 11;
-  const zonePad = compact ? 4 : 9;
+  const rightPad = side.length ? (compact ? 28 : 46) : (compact ? 9 : 14);
+  const laneGap = compact ? 4 : 11;
+  const zonePad = compact ? 3 : 9;
   const nodeHeight = compact ? 34 : 42;
+  const header = compact ? 22 : 25;
+  const rowPad = compact ? 9 : 12;
   const contents = collectZones(twin);
   const lanes = assignLanes(contents);
-  const width = Math.max(viewportWidth, left + lanes * 48 + (lanes - 1) * laneGap + rightPad);
+  const width = Math.max(viewportWidth, left + lanes * (compact ? 43 : 48) + (lanes - 1) * laneGap + rightPad);
   const laneWidth = (width - left - rightPad - (lanes - 1) * laneGap) / lanes;
   const diagramRight = width - rightPad;
   const remoteZone = contents.find((zone) => zone.name === PURDUE_LEVELS[0].name && zone.first === 0)
     ?? contents.find((zone) => zone.first === 0);
-  const minNodeWidth = compact ? 47 : 50;
+  const minNodeWidth = compact ? 42 : 46;
   const maxNodeWidth = compact ? 74 : 92;
   const bands: Band[] = [];
   const cards: AssetCard[] = [];
@@ -201,7 +213,7 @@ export function buildPurdueLayout(
   let y = 0;
 
   for (const [index, { level }] of PURDUE_LEVELS.entries()) {
-    let bandHeight = MIN_BAND_HEIGHT[level];
+    let bandHeight = (compact ? COMPACT_BAND_HEIGHT : MIN_BAND_HEIGHT)[level];
     const remoteGrid = !remoteZone && level === TOP
       ? grid(remote.length, diagramRight - left, 115, 166, 27)
       : [];
@@ -221,7 +233,7 @@ export function buildPurdueLayout(
       const span = index < LOWER_START ? Math.max(zone.span, zone.headSpan) : zone.span;
       const zw = span * (laneWidth + laneGap) - laneGap;
       const inner = zw - zonePad * 2;
-      let rowY = ROW_PAD + (index === zone.first ? HEADER : 0);
+      let rowY = rowPad + (index === zone.first ? header : 0);
       const placeGrid = (boxes: Box[], place: (box: Box, i: number) => void) => {
         boxes.forEach((box, i) => place({ ...box, x: zx + zonePad + box.x, y: y + rowY + box.y }, i));
         const last = boxes.at(-1);
@@ -250,8 +262,8 @@ export function buildPurdueLayout(
         });
         if (!visibleFields.length) rowY += MINI_HEIGHT + GRID_GAP;
       }
-      if (rowY > ROW_PAD + (index === zone.first ? HEADER : 0)) {
-        bandHeight = Math.max(bandHeight, rowY + ROW_PAD - GRID_GAP);
+      if (rowY > rowPad + (index === zone.first ? header : 0)) {
+        bandHeight = Math.max(bandHeight, rowY + rowPad - GRID_GAP);
       }
     }
     bands.push({ level, y, h: bandHeight });
