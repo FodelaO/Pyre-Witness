@@ -1,6 +1,7 @@
 /** Fixed-size card for the selected asset's location and available telemetry. */
 import { memo } from "react";
 import type { Asset } from "@/twin/types";
+import { assetLabel } from "./assetLabel";
 import { formatTelemetry } from "./telemetryFormat";
 
 interface Reading {
@@ -29,12 +30,13 @@ function readingsFor(asset: Asset): Reading[] {
   return readings;
 }
 
-export default memo(function SelectionCard({ asset, area }: { asset: Asset; area: string }) {
-  const readings = readingsFor(asset);
+export default memo(function SelectionCard({ asset, area, showMaterial }: { asset: Asset; area: string; showMaterial: boolean }) {
+  const readings = showMaterial ? readingsFor(asset) : [];
+  const label = assetLabel(asset);
   return (
     <aside className="pw-floor-tag" aria-label="Selected equipment">
       <header className="pw-floor-tag-header">
-        <span className="pw-floor-tag-id">{asset.id}</span>
+        {label !== asset.name && <span className="pw-floor-tag-id">{label}</span>}
         <strong>{asset.name}</strong>
       </header>
       <div className="pw-floor-tag-location"><span>{area}</span><span>Purdue L{asset.network.level}</span></div>
@@ -47,7 +49,7 @@ export default memo(function SelectionCard({ asset, area }: { asset: Asset; area
             </div>
           ))}
         </dl>
-      ) : <p className="pw-floor-tag-empty">No telemetry</p>}
+      ) : showMaterial && <p className="pw-floor-tag-empty">No telemetry</p>}
     </aside>
   );
 });

@@ -1,0 +1,197 @@
+/* Industrial overlay inks, glyphs and CSS-only traffic motion. */
+.pw-lens-data,
+.pw-lens-connectors {
+  transition: opacity 175ms ease-out;
+}
+.pw-lens-network,
+.pw-lens-digital-entries,
+.pw-lens-node-meta {
+  --lens-data-ink: #a79ced;
+  --lens-data-text: #d9d4fb;
+  --lens-chip-fill: #141829;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.pw-lens-zone {
+  --zone-ink: #8b7ed8;
+  fill: var(--zone-ink);
+  fill-opacity: .072;
+  stroke: var(--zone-ink);
+  stroke-opacity: .5;
+  stroke-width: 1.15;
+  stroke-dasharray: 4 5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.pw-lens-zones [data-tier="operations"] :is(.pw-lens-zone, .pw-lens-zone-label) { --zone-ink: #8bb5df; }
+.pw-lens-zones [data-tier="dmz"] :is(.pw-lens-zone, .pw-lens-zone-label) { --zone-ink: #b69af3; }
+.pw-lens-zones [data-tier="enterprise"] :is(.pw-lens-zone, .pw-lens-zone-label) { --zone-ink: #87c4d5; }
+.pw-lens-zone-label {
+  fill: var(--zone-ink, #b1a6ec);
+  paint-order: stroke;
+  stroke: #111421;
+  stroke-width: 3;
+  stroke-linejoin: round;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: .095em;
+  text-transform: uppercase;
+}
+.pw-lens-cable,
+.pw-lens-flow-route,
+.pw-lens-packet {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pw-lens-cable {
+  stroke: #786caf;
+  stroke-width: 1.5;
+  opacity: .71;
+  vector-effect: non-scaling-stroke;
+}
+.pw-lens-cable[data-disabled] {
+  opacity: .34;
+  stroke-dasharray: 2 4;
+}
+.pw-lens-cable[data-active],
+.pw-lens-traffic [data-active] .pw-lens-flow-route {
+  stroke: #c6b5ff;
+  opacity: .94;
+  stroke-width: 1.7;
+}
+.pw-lens-flow-route {
+  stroke: var(--lens-data-ink);
+  stroke-width: 1;
+  opacity: .36;
+  vector-effect: non-scaling-stroke;
+}
+.pw-lens-traffic [data-medium="hardwired"] .pw-lens-flow-route {
+  stroke: #98a9c9;
+  stroke-dasharray: 1 4;
+}
+.pw-lens-traffic [data-medium="external"] .pw-lens-flow-route {
+  stroke-dasharray: 6 6;
+  opacity: .59;
+}
+.pw-lens-packet {
+  stroke: #c1abff;
+  stroke-width: 2.35;
+  opacity: .8;
+  animation: pw-lens-packet-travel var(--packet-duration, 3s) linear infinite var(--packet-delay, 0s);
+}
+.pw-lens-traffic [data-kind="signal"] .pw-lens-packet { stroke: #95b1df; opacity: .5; }
+.pw-lens-traffic [data-active] .pw-lens-packet { stroke: #eee4ff; opacity: 1; stroke-width: 3.3; }
+.pw-lens-data:not([data-visible]) .pw-lens-packet { animation-play-state: paused; }
+@keyframes pw-lens-packet-travel {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: calc(-1 * var(--packet-period, 100)); }
+}
+.pw-lens-direction { fill: #c8b7ff; }
+.pw-lens-protocol rect {
+  fill: var(--lens-chip-fill);
+  stroke: #605589;
+  stroke-width: .85;
+}
+.pw-lens-protocol text {
+  fill: var(--lens-data-text);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.pw-lens-gate { color: #b1a4ee; }
+.pw-lens-gate[data-open] { color: var(--pw-attention, #f6b765); }
+.pw-lens-gate circle {
+  fill: #18182b;
+  stroke: currentColor;
+  stroke-width: 1.1;
+}
+.pw-lens-gate path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pw-lens-digital-entry {
+  color: #c2afff;
+  cursor: default;
+  outline: none;
+}
+.pw-lens-digital-entry[data-interactive] { pointer-events: auto; cursor: pointer; }
+.pw-lens-digital-entry circle {
+  fill: #1d1932;
+  stroke: #8276b6;
+  stroke-width: 1.45;
+}
+.pw-lens-digital-entry:is(:hover, :focus-visible, [aria-pressed="true"]) { color: #f0eaff; }
+.pw-lens-digital-entry:is(:hover, :focus-visible, [aria-pressed="true"]) circle {
+  fill: #322950;
+  stroke: currentColor;
+}
+.pw-lens-digital-entry text {
+  pointer-events: none;
+  fill: currentColor;
+  paint-order: stroke;
+  stroke: #101521;
+  stroke-width: 3.4;
+  stroke-linejoin: round;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.pw-lens-software rect {
+  fill: #181b2f;
+  stroke: #8076b4;
+  stroke-width: 1;
+}
+.pw-lens-chip-leader {
+  stroke: #988bbf;
+  stroke-dasharray: 2 3;
+  stroke-width: .8;
+}
+.pw-lens-software-icon {
+  fill: none;
+  stroke: #b7a8ed;
+  stroke-width: .9;
+}
+.pw-lens-software text {
+  fill: #ece6ff;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.pw-lens-software .pw-lens-assumed { fill: #b7a9d4; font-size: 8.8px; letter-spacing: .075em; }
+.pw-lens-vuln { color: #efc178; }
+.pw-lens-vuln:is([data-severity="1"], [data-severity="2"]) { color: #b2bcda; }
+.pw-lens-vuln:is([data-severity="4"], [data-severity="5"]) { color: #ff9a94; }
+.pw-lens-vuln[data-severity="advisory"] { color: #c7abff; }
+.pw-lens-vuln rect {
+  fill: #1f1b22;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+.pw-lens-vuln :is(text, circle) { fill: currentColor; }
+.pw-lens-vuln text { font-size: 10.2px; font-weight: 700; }
+.pw-lens-signal {
+  fill: none;
+  stroke: #a3b2bd;
+  stroke-opacity: .62;
+  stroke-width: 1.15;
+  stroke-dasharray: 4 4;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.pw-lens-signal.pw-lens-control-signal { stroke: #a9a9cb; stroke-opacity: .54; }
+.pw-lens-tap[data-role="actuator"] .pw-lens-signal { stroke-dasharray: 7 3 1 3; }
+.pw-lens-signal[data-active] {
+  stroke: #f3dcaa;
+  stroke-opacity: 1;
+  stroke-width: 1.75;
+}
+.pw-lens-tap-dot {
+  fill: #121921;
+  stroke: #aebec9;
+  stroke-width: 1.2;
+}
+.pw-lens-tap-dot[data-active] { fill: #f3dcaa; stroke: #f3dcaa; }
+@media (prefers-reduced-motion: reduce) {
+  .pw-lens-data, .pw-lens-connectors { transition: none; }
+  .pw-lens-packet { display: none; animation: none; }
+}

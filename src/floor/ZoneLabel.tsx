@@ -1,7 +1,7 @@
 /** Fits fixed-screen-size room names, markings and operating chips into floor geometry. */
 import { Droplet, LockKeyhole, TriangleAlert } from "lucide-react";
 import type { Area } from "@/twin/types";
-import { chooseLabelBox, type LabelBox } from "./labelPlacement";
+import { chooseLabelBox, isClear, type LabelBox } from "./labelPlacement";
 
 const statusLabels = { normal: "Normal", attention: "Attention", alarm: "Alarm" } as const;
 const shortNames: Partial<Record<Area["id"], string>> = {
@@ -64,6 +64,9 @@ export default function ZoneLabel({ area, obstacles, scale, selected, highlighte
   ], obstacles);
 
   const note = area.statusNote ?? statusLabels[area.status];
+  const abnormal = area.status !== "normal";
+  // A chip earns its ink: an abnormal state, or an operating note. A bare "Normal" is noise.
+  const informative = abnormal || Boolean(area.statusNote);
   const naturalWidth = note.length * 5.4 + 16;
   const chipWidth = Math.max(20, Math.min(naturalWidth, (right - left) * scale));
   const chipAt = (x: number, y: number, width = chipWidth): LabelBox => ({
@@ -71,17 +74,24 @@ export default function ZoneLabel({ area, obstacles, scale, selected, highlighte
   });
   const sideX = name.x + name.w + 5 / scale;
   const sideWidth = Math.min(chipWidth, (right - sideX) * scale);
+  const besideName = sideWidth >= chipWidth * 0.8 ? [chipAt(sideX, name.y, sideWidth)] : [];
+  const cornerX = right - chipWidth / scale;
   const chipOptions = [
-    ...(sideWidth >= chipWidth * 0.88 ? [chipAt(sideX, name.y, sideWidth)] : []),
-    chipAt(Math.min(name.x, right - chipWidth / scale), name.y + name.h + 2 / scale),
-    chipAt(right - chipWidth / scale, top),
-    chipAt(left, bounds.y + bounds.h / 2),
-    chipAt(right - chipWidth / scale, bounds.y + bounds.h / 2),
-    chipAt(left, bounds.y + bounds.h - pad - CHIP_HEIGHT / scale),
+    ...besideName,
+    chipAt(Math.min(name.x, cornerX), name.y + name.h + 2 / scale),
+    // The far corner only when it clears the room name; a chip never sits on the title.
+    ...(cornerX >= sideX ? [chipAt(cornerX, top)] : []),
+    // Mid-room and floor positions cross pipes and entry labels: only an abnormal state may take them.
+    ...(abnormal ? [
+      chipAt(left, bounds.y + bounds.h / 2),
+      chipAt(cornerX, bounds.y + bounds.h / 2),
+      chipAt(left, bounds.y + bounds.h - pad - CHIP_HEIGHT / scale),
+    ] : []),
   ].filter((box) => box.y + box.h <= bounds.y + bounds.h - pad + 0.01);
-  const chip = chipOptions.length && (!overlay || area.status !== "normal")
-    ? chooseLabelBox(chipOptions[0], chipOptions.slice(1), [name, ...obstacles])
-    : undefined;
+  const chipBlockers = [name, ...obstacles];
+  const clearChip = chipOptions.find((box) => isClear(box, chipBlockers));
+  const chip = !informative || !chipOptions.length || (overlay && !abnormal) ? undefined
+    : clearChip ?? (abnormal ? chooseLabelBox(chipOptions[0], chipOptions.slice(1), chipBlockers) : undefined);
   const renderedChipWidth = chip ? chip.w * scale : 0;
 
   return (

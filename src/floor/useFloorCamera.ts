@@ -1,5 +1,6 @@
 /** Applies the camera to SVG and positions the selected equipment card without React frames. */
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { CREW_FOCUS_EVENT, type CrewFocusPoint } from "@/crew/focusCrew";
 import { FOOTPRINT } from "@/equipment/types";
 import type { Point } from "@/twin/geometry";
 import type { Area, Asset, Twin, ViewMode } from "@/twin/types";
@@ -7,7 +8,9 @@ import { clientToStage, FIT, viewportFor, worldToLocal, zoomBetween, type Camera
 import { fitDrawing, type Rect } from "./fit";
 import { CAPTURE_OVERLAY, observeViewportOverlays } from "./viewportOverlays";
 
-const FLOOR_CONTROLS = `${CAPTURE_OVERLAY}, .pw-floor-caption, .pw-floor-zoom, .pw-floor-legend`;
+const SPLIT_TAG = '.pw-plant-floor[data-view="split"] .pw-floor-tag-anchor';
+const FLOOR_CONTROLS = `${CAPTURE_OVERLAY}, .pw-floor-caption, .pw-floor-zoom, .pw-floor-legend, .pw-stage-escalation .pw-es-chip, ${SPLIT_TAG}`;
+const DOCK_TAG_WIDTH = 650;
 const coverage = (value: number) => Math.max(0, Math.min(1, value));
 
 export default function useFloorCamera(
@@ -34,6 +37,10 @@ export default function useFloorCamera(
   const selected = useRef<Asset | undefined>(undefined);
   const previousSelection = useRef<string | null>(null);
   const [fitPixelsPerUnit, setFitPixelsPerUnit] = useState(0.5);
+  const [lensDetail, setLensDetail] = useState(false);
+  const lensDetailRef = useRef(false);
+  const [instrumentDetail, setInstrumentDetail] = useState(false);
+  const instrumentDetailRef = useRef(false);
   const { w, h } = canvas;
 
   const measure = useCallback(() => {
@@ -50,6 +57,13 @@ export default function useFloorCamera(
     const tag = tagRef.current;
     const asset = selected.current;
     if (!tag || !asset) return;
+    const docked = viewMode === "split" && view.width < DOCK_TAG_WIDTH;
+    tag.toggleAttribute("data-docked", docked);
+    if (docked) {
+      tag.removeAttribute("data-offscreen");
+      tag.style.transform = "";
+      return;
+    }
 
     const point = worldToLocal(asset.physical, next, view);
     const onScreen = point.x > 0 && point.y > 0 && point.x < view.width && point.y < view.height;
@@ -70,7 +84,7 @@ export default function useFloorCamera(
     tag.dataset.side = onRight ? "right" : "left";
     tag.style.setProperty("--pw-floor-anchor-y", `${Math.max(14, Math.min(height - 12, point.y - y))}px`);
     tag.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-  }, []);
+  }, [viewMode]);
 
   const paint = useCallback((smooth: boolean) => {
     const world = worldRef.current;
@@ -81,6 +95,16 @@ export default function useFloorCamera(
       placeTag(next, view);
       const absolute = next.scale * view.pixelsPerUnit;
       const relative = next.scale / fit.current.scale;
+      const detailed = relative >= 1.5;
+      if (detailed !== lensDetailRef.current) {
+        lensDetailRef.current = detailed;
+        setLensDetail(detailed);
+      }
+      const readableInstruments = absolute >= 0.95;
+      if (readableInstruments !== instrumentDetailRef.current) {
+        instrumentDetailRef.current = readableInstruments;
+        setInstrumentDetail(readableInstruments);
+      }
       if (absolute !== visualScale.current.absolute || relative !== visualScale.current.relative) {
         world.style.setProperty("--pw-floor-inverse-scale", String(1 / absolute));
         world.style.setProperty("--pw-floor-detail", String(coverage((relative - 1.12) / 0.64)));
@@ -109,6 +133,24 @@ export default function useFloorCamera(
       });
     }
   }, [paint]);
+
+  useLayoutEffect(() => {
+    function focusCrew(event: Event) {
+      const point = (event as CustomEvent<CrewFocusPoint>).detail;
+      const view = measure();
+      if (!view || view.width <= 0 || view.height <= 0 || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+      const next = pose.current;
+      const local = worldToLocal(point, next, view);
+      setCamera({
+        ...next,
+        x: next.x + (view.width / 2 - local.x) / view.pixelsPerUnit,
+        y: next.y + (view.height / 2 - local.y) / view.pixelsPerUnit,
+      }, true);
+    }
+
+    window.addEventListener(CREW_FOCUS_EVENT, focusCrew);
+    return () => window.removeEventListener(CREW_FOCUS_EVENT, focusCrew);
+  }, [measure, setCamera]);
 
   const resetFit = useCallback(() => setCamera(fit.current, true), [setCamera]);
   const zoom = useCallback((current: Camera, from: Point, to: Point, factor: number) =>
@@ -146,7 +188,8 @@ export default function useFloorCamera(
       if (!view || view.width <= 24 || view.height <= 24) return;
       const resized = view.width !== observedSize.current?.width || view.height !== observedSize.current.height;
       observedSize.current = view;
-      overlays.current = controls.map((control) => control.getBoundingClientRect()).filter(({ width, height }) => width > 0 && height > 0);
+      overlays.current = controls.filter((control) => control !== tagRef.current || view.width < DOCK_TAG_WIDTH)
+        .map((control) => control.getBoundingClientRect()).filter(({ width, height }) => width > 0 && height > 0);
       fit.current = fitDrawing(view, bounds, overlays.current);
       setFitPixelsPerUnit(fit.current.scale * view.pixelsPerUnit);
       if (resized || fitted.current) {
@@ -196,7 +239,7 @@ export default function useFloorCamera(
     }
   }, [bounds, selectedId, selectedPoint, selection, measure, measureTag, placeTag, setCamera]);
 
-  return { paneRef, svgRef, worldRef, tagRef, pose, fitPixelsPerUnit, resetFit, zoom, zoomAtCenter, setCamera, startGesture, stagePoint };
+  return { paneRef, svgRef, worldRef, tagRef, pose, fitPixelsPerUnit, lensDetail, instrumentDetail, resetFit, zoom, zoomAtCenter, setCamera, startGesture, stagePoint };
 }
 
 export type FloorCamera = ReturnType<typeof useFloorCamera>;

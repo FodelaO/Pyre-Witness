@@ -1,6 +1,5 @@
 /** Shared wordmark for the twin and its evidence page. */
 import Image from "next/image";
-import "./instruments.css";
 
 export function BrandMark() {
   return (

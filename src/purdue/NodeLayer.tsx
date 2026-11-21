@@ -2,6 +2,7 @@
 import { Boxes, ChevronDown, Globe, Laptop, Radio, Truck, UserRound } from "lucide-react";
 import type { PointerEvent } from "react";
 import { Equipment, FOOTPRINT } from "@/equipment";
+import { assetLabel } from "@/floor/assetLabel";
 import type { Asset, EntryPoint } from "@/twin/types";
 import type { Box, PurdueLayout } from "./layout";
 
@@ -86,9 +87,11 @@ export function NodeLayer({
       ))}
       {layout.cards.map(({ asset, mini, ...box }) => {
         const { id, name, origin, placement, physical, status, network } = asset;
+        const label = assetLabel(asset);
+        const accessibleName = label === name ? name : `${label} · ${name}`;
         const footprint = FOOTPRINT[physical.kind];
         const letters = physical.kind === "instrument" ? id.match(/^([A-Z]{1,3})-(\d{1,4})$/) : null;
-        const fieldGlyph = mini && letters && box.w >= 36;
+        const fieldGlyph = mini && !(layout.compact && layout.dense) && letters && box.w >= 36;
         const selected = id === selectedId;
         const linked = highlighted.has(id);
         return (
@@ -105,8 +108,8 @@ export function NodeLayer({
             data-hovered={linked}
             data-zone-active={activeZones.has(network.area)}
             aria-pressed={selected}
-            aria-label={`${id} · ${name}`}
-            title={`${id} · ${name}`}
+            aria-label={accessibleName}
+            title={accessibleName}
             onClick={() => onSelect(id)}
             onPointerEnter={(event) => { if (event.pointerType !== "touch") onHover(id, true); }}
             onPointerLeave={() => onHover(id, false)}
@@ -122,7 +125,7 @@ export function NodeLayer({
                 <Equipment kind={physical.kind} status={status} selected={selected} highlighted={linked} letters={letters?.[1]} compact />
               </svg>
             )}
-            <span className="pw-purdue-tag">{fieldGlyph ? letters[2] : id}</span>
+            <span className="pw-purdue-tag">{fieldGlyph ? letters[2] : label}</span>
           </button>
         );
       })}

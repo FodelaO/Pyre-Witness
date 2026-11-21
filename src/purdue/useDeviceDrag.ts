@@ -1,5 +1,6 @@
 /** Tracks added-device pointer drags and scrolls the diagram near the pane edges. */
 import { type MouseEvent, type PointerEvent, type RefObject, useEffect, useRef, useState } from "react";
+import { assetLabel } from "@/floor/assetLabel";
 import type { Point } from "@/twin/geometry";
 import type { Asset } from "@/twin/types";
 import { networkDropAt, type NetworkDrop, type PurdueLayout } from "./layout";
@@ -14,6 +15,7 @@ interface Tracking {
 
 interface Preview {
   id: string;
+  label: string;
   point: Point;
   target?: NetworkDrop;
 }
@@ -49,6 +51,7 @@ export function useDeviceDrag(
       && drag.client.y < bounds.top + scroller.clientHeight;
     return {
       id: drag.asset.id,
+      label: assetLabel(drag.asset),
       point,
       target: inside ? networkDropAt(layout, point, drag.asset.network.area) : undefined,
     };

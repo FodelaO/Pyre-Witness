@@ -3,7 +3,7 @@
   position: absolute;
   inset: 0;
   isolation: isolate;
-  container-type: inline-size;
+  container-type: size;
   overflow: hidden;
   background: var(--pw-floor);
   --pw-floor-mono: var(--font-geist-mono), ui-monospace, monospace;
@@ -32,6 +32,7 @@
   transform-box: view-box;
 }
 .pw-floor-world[data-easing], .pw-floor-tag-anchor[data-easing] { transition: transform var(--pw-floor-ease); }
+.pw-floor-world .pw-crew-avatar[data-state="idle"] .pw-crew-size { scale: 0.9; }
 .pw-floor-screen-label { transform: scale(var(--pw-floor-inverse-scale)); transform-origin: 0 0; transform-box: view-box; }
 .pw-floor-world[data-easing] .pw-floor-screen-label { transition: transform var(--pw-floor-ease); }
 
@@ -53,7 +54,7 @@
 .pw-floor-caption span:first-child { color: var(--pw-text); font-weight: 550; }
 
 .pw-floor-zoom,
-.pw-floor-legend,
+.pw-floor-legend-card,
 .pw-floor-tag {
   border: 1px solid var(--pw-line-strong);
   border-radius: 6px;
@@ -139,7 +140,7 @@
 .pw-floor-parking-mark { stroke: var(--pw-line-strong); stroke-dasharray: 3 4; }
 
 .pw-floor-zone-label { cursor: pointer; outline: none; }
-.pw-floor-zone-label-back { fill: var(--pw-floor); fill-opacity: 0.7; pointer-events: all; }
+.pw-floor-zone-label-back { fill: var(--pw-floor); fill-opacity: 0.7; pointer-events: var(--lens-material-hit-all, all); }
 .pw-floor-zone-label:is(:focus-visible, [data-highlighted], [aria-pressed="true"]) .pw-floor-zone-label-back {
   stroke: var(--pw-info);
   stroke-width: 0.8;
@@ -181,7 +182,7 @@
 .pw-floor-pipe-line, .pw-floor-pipe-flow, .pw-floor-pipe-hit { vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
 .pw-floor-pipe-line { stroke-width: var(--pw-pipe-width); opacity: var(--pw-pipe-ink); }
 .pw-floor-pipe-flow { stroke-width: calc(var(--pw-pipe-width) * 0.42); stroke-dasharray: 5 19; stroke: #fff; opacity: 0.48; }
-.pw-floor-pipe-hit { stroke: transparent; stroke-width: 7; pointer-events: stroke; }
+.pw-floor-pipe-hit { stroke: transparent; stroke-width: 7; pointer-events: var(--lens-material-hit-stroke, stroke); }
 .pw-floor-pipe:hover .pw-floor-pipe-line { opacity: 1; }
 .pw-floor-pipe:hover .pw-floor-pipe-flow { opacity: 0.74; }
 .pw-floor-pipe-label {
@@ -201,28 +202,41 @@
 .pw-floor-svg[data-interaction] .pw-floor-pipe-label { opacity: 0; }
 
 .pw-floor-asset { cursor: pointer; outline: none; }
-.pw-floor-asset[data-floor-added] { cursor: grab; }
+.pw-floor-asset[data-floor-added] { cursor: grab; pointer-events: auto; }
 .pw-floor-asset[data-field]:not([data-focused]):not([data-status="alarm"]):not([data-status="attention"]) .pw-floor-symbol {
   opacity: calc(0.26 + 0.74 * var(--pw-floor-detail));
 }
-.pw-floor-symbol .pw-instrument-text,
-.pw-floor-symbol .pw-instrument-leader,
-.pw-floor-symbol .pw-vessel-readout { opacity: var(--pw-floor-telemetry); transition: opacity 150ms ease; }
+:root[data-theme="light"] .pw-plant-floor[data-lens="material"] .pw-floor-asset.lens-ghost-in-material:not([data-focused], :focus-visible) {
+  opacity: calc(0.38 + 0.62 * var(--lens-data, 1));
+}
+:root[data-theme="light"] .pw-plant-floor:not([data-lens="data"]) .pw-floor-asset[data-field]:not([data-focused], [data-status="alarm"], [data-status="attention"]) .pw-floor-symbol {
+  opacity: calc(0.45 + 0.55 * var(--pw-floor-detail));
+}
+.pw-plant-floor[data-lens="data"] .pw-floor-asset.lens-ghost-in-material .pw-floor-symbol { opacity: 1; }
+.pw-floor-asset:is(.lens-ghost-in-data, .lens-ghost-in-material)[data-focused] { opacity: 1; }
+.pw-floor-field-mark { fill: none; stroke: var(--pw-text-dim); stroke-width: 1.8; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.pw-floor-asset[data-focused] .pw-floor-field-mark { stroke: var(--pw-info); }
+.pw-floor-asset[data-status="alarm"] .pw-floor-field-mark, .pw-floor-field-mark[data-placement="unsafe"] { stroke: var(--pw-alarm); }
+.pw-floor-symbol .pw-vessel-readout { display: none; }
 .pw-floor-asset-tag,
-.pw-floor-asset-reading {
+.pw-floor-asset-reading,
+.pw-floor-tank-level {
   fill: var(--pw-text-dim);
   stroke: var(--pw-floor);
-  stroke-width: 2.3;
+  stroke-width: 3.3;
   stroke-linejoin: round;
   paint-order: stroke;
   text-anchor: middle;
   font: 500 9px var(--pw-floor-mono);
   transition: opacity 150ms ease;
 }
+.pw-floor-tank-level { fill: var(--pw-text); font-weight: 630; }
 .pw-floor-asset-tag { opacity: var(--pw-floor-detail); }
 .pw-floor-asset-reading { opacity: var(--pw-floor-telemetry); }
 .pw-floor-asset[data-tag="primary"] .pw-floor-asset-tag { opacity: 1; }
 .pw-floor-asset[data-tag="secondary"] .pw-floor-asset-tag { opacity: max(var(--pw-floor-secondary), var(--pw-floor-detail)); }
+.pw-plant-floor[data-lens="data"] .pw-floor-asset.lens-ghost-in-material[data-tag="secondary"] .pw-floor-asset-tag { opacity: 1; }
+.pw-plant-floor[data-lens="both"]:not([data-lens-detail]) .pw-floor-asset:not([data-floor-added], [data-tag-focus], :focus-visible) .pw-floor-asset-tag { opacity: 0; }
 .pw-floor-asset:is([data-tag-focus], :focus-visible) .pw-floor-asset-tag { opacity: 1; fill: var(--pw-eq-accent); }
 .pw-floor-asset-hit { fill: transparent; stroke: transparent; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .pw-floor-asset:focus-visible .pw-floor-asset-hit { stroke: var(--pw-eq-accent); stroke-dasharray: 3 3; }
@@ -334,18 +348,24 @@
   z-index: 4;
   right: 16px;
   bottom: 16px;
-  padding: 8px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  width: min(520px, calc(100% - 32px));
+  min-height: 62px;
+  pointer-events: none;
 }
 
-.pw-floor-legend-heading {
-  margin: 0 4px 5px;
-  color: var(--pw-text-dim);
-  font: 550 9px/1.15 var(--pw-floor-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.pw-floor-legend-card { display: grid; gap: 2px; max-width: 100%; padding: 5px 7px; }
+.pw-floor-legend-card .lens-legend { column-gap: 11px; row-gap: 3px; font-size: 10px; }
+.pw-floor-legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 2px;
+  max-width: 100%;
+  pointer-events: auto;
 }
-
-.pw-floor-legend-items { display: grid; grid-template-columns: repeat(2, max-content); gap: 2px 6px; }
 .pw-floor-legend button {
   display: flex;
   align-items: center;
@@ -361,10 +381,10 @@
 
 .pw-floor-legend button[aria-pressed="false"] { opacity: 0.5; text-decoration: line-through; }
 
-@container (width >= 1000px) {
-  .pw-floor-legend { display: flex; align-items: center; gap: 6px; padding: 4px 7px; }
-  .pw-floor-legend-heading { margin: 0; }
-  .pw-floor-legend-items { grid-template-columns: repeat(7, max-content); gap: 2px; }
+.pw-shell:has(.lens-toggle[data-dragging]) .pw-floor-world :is(
+  .lens-material-only, .lens-data-only, .lens-ghost-in-data, .lens-ghost-in-material, .pw-lens-data, .pw-lens-connectors
+) {
+  transition: none;
 }
 
 .pw-floor-tag-anchor {
@@ -377,6 +397,8 @@
 }
 
 .pw-floor-tag-anchor[data-offscreen] { visibility: hidden; }
+.pw-floor-tag-anchor[data-docked] { top: 52px; left: 12px; width: min(172px, calc(100cqw - 24px)); }
+.pw-floor-tag-anchor[data-docked] .pw-floor-tag::before { display: none; }
 .pw-floor-tag { position: relative; padding: 10px 11px 8px; color: var(--pw-text); }
 .pw-floor-tag::before {
   position: absolute;
@@ -410,9 +432,19 @@
 .pw-floor-tag-readings dd[data-abnormal] { color: var(--pw-attention); }
 
 @container (width < 510px) {
-  .pw-floor-legend { bottom: 145px; }
+  .pw-floor-legend { bottom: 16px; min-height: 104px; }
   .pw-floor-caption { left: 10px; top: 10px; }
   .pw-floor-zoom { right: 10px; top: 10px; }
+}
+
+/* Wide, short pane (projector 1280x720 with the crew strip on top): the plant is height-limited, so the
+   legend becomes a side column and the drawing stays centred instead of being pushed to the left edge. */
+@container (min-aspect-ratio: 19/10) and (min-width: 900px) {
+  .pw-floor-legend { top: 58px; width: 204px; min-height: 0; }
+  .pw-floor-legend-card { width: 100%; gap: 4px; }
+  .pw-floor-legend-card .lens-legend, .pw-floor-legend-items { flex-direction: column; flex-wrap: nowrap; align-items: flex-start; }
+  .pw-floor-legend-card .lens-legend { row-gap: 5px; padding: 2px 4px; }
+  .pw-floor-legend-items { gap: 0; }
 }
 
 @media (pointer: coarse) {

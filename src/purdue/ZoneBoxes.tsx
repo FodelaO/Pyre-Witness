@@ -31,12 +31,13 @@ function ZoneOutline({ zone, active, highlighted }: { zone: Zone; active: boolea
 
 interface ZoneBoxesProps {
   zones: Zone[];
+  dense: boolean;
   active: ReadonlySet<string>;
   highlighted: ReadonlySet<string>;
   onSelect: (name: string) => void;
 }
 
-export function ZoneBoxes({ zones, active, highlighted, onSelect }: ZoneBoxesProps) {
+export function ZoneBoxes({ zones, dense, active, highlighted, onSelect }: ZoneBoxesProps) {
   return (
     <>
       {zones.map((zone) => <ZoneOutline key={zone.name} zone={zone} active={active.has(zone.name)} highlighted={highlighted.has(zone.name)} />)}
@@ -48,11 +49,12 @@ export function ZoneBoxes({ zones, active, highlighted, onSelect }: ZoneBoxesPro
           data-lower={lower}
           data-highlighted={highlighted.has(name)}
           aria-pressed={active.has(name)}
+          aria-label={name}
           title={name}
           onClick={() => onSelect(name)}
-          style={{ left: x + 4, top: y + 6, maxWidth: (head?.w ?? w) - 8 }}
+          style={{ left: x + 4, top: y + (dense ? 11 : 6), maxWidth: (head?.w ?? w) - 8 }}
         >
-          {name}
+          {dense && lower && (head?.w ?? w) < 70 ? name.replace(/^Cell /, "").replace(/^Utilities$/, "Util.") : name}
         </button>
       ))}
     </>

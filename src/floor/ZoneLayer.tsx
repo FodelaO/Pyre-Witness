@@ -86,7 +86,15 @@ export const ZoneLabels = memo(function ZoneLabels({ areas, scale, selectedId, h
   const fixtures = useTwinStore(useShallow((state) => state.twin.assets
     .filter(({ origin, physical }) => origin === "seed" && !smallEquipment.has(physical.kind))
     .map(({ physical }) => physical)));
-  const obstacles = useMemo(() => fixtures.map(reservedSpace), [fixtures]);
+  const entries = useTwinStore((state) => state.twin.entryPoints);
+  // Walk-in entry symbols carry a screen-sized name below them; room labels must not land on either.
+  const obstacles = useMemo(() => [
+    ...fixtures.map(reservedSpace),
+    ...entries.filter(({ kind }) => kind === "physical" || kind === "supply").map(({ x, y, name }): LabelBox => {
+      const halfW = Math.max(16, name.length * 2.9 / scale);
+      return { x: x - halfW, y: y - 16, w: halfW * 2, h: 32 + 14 / scale };
+    }),
+  ], [fixtures, entries, scale]);
   return (
     <g className="pw-floor-zone-labels" pointerEvents="none">
       {areas.map((area) => (

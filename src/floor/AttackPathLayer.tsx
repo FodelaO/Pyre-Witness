@@ -1,5 +1,6 @@
 /** Visualizes the risk report's existing paths on the fictional floor plan. */
 import { memo, useId, useMemo } from "react";
+import { useRunStore } from "@/pipeline/runStore";
 import { containsPoint, distance, entryPointById, nodePosition, type Point } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import { MEDIA, type Asset, type AttackPath, type AttackStep, type Twin } from "@/twin/types";
@@ -104,6 +105,7 @@ function placeTechniqueLabels(segments: Segment[]) {
 
 export default memo(function AttackPathLayer({ twin, focused }: { twin: Twin; focused: ReadonlySet<string> }) {
   const paths = useTwinStore((state) => state.risk.paths);
+  const captured = useRunStore((state) => state.placedAssetId);
   const arrow = `${useId()}-risk-arrow`;
 
   const segments = useMemo(() => {
@@ -133,7 +135,7 @@ export default memo(function AttackPathLayer({ twin, focused }: { twin: Twin; fo
   }, [twin, paths]);
 
   const [dim, emphasized] = useMemo(() => {
-    const active = new Set(paths.filter((path) => pathHasFocus(path, focused)));
+    const active = new Set(paths.filter((path) => (captured && path.causedBy === captured) || pathHasFocus(path, focused)));
     const dim: typeof segments = [];
     const emphasized: typeof segments = [];
     for (const [key, segment] of segments) {
@@ -142,7 +144,7 @@ export default memo(function AttackPathLayer({ twin, focused }: { twin: Twin; fo
     }
     placeTechniqueLabels(emphasized.map(([, segment]) => segment));
     return [dim, emphasized];
-  }, [segments, paths, focused]);
+  }, [segments, paths, focused, captured]);
 
   if (!segments.length) return null;
   return (

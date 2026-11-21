@@ -1,0 +1,76 @@
+/* Shared drawing palette, typography and accessibility defaults. */
+:root {
+  color-scheme: dark;
+
+  /* surfaces */
+  --pw-bg: #070b10;
+  --pw-floor: #0b1117;
+  --pw-panel: #0e151d;
+  --pw-panel-2: #131c26;
+  --pw-line: #1e2a37;
+  --pw-line-strong: #2f4053;
+  --pw-grid: rgba(120, 150, 180, 0.06);
+
+  /* text */
+  --pw-text: #d7e1ec;
+  --pw-text-dim: #8797a9;
+  --pw-text-faint: #55657a;
+
+  /* equipment */
+  --pw-eq-stroke: #93a7bc;
+  --pw-eq-fill: #151f2a;
+  --pw-eq-fill-2: #1d2a38;
+  --pw-eq-accent: #d2deea;
+
+  /* process media */
+  --pw-m-water: #4cc3ff;
+  --pw-m-syrup: #f5b041;
+  --pw-m-product: #c97b45;
+  --pw-m-co2: #e2e8f0;
+  --pw-m-glycol: #5eead4;
+  --pw-m-ammonia: #a3e635;
+  --pw-m-cip: #e879f9;
+  --pw-m-power: #facc15;
+  --pw-m-network: #7b8898;
+
+  /* state */
+  --pw-ok: #34d399;
+  --pw-attention: #fbbf24;
+  --pw-alarm: #ff3b5c;
+  --pw-info: #60a5fa;
+
+  /* brand + crew */
+  --pw-ember: #ff7a2f;
+  --pw-crew-scout: #4cc3ff;
+  --pw-crew-architect: #a78bfa;
+  --pw-crew-inspector: #34d399;
+  --pw-crew-chief: #ff7a2f;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--pw-bg);
+  color: var(--pw-text);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.pw-mono {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-feature-settings: "tnum" 1;
+}
+
+.pw-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--pw-line-strong) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

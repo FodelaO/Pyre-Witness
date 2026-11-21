@@ -49,6 +49,7 @@ export interface PurdueLayout {
   railWidth: number;
   diagramRight: number;
   compact: boolean;
+  dense: boolean;
   bands: Band[];
   zones: Zone[];
   cards: AssetCard[];
@@ -163,8 +164,11 @@ const MIN_BAND_HEIGHT: Record<PurdueLevel, number> = {
 const COMPACT_BAND_HEIGHT: Record<PurdueLevel, number> = {
   5: 62, 4: 78, 3.5: 82, 3: 78, 2: 78, 1: 93, 0: 66,
 };
+const DENSE_BAND_HEIGHT: Record<PurdueLevel, number> = {
+  5: 47, 4: 49, 3.5: 50, 3: 49, 2: 52, 1: 63, 0: 46,
+};
 
-function grid(count: number, width: number, minWidth: number, maxWidth: number, height: number): Box[] {
+function grid(count: number, width: number, minWidth: number, maxWidth: number, height: number, rowGap = GRID_GAP): Box[] {
   const columns = Math.max(1, Math.min(count, Math.floor((width + GRID_GAP) / (minWidth + GRID_GAP))));
   const pitch = Math.min((width + GRID_GAP) / columns, maxWidth + 22);
   const w = Math.min(maxWidth, pitch - GRID_GAP);
@@ -172,7 +176,7 @@ function grid(count: number, width: number, minWidth: number, maxWidth: number, 
     const inRow = Math.min(columns, count - Math.floor(index / columns) * columns);
     return {
       x: (width - (inRow - 1) * pitch - w) / 2 + (index % columns) * pitch,
-      y: Math.floor(index / columns) * (height + GRID_GAP),
+      y: Math.floor(index / columns) * (height + rowGap),
       w,
       h: height,
     };
@@ -184,6 +188,18 @@ export function buildPurdueLayout(
   viewportWidth: number,
   expanded: ReadonlySet<string> = new Set(),
   revealed: ReadonlySet<string> = new Set(),
+  viewportHeight = Infinity,
+): PurdueLayout {
+  const normal = packPurdueLayout(twin, viewportWidth, expanded, revealed, false);
+  return normal.height <= viewportHeight ? normal : packPurdueLayout(twin, viewportWidth, expanded, revealed, true);
+}
+
+function packPurdueLayout(
+  twin: Twin,
+  viewportWidth: number,
+  expanded: ReadonlySet<string>,
+  revealed: ReadonlySet<string>,
+  dense: boolean,
 ): PurdueLayout {
   const compact = viewportWidth < 850;
   const railWidth = viewportWidth < 575 ? 76 : compact ? 80 : 137;
@@ -193,12 +209,17 @@ export function buildPurdueLayout(
   const rightPad = side.length ? (compact ? 28 : 46) : (compact ? 9 : 14);
   const laneGap = compact ? 4 : 11;
   const zonePad = compact ? 3 : 9;
-  const nodeHeight = compact ? 34 : 42;
-  const header = compact ? 22 : 25;
-  const rowPad = compact ? 9 : 12;
+  const nodeHeight = dense ? 22 : compact ? 34 : 42;
+  // Dense: the zone name sits below the gate that straddles the zone's top edge, so the header is deeper.
+  const header = dense ? 23 : compact ? 22 : 25;
+  const rowPad = dense ? 5 : compact ? 9 : 12;
+  const rowGap = dense ? 3 : GRID_GAP;
+  const groupHeight = dense ? 20 : GROUP_HEIGHT;
+  const miniHeight = dense ? 19 : MINI_HEIGHT;
   const contents = collectZones(twin);
   const lanes = assignLanes(contents);
-  const width = Math.max(viewportWidth, left + lanes * (compact ? 43 : 48) + (lanes - 1) * laneGap + rightPad);
+  const minLaneWidth = compact ? (dense ? 42 : 43) : 48;
+  const width = Math.max(viewportWidth, left + lanes * minLaneWidth + (lanes - 1) * laneGap + rightPad);
   const laneWidth = (width - left - rightPad - (lanes - 1) * laneGap) / lanes;
   const diagramRight = width - rightPad;
   const remoteZone = contents.find((zone) => zone.name === PURDUE_LEVELS[0].name && zone.first === 0)
@@ -213,9 +234,9 @@ export function buildPurdueLayout(
   let y = 0;
 
   for (const [index, { level }] of PURDUE_LEVELS.entries()) {
-    let bandHeight = (compact ? COMPACT_BAND_HEIGHT : MIN_BAND_HEIGHT)[level];
+    let bandHeight = (dense ? DENSE_BAND_HEIGHT : compact ? COMPACT_BAND_HEIGHT : MIN_BAND_HEIGHT)[level];
     const remoteGrid = !remoteZone && level === TOP
-      ? grid(remote.length, diagramRight - left, 115, 166, 27)
+      ? grid(remote.length, diagramRight - left, 115, 166, dense ? 22 : 27, rowGap)
       : [];
     remoteGrid.forEach((box, i) => {
       entries.push({ ...box, x: left + box.x, y: y + 12 + box.y, entry: remote[i], external: true });
@@ -237,13 +258,13 @@ export function buildPurdueLayout(
       const placeGrid = (boxes: Box[], place: (box: Box, i: number) => void) => {
         boxes.forEach((box, i) => place({ ...box, x: zx + zonePad + box.x, y: y + rowY + box.y }, i));
         const last = boxes.at(-1);
-        if (last) rowY += last.y + last.h + GRID_GAP;
+        if (last) rowY += last.y + last.h + rowGap;
       };
 
-      placeGrid(grid(topEntries.length, inner, 104, 159, 26), (box, i) =>
+      placeGrid(grid(topEntries.length, inner, 104, 159, dense ? 22 : 26, rowGap), (box, i) =>
         entries.push({ ...box, entry: topEntries[i], external: true }),
       );
-      placeGrid(grid(assets.length, inner, minNodeWidth, maxNodeWidth, nodeHeight), (box, i) => {
+      placeGrid(grid(assets.length, inner, minNodeWidth, maxNodeWidth, nodeHeight, rowGap), (box, i) => {
         const asset = assets[i];
         cards.push({ ...box, asset, mini: false });
         anchors.set(asset.id, { ...box, zone: zone.name, level });
@@ -251,19 +272,19 @@ export function buildPurdueLayout(
       if (fields.length > 0) {
         const visibleFields = isExpanded ? fields : fields.filter((asset) => revealed.has(asset.id));
         const w = Math.min(inner, 100);
-        const group = { x: zx + (zw - w) / 2, y: y + rowY, w, h: GROUP_HEIGHT };
+        const group = { x: zx + (zw - w) / 2, y: y + rowY, w, h: groupHeight };
         fieldGroups.push({ ...group, zone: zone.name, count: fields.length, expanded: isExpanded });
         for (const asset of fields) anchors.set(asset.id, { ...group, zone: zone.name, level });
-        rowY += GROUP_HEIGHT + GRID_GAP;
-        placeGrid(grid(visibleFields.length, inner, 46, 80, MINI_HEIGHT), (box, i) => {
+        rowY += groupHeight + rowGap;
+        placeGrid(grid(visibleFields.length, inner, 46, 80, miniHeight, rowGap), (box, i) => {
           const asset = visibleFields[i];
           cards.push({ ...box, asset, mini: true });
           anchors.set(asset.id, { ...box, zone: zone.name, level });
         });
-        if (!visibleFields.length) rowY += MINI_HEIGHT + GRID_GAP;
+        if (!visibleFields.length && !dense) rowY += miniHeight + rowGap;
       }
       if (rowY > rowPad + (index === zone.first ? header : 0)) {
-        bandHeight = Math.max(bandHeight, rowY + rowPad - GRID_GAP);
+        bandHeight = Math.max(bandHeight, rowY + rowPad - rowGap);
       }
     }
     bands.push({ level, y, h: bandHeight });
@@ -301,7 +322,7 @@ export function buildPurdueLayout(
     };
   }).sort((a, b) => a.first - b.first || a.x - b.x);
 
-  return { width, height: y, railWidth, diagramRight, compact, bands, zones, cards, fieldGroups, entries, anchors };
+  return { width, height: y, railWidth, diagramRight, compact, dense, bands, zones, cards, fieldGroups, entries, anchors };
 }
 
 export function zoneWidthAt(zone: Zone, y: number): number {

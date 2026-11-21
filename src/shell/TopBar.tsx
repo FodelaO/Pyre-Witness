@@ -2,73 +2,65 @@
 "use client";
 
 import Link from "next/link";
-import { Factory, Network, SquareSplitHorizontal } from "lucide-react";
-import type { KeyboardEvent } from "react";
+import { Layers3, Map } from "lucide-react";
+import ServicesChip from "@/health/ServicesChip";
+import LensToggle from "@/layers/LensToggle";
+import type { LensMode } from "@/layers/lensStore";
+import { displayedRiskChange, riskDelta, riskScore } from "@/panel/riskNumber";
+import ThemeToggle from "@/theme/ThemeToggle";
 import { useTwinStore } from "@/twin/store";
-import type { ViewMode } from "@/twin/types";
+import View3DToggle from "@/view3d/View3DToggle";
 import { useWatchStore } from "@/watch/watchStore";
 import { BrandMark } from "./BrandMark";
 import { watchStatus } from "./watchStatus";
 
-const VIEWS: readonly { id: ViewMode; label: string; short: string; icon: typeof Factory }[] = [
-  { id: "floor", label: "Plant floor", short: "Floor", icon: Factory },
-  { id: "purdue", label: "Purdue network map", short: "Purdue", icon: Network },
-  { id: "split", label: "Side by side", short: "Split", icon: SquareSplitHorizontal },
-];
-
-function viewKeys(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-  const keys: Record<string, number> = {
-    ArrowLeft: (index + VIEWS.length - 1) % VIEWS.length,
-    ArrowRight: (index + 1) % VIEWS.length,
-    Home: 0,
-    End: VIEWS.length - 1,
-  };
-  const next = VIEWS[keys[event.key]];
-  if (!next) return;
-  event.preventDefault();
-  useTwinStore.getState().setView(next.id);
-  event.currentTarget.parentElement?.querySelector<HTMLButtonElement>('[data-view="' + next.id + '"]')?.focus();
-}
-
 type Props = {
+  mode: LensMode;
+  levels: boolean;
+  lensNotice: boolean;
   drawerOpen: boolean;
   watchOpen: boolean;
+  onToggleLevels: () => void;
   onToggleDrawer: (trigger: HTMLButtonElement) => void;
   onToggleWatch: (trigger: HTMLButtonElement) => void;
 };
 
-export function TopBar({ drawerOpen, watchOpen, onToggleDrawer, onToggleWatch }: Props) {
-  const view = useTwinStore((state) => state.view);
-  const setView = useTwinStore((state) => state.setView);
+export function TopBar({ mode, levels, lensNotice, drawerOpen, watchOpen, onToggleLevels, onToggleDrawer, onToggleWatch }: Props) {
   const plant = useTwinStore((state) => state.twin.plant);
   const risk = useTwinStore((state) => state.risk);
   const baseline = useTwinStore((state) => state.baselineScore);
   const watch = useWatchStore((state) => watchStatus(state.local));
-  const score = Math.round(risk.score);
-  const delta = score - Math.round(baseline);
+  const score = riskScore(risk.score);
+  const delta = displayedRiskChange(risk.score, baseline);
 
   const riskReadout = (
     <>
       <span>Risk</span>
       <strong className="pw-mono">{score}</strong>
-      {delta !== 0 && <span className="pw-top-delta pw-mono" data-increased={delta > 0}>{delta > 0 ? "+" : ""}{delta}</span>}
+      {delta !== 0 && <span className="pw-top-delta pw-mono" data-increased={delta > 0}>{riskDelta(delta)}</span>}
     </>
   );
   const band = "Plant risk " + score + " of 100, " + risk.band;
 
   return (
     <header className="pw-top">
-      <div className="pw-top-context"><BrandMark /></div>
-      <p className="pw-top-disclosure"><strong>Simulated plant:</strong> {plant.name}, {plant.line} (fictional)</p>
-      <div className="pw-top-views" role="tablist" aria-label="Twin view">
-        {VIEWS.map(({ id, label, short, icon: Icon }, index) => (
-          <button key={id} className="pw-tool-button" role="tab" type="button" data-view={id}
-            id={"pw-view-" + id} aria-controls="pw-drawing"
-            aria-selected={view === id} aria-label={label} tabIndex={view === id ? 0 : -1}
-            data-pw-tip={label} onKeyDown={(event) => viewKeys(event, index)} onClick={() => setView(id)}>
-            <Icon size={17} strokeWidth={1.65} aria-hidden /><span>{short}</span>
+      <div className="pw-top-context">
+        <BrandMark />
+        <p className="pw-top-disclosure" title={`Simulated plant: ${plant.name}, ${plant.line} (fictional)`}>
+          <strong>Simulated plant:</strong> {plant.name}, {plant.line} (fictional)
+        </p>
+      </div>
+      <div className="pw-top-lens">
+        <View3DToggle />
+        <LensToggle />
+        {mode === "data" && (
+          <button type="button" className="pw-tool-button pw-levels-toggle" aria-controls="pw-drawing"
+            aria-label="Purdue Levels" aria-pressed={levels}
+            title={levels ? "Show plan only" : "Show Purdue levels"} onClick={onToggleLevels}>
+            {levels ? <Map size={14} aria-hidden /> : <Layers3 size={14} aria-hidden />}
+            <span>{levels ? "Plan" : "Levels"}</span>
           </button>
-        ))}
+        )}
       </div>
       <div className="pw-top-actions">
         <button type="button" className="pw-top-watch" aria-expanded={watchOpen} aria-controls="pw-watch"
@@ -76,13 +68,18 @@ export function TopBar({ drawerOpen, watchOpen, onToggleDrawer, onToggleWatch }:
           onClick={(event) => onToggleWatch(event.currentTarget)}>
           <span className="pw-status-dot" data-status={watch} aria-hidden /><span className="pw-top-watch-label">Watch</span>
         </button>
+        <ServicesChip />
         <Link className="pw-top-proof" href="/proof">Proof</Link>
+        <ThemeToggle />
         <span className="pw-top-risk pw-top-risk-desktop" data-band={risk.band} title={band}>{riskReadout}</span>
         <button className="pw-top-risk pw-top-risk-mobile" type="button" data-band={risk.band}
           aria-controls="pw-results" aria-expanded={drawerOpen} aria-label={"Plant details · " + band}
           data-pw-tip="Plant details" data-pw-tip-align="end" onClick={(event) => onToggleDrawer(event.currentTarget)}>
           {riskReadout}
         </button>
+      </div>
+      <div className="pw-lens-notice" role="status">
+        {lensNotice && <span>Lens: Both, this device changes the data pipeline</span>}
       </div>
     </header>
   );

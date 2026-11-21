@@ -12,6 +12,10 @@ function overlap(a: LabelBox, b: LabelBox): number {
   return width * height;
 }
 
+export function isClear(box: LabelBox, obstacles: LabelBox[]): boolean {
+  return obstacles.every((obstacle) => overlap(box, obstacle) === 0);
+}
+
 export function chooseLabelBox(first: LabelBox, alternatives: LabelBox[], obstacles: LabelBox[]): LabelBox {
   let result = first;
   let leastOverlap = Infinity;

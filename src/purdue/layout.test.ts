@@ -44,6 +44,19 @@ const fixture: Twin = {
 };
 
 describe("Purdue diagram layout", () => {
+  it("keeps L0 and the revealed selection within the projector's short Levels pane", () => {
+    const layout = buildPurdueLayout(SEED_TWIN, 431, new Set(), new Set(["CT-210"]), 550);
+    expect(layout.dense).toBe(true);
+    expect(layout.width).toBe(431);
+    expect(layout.height).toBeLessThanOrEqual(550);
+    expect(layout.bands.at(-1)?.level).toBe(0);
+    expect(layout.cards.find(({ asset }) => asset.id === "CT-210")?.mini).toBe(true);
+    for (const card of layout.cards) {
+      const band = layout.bands.find(({ level }) => level === card.asset.network.level)!;
+      expect(card.y + card.h).toBeLessThanOrEqual(band.y + band.h);
+    }
+  });
+
   it("links a physical room across network zones and an asset-free area through its entries", () => {
     const links = linkPhysicalAreas(SEED_TWIN);
     expect(links.get("control_room")?.zones).toEqual(new Set(["Site operations", "OT DMZ"]));

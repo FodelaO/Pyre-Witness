@@ -10,7 +10,8 @@ export default memo(function Blueprint({ plant }: { plant: Twin["plant"] }) {
   const { x, y, w, h } = plant.building;
   const wallInset = 5;
   const scaleX = x + 3;
-  const scaleY = Math.max(20, y - 22);
+  // Between the outer wall and the network perimeter drawn through the entry points, touching neither.
+  const scaleY = Math.max(20, y - 14);
 
   return (
     <g className="pw-floor-blueprint" pointerEvents="none" aria-hidden="true">

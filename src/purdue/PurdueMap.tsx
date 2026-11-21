@@ -54,7 +54,7 @@ export default function PurdueMap() {
   const { selectedId, hoveredId, highlightIds, selectedArea, focusedAreas, highlighted, focused } = useTwinFocus(twin);
   const select = useTwinStore((state) => state.select);
   const hover = useTwinStore((state) => state.hover);
-  const [width, setWidth] = useState(850);
+  const [size, setSize] = useState({ width: 850, height: Infinity });
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [localZone, setLocalZone] = useState<string | null>(null);
   const [inspectedId, setInspectedId] = useState<string | null>(null);
@@ -75,10 +75,11 @@ export default function PurdueMap() {
   ]), [selectedField, hoveredField, highlightIds, hiddenFields]);
   const layout = useMemo(() => buildPurdueLayout(
     twin,
-    width,
+    size.width,
     expanded,
     revealed,
-  ), [twin, width, expanded, revealed]);
+    size.height,
+  ), [twin, size, expanded, revealed]);
   const physicalLinks = useMemo(() => linkPhysicalAreas(twin), [twin]);
   const linkedZones = new Set(focusedAreas.flatMap(({ id }) => [...(physicalLinks.get(id)?.zones ?? [])]));
   const linkedEntries = new Set(focusedAreas.flatMap(({ id }) => physicalLinks.get(id)?.entries ?? []));
@@ -94,7 +95,11 @@ export default function PurdueMap() {
   useLayoutEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    const fit = () => { if (scroller.clientWidth > 0) setWidth(scroller.clientWidth); };
+    const fit = () => {
+      const { clientWidth: width, clientHeight: height } = scroller;
+      if (width > 0 && height > 0) setSize((previous) =>
+        previous.width === width && previous.height === height ? previous : { width, height });
+    };
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(scroller);
@@ -186,12 +191,14 @@ export default function PurdueMap() {
         <div
           className="pw-purdue-canvas"
           data-compact={layout.compact}
+          data-dense={layout.dense || undefined}
           data-dragging={!!drag.preview}
           style={{ width: layout.width, height: layout.height }}
         >
           <LevelBands bands={layout.bands} railWidth={layout.railWidth} />
           <ZoneBoxes
             zones={layout.zones}
+            dense={layout.dense}
             active={activeZones}
             highlighted={linkedZones}
             onSelect={selectZone}
@@ -235,7 +242,7 @@ export default function PurdueMap() {
                 top: Math.max(0, Math.min(layout.height - 24, drag.preview.point.y + 9)),
               }}
             >
-              {drag.preview.id}
+              {drag.preview.label}
               {drag.preview.target && <small>{drag.preview.target.area} · L{drag.preview.target.level}</small>}
             </span>
           )}
