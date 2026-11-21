@@ -28,7 +28,7 @@ export default function Review3D() {
     const wanted = query.get("lens");
     const mode = LENS_MODES.find((item) => item === wanted);
     if (mode) useLensStore.getState().setMode(mode);
-    // Selecting after the fly-in behaves like a selection made in another view: the camera frames it.
+    // Select once the 3D scene is mounted so the camera can frame the asset.
     const select = query.get("select");
     const timer = select ? window.setTimeout(() => useTwinStore.getState().select(select), 2200) : null;
     const hover = query.get("hover");

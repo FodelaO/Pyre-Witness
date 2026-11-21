@@ -101,6 +101,7 @@ uniform vec3 uLightDir;
 uniform vec3 uBg;
 uniform vec3 uSky;
 uniform vec3 uGround;
+uniform bool uDaylight;
 uniform vec2 uFog;
 uniform vec3 uEdgeColor;
 uniform vec3 uSelColor;
@@ -140,7 +141,7 @@ void main() {
   for (int i = 0; i < ${MAX_HIGHLIGHTS}; i++) { if (same(id, uHi[i])) highlighted = true; }
 
   float dist = length(vWorld - uEye);
-  float fog = smoothstep(uFog.x, uFog.y, dist);
+  float fog = smoothstep(uFog.x, uFog.y, dist) * (uDaylight ? 0.45 : 1.0);
 
   if (uPass == 1) {
     float strength = vExtra.w;
@@ -164,7 +165,9 @@ void main() {
     float along = vLocal.y * vScale.y;
     float band = fract(along / 2.4 - uTime * 0.55 * uMotion * param);
     float pulse = smoothstep(0.0, 0.08, band) * (1.0 - smoothstep(0.34, 0.42, band));
-    base = mix(base * 0.62, base * 1.18 + 0.06, param > 0.5 ? pulse : 0.0);
+    vec3 start = base * (uDaylight ? 0.85 : 0.62);
+    vec3 crest = base * 1.18 + (uDaylight ? 0.015 : 0.06);
+    base = mix(start, crest, param > 0.5 ? pulse : 0.0);
     emissive = param > 0.5 ? 0.55 + 0.25 * pulse : 0.3;
   } else if (pattern == 2) {
     float along = vLocal.x * vScale.x;
@@ -183,21 +186,22 @@ void main() {
     float lineMinor = 1.0 - min(min(minor.x, minor.y), 1.0);
     float lineMajor = 1.0 - min(min(major.x, major.y), 1.0);
     float fade = 1.0 - smoothstep(60.0, 190.0, dist);
-    base += uEdgeColor * (lineMinor * 0.035 + lineMajor * 0.075) * fade;
+    float grid = (lineMinor * 0.035 + lineMajor * 0.075) * fade;
+    base = uDaylight ? mix(base, uEdgeColor, grid) : base + uEdgeColor * grid;
     emissive = 1.0;
   } else if (pattern == 5) {
     float d = length(vLocal.xz) * 2.0;
     alpha *= 1.0 - smoothstep(0.25, 1.0, d);
     emissive = 1.0;
   } else if (pattern == 6) {
-    float ring = ringMask(0.86, 0.915);
-    float on = selected ? 1.0 : (hovered ? 0.8 : (highlighted ? 0.65 : 0.0));
+    float ring = ringMask(0.82, 0.94);
+    float on = selected ? 1.0 : (hovered ? 0.92 : (highlighted ? 0.8 : 0.0));
     base = selected ? uSelColor : uHoverColor;
     alpha = ring * on;
     emissive = 1.0;
   } else if (pattern == 7) {
     float d = length(vLocal.xz) * 2.0;
-    float ring = ringMask(0.87, 0.93);
+    float ring = ringMask(0.81, 0.94);
     alpha *= ring + (1.0 - smoothstep(0.0, 0.9, d)) * 0.10;
     emissive = 1.0;
   } else if (pattern == 8) {
@@ -222,10 +226,10 @@ void main() {
   float lambert = max(dot(n, uLightDir), 0.0);
   float wrap = dot(n, uLightDir) * 0.5 + 0.5;
   vec3 ambient = mix(uGround, uSky, n.y * 0.5 + 0.5);
-  vec3 lit = base * (ambient + vec3(0.62) * lambert + vec3(0.16) * wrap);
+  vec3 lit = base * (ambient + (uDaylight ? 0.46 : 0.62) * lambert + 0.16 * wrap);
   vec3 view = normalize(uEye - vWorld);
   float rim = pow(1.0 - max(dot(n, view), 0.0), 3.0);
-  lit += uEdgeColor * rim * 0.10;
+  lit += uEdgeColor * rim * (uDaylight ? 0.03 : 0.10);
   vec3 color = mix(lit, base, clamp(emissive, 0.0, 1.0));
 
   if (pattern != 6 && pattern != 7 && pattern != 5 && pattern != 4) {

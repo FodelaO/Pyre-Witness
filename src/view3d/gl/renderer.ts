@@ -228,10 +228,16 @@ export class Renderer {
     const l = Math.hypot(LIGHT[0], LIGHT[1], LIGHT[2]);
     gl.uniform3f(p.uniform("uLightDir"), LIGHT[0] / l, LIGHT[1] / l, LIGHT[2] / l);
     gl.uniform3fv(p.uniform("uBg"), pal.bg);
-    gl.uniform3f(p.uniform("uSky"), 0.62, 0.68, 0.78);
-    gl.uniform3f(p.uniform("uGround"), 0.3, 0.33, 0.4);
+    gl.uniform1i(p.uniform("uDaylight"), pal.daylight ? 1 : 0);
+    if (pal.daylight) {
+      gl.uniform3f(p.uniform("uSky"), 0.57, 0.59, 0.61);
+      gl.uniform3f(p.uniform("uGround"), 0.32, 0.34, 0.37);
+    } else {
+      gl.uniform3f(p.uniform("uSky"), 0.62, 0.68, 0.78);
+      gl.uniform3f(p.uniform("uGround"), 0.3, 0.33, 0.4);
+    }
     gl.uniform2f(p.uniform("uFog"), frame.fog[0], frame.fog[1]);
-    gl.uniform3fv(p.uniform("uEdgeColor"), pal.eqStroke);
+    gl.uniform3fv(p.uniform("uEdgeColor"), pal.outline);
     gl.uniform3fv(p.uniform("uSelColor"), pal.info);
     gl.uniform3fv(p.uniform("uHoverColor"), pal.eqAccent);
     gl.uniform1f(p.uniform("uSel"), frame.selected);

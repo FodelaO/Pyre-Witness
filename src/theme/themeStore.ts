@@ -9,12 +9,13 @@ type ThemeState = {
 
 const storageKey = "pw-theme";
 
+/** Light (the engineering drawing by day) is the default; dark only when the viewer chose it. */
 function readTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "light";
   try {
-    return window.localStorage.getItem(storageKey) === "light" ? "light" : "dark";
+    return window.localStorage.getItem(storageKey) === "dark" ? "dark" : "light";
   } catch {
-    return "dark";
+    return "light";
   }
 }
 

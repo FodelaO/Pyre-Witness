@@ -6,15 +6,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Component, useEffect, type ReactNode } from "react";
+import { Component, useEffect, useLayoutEffect, type ReactNode } from "react";
 import { useSimStore } from "@/sim/simStore";
+import { useDropStore } from "@/twin/dropPoint";
 import { SIMULATION_NOTICE, useView3DStore } from "./view3dStore";
 import "./view3d.css";
 
-const Plant3D = dynamic(() => import("./Plant3D"), {
-  ssr: false,
-  loading: () => <div className="pw3d-loading pw-mono">3D VIEW</div>,
-});
+const Plant3D = dynamic(() => import("./Plant3D"), { ssr: false });
 
 class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -44,18 +42,21 @@ function Notice({ text }: { text: string }) {
 export default function View3DStage() {
   const enabled = useView3DStore((state) => state.enabled);
   const notice = useView3DStore((state) => state.notice);
-  // Simulation overlays (incident effects, timeline stages) are drawn on the 2D floor only: while a
-  // scenario is loaded the view is 2D, with a one-line notice instead of a 3D plant where nothing happens.
-  const simulating = useSimStore((state) => state.activeScenario !== null);
-  useEffect(() => {
-    if (enabled && simulating) useView3DStore.getState().showIn2D(SIMULATION_NOTICE);
-  }, [enabled, simulating]);
+  // The incident end state is drawn in 2D only: stay in 2D until the simulation is reset.
+  const simulating = useSimStore((state) => state.mode !== "idle");
+  const pinning = useDropStore((state) => state.armed);
+  useLayoutEffect(() => {
+    const view = useView3DStore.getState();
+    if (simulating) view.showIn2D(SIMULATION_NOTICE);
+    else if (!pinning) view.restoreAfterSimulation();
+  }, [simulating, pinning]);
   if (!enabled) return notice ? <Notice text={notice} /> : null;
   return (
     <div className="pw3d-stage">
       <Boundary>
         <Plant3D />
       </Boundary>
+      <div className="pw3d-loading pw-mono" role="status">Loading 3D plant…</div>
     </div>
   );
 }

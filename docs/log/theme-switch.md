@@ -1,7 +1,7 @@
 <!-- Delivery and verification notes for the global theme preference. -->
 # Theme switch
 
-`src/theme/themeStore.ts` stores the preference under `pw-theme` and applies it to the document. The inline script in `src/app/layout.tsx` selects the palette before the page renders. Dark is the default. `src/theme/ThemeToggle.tsx` uses the shared instrument button and gives the sun or moon an accessible action name.
+`src/theme/themeStore.ts` stores the preference under `pw-theme` and applies it to the document. The inline script in `src/app/layout.tsx` selects the palette before the page renders. Light is the default since 15:00 on Nov 21 (product owner's request); dark is kept when the viewer chooses it. The 3D view is also the default view (`pw-view` = `3d` | `2d`, saved only when the viewer picks a view; automatic switches to 2D for pin placement and simulations are not saved). `src/theme/ThemeToggle.tsx` uses the shared instrument button and gives the sun or moon an accessible action name.
 
 `src/theme/light.css` uses warm paper, graphite linework and mid-steel equipment. It redefines all 32 drawing tokens imported by `src/app/globals.css`. Scoped rules cover hard-coded inks, fills and overlays in the schematic, data and Purdue lenses, crew, capture, transcript and proof surfaces.
 

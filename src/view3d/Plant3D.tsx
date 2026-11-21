@@ -1,5 +1,5 @@
 /**
- * Optional 3D view of the live digital twin (hand-written WebGL2, no dependencies).
+ * 3D view of the live digital twin (hand-written WebGL2, no dependencies).
  * Reads the same stores as the 2D floor: twin, risk, linked selection / hover, lens, crew, run.
  * Default export, no props. Mount it through View3DStage, which adds the lazy load and fallback.
  */
@@ -15,7 +15,7 @@ import { useSimStore } from "@/sim/simStore";
 import { useTwinStore } from "@/twin/store";
 import { arcParts, attackSegments, mergePaths, pathIsActive } from "./attackArcs";
 import {
-  cameraMatrices, defaultPose, dropOffset, easeInOutCubic, easeOutCubic, framePose, mixPose, type Pose,
+  cameraMatrices, defaultPose, dropOffset, easeInOutCubic, framePose, mixPose, type Pose,
 } from "./camera";
 import { attachControls } from "./controls";
 import { packParts } from "./gl/instances";
@@ -24,12 +24,11 @@ import { Renderer, type FrameState } from "./gl/renderer";
 import { MAX_HIGHLIGHTS, PATTERN } from "./gl/shaders";
 import Overlay, { type OverlayHandle } from "./Overlay";
 import { DEFAULT_PALETTE, readPalette, type Palette } from "./palette";
-import { HEIGHTS_CAPTION, sceneFromTwin, type Scene } from "./scene";
+import { sceneFromTwin, type Scene } from "./scene";
 import { useView3DStore } from "./view3dStore";
 import "./view3d.css";
 
 const DROP_MS = 950;
-const FLY_IN_MS = 1700;
 const FRAME_MS = 850;
 /** CSS pixels kept free at the bottom of the stage for the caption and the tools row. */
 const BOTTOM_STRIP = 50;
@@ -85,7 +84,8 @@ export default function Plant3D() {
   const engine = useRef<Engine | null>(null);
   const births = useRef(new Map<string, number>());
   const emphasisKey = useRef("");
-  const [palette, setPalette] = useState<Palette>(DEFAULT_PALETTE);
+  const [palette, setPalette] = useState<Palette>(() =>
+    typeof document === "undefined" ? DEFAULT_PALETTE : readPalette(document.documentElement));
   const [epoch, setEpoch] = useState(0);
 
   const twin = useTwinStore((state) => state.twin);
@@ -168,19 +168,12 @@ export default function Plant3D() {
       localSelect: null,
       ensurePose() {
         if (e.poseReady || !e.scene || e.width < 2 || e.height < 2) return;
-        e.poseReady = true;
-        // First show always lands on the whole plant (an existing selection is highlighted, not
-        // framed), so the switch from 2D reads as the same drawing tipped back.
         const home = e.homePose();
         if (!home) return;
+        // The first frame lands directly on the fitted plant.
+        e.pose = home;
+        e.poseReady = true;
         e.atHome = true;
-        if (e.reduced) {
-          e.pose = home;
-        } else {
-          // Eased fly-in: start high and wide, settle on the drawing angle.
-          e.pose = { target: home.target, yaw: home.yaw - 0.5, pitch: 1.2, distance: home.distance * 1.55 };
-          e.tween = { from: e.pose, to: home, start: performance.now(), duration: FLY_IN_MS, ease: easeOutCubic };
-        }
         e.dirty = true;
       },
       flyTo(pose, duration) {
@@ -236,6 +229,7 @@ export default function Plant3D() {
     let lastDraw = 0;
     let slowFrames = 0;
     let tooSlow = false;
+    let firstFrame = true;
     const frame = (nowMs: number) => {
       raf = requestAnimationFrame(frame);
       if (renderer.lost || !e.poseReady || e.width < 2 || e.height < 2) return;
@@ -282,6 +276,10 @@ export default function Plant3D() {
       }
       renderer.render(state);
       overlay.current?.update({ viewProjection: state.viewProjection, width: e.width, height: e.height, now: nowMs });
+      if (firstFrame) {
+        container.dataset.ready = "true";
+        firstFrame = false;
+      }
     };
 
     const start = () => {
@@ -383,6 +381,7 @@ export default function Plant3D() {
       if (useTwinStore.getState().hoveredId !== null) useTwinStore.getState().hover(null);
       renderer.dispose();
       canvas.remove();
+      delete container.dataset.ready;
       engine.current = null;
     };
   }, []);
@@ -432,19 +431,15 @@ export default function Plant3D() {
   useEffect(() => {
     const e = engine.current;
     if (!e) return;
+    if (selectedId !== e.selectedId) {
+      if (selectedId && e.localSelect !== selectedId) e.frameNode(selectedId);
+      e.localSelect = null;
+    }
     e.selectedId = selectedId;
     e.hoveredId = hoveredId;
     e.highlighted = [...focus.highlighted].filter((id) => id !== hoveredId && id !== selectedId);
     e.dirty = true;
   }, [selectedId, hoveredId, focus, epoch]);
-
-  useEffect(() => {
-    const e = engine.current;
-    if (!e || !selectedId) return;
-    const local = e.localSelect === selectedId;
-    e.localSelect = null;
-    if (!local) e.frameNode(selectedId);
-  }, [selectedId]);
 
   // A capture placed a device: it drops in from above at its spot, with a short settle.
   useEffect(() => {
@@ -472,7 +467,6 @@ export default function Plant3D() {
         placedAssetId={placedAssetId}
         thumbnail={thumbnail}
       />
-      <div className="pw3d-caption pw-mono">{HEIGHTS_CAPTION}</div>
       <div className="pw3d-tools" data-pw3d-ui>
         <span className="pw3d-hint pw-mono" aria-hidden="true">drag orbit · right-drag pan · scroll zoom · F frame</span>
         <button type="button" className="pw3d-button pw-mono" onClick={() => engine.current?.resetView()}>reset view</button>

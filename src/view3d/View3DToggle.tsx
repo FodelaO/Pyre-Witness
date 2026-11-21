@@ -5,6 +5,7 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 import { isWebGL2Available } from "./gl/renderer";
 import { useView3DStore } from "./view3dStore";
 import "./view3d.css";
+import { HEIGHTS_CAPTION } from "./scene";
 
 let supportCache: boolean | null = null;
 
@@ -20,11 +21,11 @@ export function useWebGL2Support(): boolean | null {
 
 export default function View3DToggle({ className }: { className?: string }) {
   const enabled = useView3DStore((state) => state.enabled);
-  const setEnabled = useView3DStore((state) => state.setEnabled);
+  const chooseView = useView3DStore((state) => state.chooseView);
   const supported = useWebGL2Support();
 
   useEffect(() => {
-    if (supported === false && useView3DStore.getState().enabled) useView3DStore.getState().setEnabled(false);
+    if (supported === false && useView3DStore.getState().enabled) useView3DStore.getState().fail();
   }, [supported]);
 
   if (!supported) return null;
@@ -32,14 +33,14 @@ export default function View3DToggle({ className }: { className?: string }) {
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
-      setEnabled(event.key === "ArrowRight");
+      chooseView(event.key === "ArrowRight");
     }
   }
 
   return (
-    <div className={"pw3d-toggle" + (className ? " " + className : "")} role="radiogroup" aria-label="Plant view dimension" onKeyDown={onKeyDown}>
-      <button type="button" role="radio" aria-checked={!enabled} tabIndex={enabled ? -1 : 0} onClick={() => setEnabled(false)}>2D</button>
-      <button type="button" role="radio" aria-checked={enabled} tabIndex={enabled ? 0 : -1} onClick={() => setEnabled(true)}>3D</button>
+    <div className={"pw3d-toggle" + (className ? " " + className : "")} role="radiogroup" aria-label="Plant view dimension" title={HEIGHTS_CAPTION} onKeyDown={onKeyDown}>
+      <button type="button" role="radio" aria-checked={!enabled} tabIndex={enabled ? -1 : 0} onClick={() => chooseView(false)}>2D</button>
+      <button type="button" role="radio" aria-checked={enabled} tabIndex={enabled ? 0 : -1} onClick={() => chooseView(true)}>3D</button>
     </div>
   );
 }

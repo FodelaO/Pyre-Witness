@@ -23,29 +23,29 @@ async function loadStore() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("theme preference", () => {
-  it.each([undefined, "invalid"])("defaults to dark with stored value %s", async (saved) => {
+  it.each([undefined, "invalid"])("defaults to light with stored value %s", async (saved) => {
     const { dataset } = browser(saved);
     const store = await loadStore();
-    expect(store.getState().theme).toBe("dark");
-    expect(dataset.theme).toBe("dark");
+    expect(store.getState().theme).toBe("light");
+    expect(dataset.theme).toBe("light");
   });
 
   it("toggles both ways and restores the persisted value on reload", async () => {
     const { dataset, storage } = browser();
     const store = await loadStore();
     store.getState().toggle();
-    expect(store.getState().theme).toBe("light");
-    expect(dataset.theme).toBe("light");
-    expect(storage.setItem).toHaveBeenLastCalledWith("pw-theme", "light");
-
-    const reloaded = await loadStore();
-    expect(reloaded.getState().theme).toBe("light");
-    expect(dataset.theme).toBe("light");
-    reloaded.getState().toggle();
-    expect(reloaded.getState().theme).toBe("dark");
+    expect(store.getState().theme).toBe("dark");
     expect(dataset.theme).toBe("dark");
     expect(storage.setItem).toHaveBeenLastCalledWith("pw-theme", "dark");
-    expect((await loadStore()).getState().theme).toBe("dark");
+
+    const reloaded = await loadStore();
+    expect(reloaded.getState().theme).toBe("dark");
+    expect(dataset.theme).toBe("dark");
+    reloaded.getState().toggle();
+    expect(reloaded.getState().theme).toBe("light");
+    expect(dataset.theme).toBe("light");
+    expect(storage.setItem).toHaveBeenLastCalledWith("pw-theme", "light");
+    expect((await loadStore()).getState().theme).toBe("light");
   });
 
   it("applies the preference for the page when storage is blocked", async () => {
@@ -54,9 +54,9 @@ describe("theme preference", () => {
     storage.getItem.mockImplementation(blocked);
     storage.setItem.mockImplementation(blocked);
     const store = await loadStore();
-    expect(store.getState().theme).toBe("dark");
-    store.getState().toggle();
     expect(store.getState().theme).toBe("light");
-    expect(dataset.theme).toBe("light");
+    store.getState().toggle();
+    expect(store.getState().theme).toBe("dark");
+    expect(dataset.theme).toBe("dark");
   });
 });

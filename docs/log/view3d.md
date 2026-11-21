@@ -227,3 +227,38 @@ Honest gaps of this pass:
   devices are tagged; no PLC carried a Material-lens finding in the seed twin during QA.
 - No z-fighting was seen in the shots at the home framing; nothing was changed for it.
 - At the home framing the stage is width-limited, so about 190 px stay free above and below the plant.
+
+## 3D contrast and simulation return (21 Nov)
+
+- `palette.ts`, `scene.ts`, `gl/renderer.ts` and `gl/shaders.ts` derive the deeper light steel and outlines from the shared CSS tokens. The slab and process and support plates have separate tones. Reduced light fog, wider media pipes and thicker status rings keep the drawing legible at plant scale.
+- `Overlay.tsx`, `labels.ts` and `view3d.css` give room names, equipment tags, crew names, caption and controls solid backgrounds. Room names try other anchors within their room when a tag or crew plate overlaps. Main equipment tags take priority.
+- `Plant3D.tsx`, `View3DStage.tsx` and `camera.ts` cover the stage until the first rendered frame and start on the fitted camera. The home fit targets 90% of the available stage width and re-fits while the camera is at home. `src/app/3d/Review3D.tsx` documents when its review selection is applied.
+- `view3dStore.ts` and `View3DToggle.tsx` store explicit dimension choices. Simulation playback and pause temporarily show the 2D floor with a notice. Reset and finish restore the prior view in memory, after placement pinning ends if it is still active.
+- `camera.test.ts` covers stage fit and alternate anchors. `view3dStore.test.ts` covers automatic return and explicit preference changes during playback.
+
+### Live screenshots
+
+| Viewport and theme | Before | After |
+| --- | --- | --- |
+| 1440×900 light | [Before](shots/contrast-3d-before-light-1440x900.png) | [After](shots/contrast-3d-after-light-1440x900.png) |
+| 1440×900 dark | [Before](shots/contrast-3d-before-dark-1440x900.png) | [After](shots/contrast-3d-after-dark-1440x900.png) |
+| 1920×1080 light | [Before](shots/contrast-3d-before-light-1920x1080.png) | [After](shots/contrast-3d-after-light-1920x1080.png) |
+| 1920×1080 dark | [Before](shots/contrast-3d-before-dark-1920x1080.png) | [After](shots/contrast-3d-after-dark-1920x1080.png) |
+| 1280×720 light, finished simulation | | [3D with results open](shots/contrast-3d-after-light-1280x720-results.png) |
+
+### Verification
+
+- `npm run typecheck` passed. `npx vitest run src/view3d --maxWorkers=1` passed 51 tests across five files.
+- In the live app, a fresh browser opened in light 3D. The 1280×720 frame trace showed the loading plate and then 3D, with zero visible 2D floor frames. The 919×591 stage kept its fit and labels stayed inside the stage after simulation results appeared.
+- The CIP simulation showed the 2D notice, stayed in 2D while paused, and returned to 3D on reset and on finish. The automatic transitions left `pw-view` unset in the fresh session. A manual 2D choice survived reload and simulation reset.
+- GPU hover and click picked FIL-3. PLC-F3 selection carried over from the 2D floor and Purdue HMI-F3 selection updated the split 3D stage. All four crew billboards rendered, and the live patrol panel kept its `idle patrol` label. T opened the transcript while 3D was active. The standalone `/3d?select=FIL-3` view loaded and framed the requested asset.
+
+| Sampled contrast | Light | Dark | Target |
+| --- | ---: | ---: | ---: |
+| Lowest text ratio across tags, rooms, caption, controls and crew | 9.30:1 | 8.20:1 | 4.5:1 |
+| Lowest measured control or chip boundary ratio | 6.59:1 | 3.59:1 | 3:1 |
+| Packaging room outline against its plate | 9.41:1 | 4.66:1 | 3:1 |
+
+Light-theme render samples also cleared 3:1 for the water and syrup pipes (4.60:1 and 4.21:1) and both placement rings (alarm 6.19:1, recommended 6.27:1). Text and chip measurements used computed colors. Outline, pipe and ring samples used rendered pixels, with a temporary QA device for the placement states.
+
+The installed Chrome channel aborted in the restricted shell, so Playwright used the cached Chrome Headless Shell with in-process SwiftShader. The shared light tokens changed in parallel between the before and after captures. Crowded angles can still hide some room names to keep crew markers and equipment tags legible.

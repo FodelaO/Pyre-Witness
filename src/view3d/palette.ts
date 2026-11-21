@@ -24,8 +24,8 @@ const TOKENS = {
   bg: ["--pw-bg", "#070b10"],
   floor: ["--pw-floor", "#0b1117"],
   panel2: ["--pw-panel-2", "#131c26"],
-  line: ["--pw-line", "#1e2a37"],
   lineStrong: ["--pw-line-strong", "#2f4053"],
+  text: ["--pw-text", "#d7e1ec"],
   eqStroke: ["--pw-eq-stroke", "#93a7bc"],
   eqFill: ["--pw-eq-fill", "#151f2a"],
   eqFill2: ["--pw-eq-fill-2", "#1d2a38"],
@@ -48,19 +48,28 @@ const TOKENS = {
 type TokenName = keyof typeof TOKENS;
 
 export interface Palette extends Record<TokenName, Rgb> {
-  /** Lit steel tones derived from the equipment tokens (2D fills are too dark to shade). */
+  daylight: boolean;
+  outline: Rgb;
   steel: Rgb;
   steelDark: Rgb;
   steelLight: Rgb;
+  slab: Rgb;
+  processPlate: Rgb;
+  supportPlate: Rgb;
   media: Record<Medium, Rgb>;
 }
 
-function derive(base: Record<TokenName, Rgb>): Palette {
+function derive(base: Record<TokenName, Rgb>, daylight: boolean): Palette {
   return {
     ...base,
-    steel: mix(base.eqFill2, base.eqStroke, 0.26),
-    steelDark: mix(base.eqFill2, base.eqStroke, 0.1),
-    steelLight: mix(base.eqFill2, base.eqStroke, 0.46),
+    daylight,
+    outline: daylight ? mix(base.eqStroke, base.text, 0.65) : base.eqStroke,
+    steel: mix(base.eqFill2, base.eqStroke, daylight ? 0.39 : 0.26),
+    steelDark: daylight ? mix(base.eqFill, base.eqStroke, 0.4) : mix(base.eqFill2, base.eqStroke, 0.1),
+    steelLight: mix(base.eqFill2, base.eqStroke, daylight ? 0.16 : 0.46),
+    slab: daylight ? mix(base.floor, base.eqStroke, 0.24) : mix(base.bg, base.floor, 0.9),
+    processPlate: daylight ? mix(base.floor, base.eqStroke, 0.08) : mix(base.floor, base.panel2, 0.75),
+    supportPlate: daylight ? mix(base.floor, base.eqStroke, 0.15) : mix(base.floor, base.panel2, 0.35),
     media: {
       water: base.water, syrup: base.syrup, product: base.product, co2: base.co2, glycol: base.glycol,
       ammonia: base.ammonia, cip: base.cip, power: base.power, network: base.network,
@@ -68,13 +77,13 @@ function derive(base: Record<TokenName, Rgb>): Palette {
   };
 }
 
-function fromSource(read: (cssVar: string) => string | undefined): Palette {
+function fromSource(read: (cssVar: string) => string | undefined, daylight = false): Palette {
   const base = {} as Record<TokenName, Rgb>;
   for (const name of Object.keys(TOKENS) as TokenName[]) {
     const [cssVar, fallback] = TOKENS[name];
     base[name] = hexToRgb(read(cssVar) ?? "") ?? (hexToRgb(fallback) as Rgb);
   }
-  return derive(base);
+  return derive(base, daylight);
 }
 
 export const DEFAULT_PALETTE: Palette = fromSource(() => undefined);
@@ -82,7 +91,7 @@ export const DEFAULT_PALETTE: Palette = fromSource(() => undefined);
 /** Reads the live tokens from the document (falls back to the defaults for non-hex values). */
 export function readPalette(element: Element): Palette {
   const style = getComputedStyle(element);
-  return fromSource((cssVar) => style.getPropertyValue(cssVar));
+  return fromSource((cssVar) => style.getPropertyValue(cssVar), style.colorScheme === "light");
 }
 
 export const rgbCss = (c: Rgb): string => `rgb(${Math.round(c[0] * 255)} ${Math.round(c[1] * 255)} ${Math.round(c[2] * 255)})`;

@@ -45,8 +45,18 @@ export default function AppShell() {
   const view = mode === "data" && requestedView !== "floor" ? "split" : "floor";
   const pinning = useDropStore((state) => state.armed);
   const view3d = useView3DStore((state) => state.enabled);
-  // Choosing a drop point needs the 2D drawing.
-  useEffect(() => { if (pinning) useView3DStore.getState().setEnabled(false); }, [pinning]);
+  // Choosing a drop point needs the 2D drawing; go back to 3D afterwards if it was on.
+  const back3d = useRef(false);
+  useEffect(() => {
+    const view = useView3DStore.getState();
+    if (pinning && view.enabled) { back3d.current = true; view.setEnabled(false); }
+    else if (!pinning && back3d.current) {
+      back3d.current = false;
+      let wanted = true;
+      try { wanted = window.localStorage.getItem("pw-view") !== "2d"; } catch { /* storage blocked: keep 3D */ }
+      if (wanted) view.setEnabled(true);
+    }
+  }, [pinning]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [modelerOpen, setModelerOpen] = useState(false);

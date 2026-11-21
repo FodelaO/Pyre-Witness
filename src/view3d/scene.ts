@@ -18,7 +18,7 @@ import { Frame, toWorld, tube, UNITS_PER_METRE, worldPart, type Part } from "./p
 const MAIN_KINDS: ReadonlySet<string> = new Set([
   "vertical_tank", "bullet_tank", "agitated_tank", "rotary_filler", "labeler", "palletizer", "carbo_cooler",
 ]);
-export const MAIN_TAG_BOOST = 260;
+export const MAIN_TAG_BOOST = 390;
 
 export const HEIGHTS_CAPTION = "3D view · heights illustrative";
 
@@ -31,6 +31,8 @@ export interface SceneNode {
   parts: Part[];
   /** World point the HTML label hangs from. */
   anchor: Vec3;
+  /** Other points inside a room if the preferred room label overlaps a crew plate. */
+  labelAlternates?: readonly Vec3[];
   /** Floor-level centre and horizontal radius, for framing the camera. */
   center: Vec3;
   radius: number;
@@ -89,7 +91,9 @@ function groundNode(twin: Twin, pal: Palette): SceneNode {
   const center: Vec3 = [m(w) / 2, 0, m(h) / 2];
   return {
     id: "ground", type: "ground", anchor: center, center, radius: m(w), height: 0, priority: 0, pickable: false,
-    parts: [worldPart("quad", [center[0], -0.03, center[2]], [900, 1, 900], { color: mix(pal.bg, pal.floor, 0.55), pattern: PATTERN.grid, edge: 0 })],
+    parts: [worldPart("quad", [center[0], pal.daylight ? -0.85 : -0.03, center[2]], [900, 1, 900], {
+      color: mix(pal.bg, pal.floor, 0.55), pattern: PATTERN.grid, edge: 0,
+    })],
   };
 }
 
@@ -107,12 +111,15 @@ function wallParts(b: Area["bounds"], height: number, thickness: number, color: 
 function buildingNode(twin: Twin, pal: Palette): SceneNode {
   const b = twin.plant.building;
   const center: Vec3 = [m(b.x + b.w / 2), 0, m(b.y + b.h / 2)];
+  const depth = pal.daylight ? 0.8 : 0.04;
   return {
     id: "building", type: "building", anchor: center, center, radius: Math.hypot(m(b.w), m(b.h)) / 2, height: 0.9,
     priority: 0, pickable: false,
     parts: [
-      worldPart("box", [center[0], -0.02, center[2]], [m(b.w), 0.04, m(b.h)], { color: mix(pal.bg, pal.floor, 0.9), edge: 0.75 }),
-      ...wallParts(b, 0.9, 0.22, pal.eqStroke, 0.2, 0.55),
+      worldPart("box", [center[0], 0.02 - depth, center[2]], [m(b.w), depth, m(b.h)], {
+        color: pal.slab, edge: pal.daylight ? 1 : 0.75, emissive: pal.daylight ? 0.55 : 0,
+      }),
+      ...wallParts(b, 0.9, 0.22, pal.eqStroke, pal.daylight ? 0.62 : 0.2, pal.daylight ? 1 : 0.55),
     ],
   };
 }
@@ -128,12 +135,16 @@ function areaNode(area: Area, pal: Palette): SceneNode {
   const parts: Part[] = [];
   const tone = statusColor(area.status, pal);
   const overlay = area.kind === "context";
+  const front = m(b.y + b.h) - 0.7;
 
   if (!overlay) {
-    const fill = area.kind === "process" ? mix(pal.floor, pal.panel2, 0.75) : mix(pal.floor, pal.panel2, 0.35);
-    parts.push(worldPart("box", [center[0], 0, center[2]], [size[0], 0.08, size[1]], { color: fill, edge: 0.5 }));
-    // Low translucent walls: 0.4 m, enough to read the rooms without hiding the equipment.
-    parts.push(...wallParts(b, 0.4, 0.1, tone ?? pal.eqStroke, tone ? 0.5 : 0.22, tone ? 1.9 : 0.4));
+    const fill = area.kind === "process" ? pal.processPlate : pal.supportPlate;
+    parts.push(worldPart("box", [center[0], 0, center[2]], [size[0], 0.08, size[1]], {
+      color: fill, edge: 0.5, emissive: pal.daylight ? 1 : 0,
+    }));
+    // Low walls keep the room boundary visible without hiding its equipment.
+    parts.push(...wallParts(b, 0.4, 0.1, tone ?? pal.eqStroke, tone || pal.daylight ? 0.5 : 0.22,
+      tone ? 1.95 : pal.daylight ? 0.92 : 0.4));
   } else if (area.attrs.hazard) {
     // Hazard overlay (NH3...): hatched in the attention colour, as on the 2D floor.
     parts.push(worldPart("quad", [center[0], 0.11, center[2]], [size[0], 1, size[1]], {
@@ -141,7 +152,7 @@ function areaNode(area: Area, pal: Palette): SceneNode {
     }));
   } else if (area.attrs.washdown) {
     parts.push(worldPart("quad", [center[0], 0.105, center[2]], [size[0], 1, size[1]], {
-      color: pal.water, alpha: 0.22, pattern: PATTERN.dots, edge: 1.4,
+      color: pal.water, alpha: pal.daylight ? 0.14 : 0.22, pattern: PATTERN.dots, edge: 1.4,
     }));
   } else {
     // Outside / public context (corridor, parking lot): quiet hatch, no walls.
@@ -154,13 +165,19 @@ function areaNode(area: Area, pal: Palette): SceneNode {
     id: area.id,
     type: overlay ? "zone" : "area",
     parts,
-    // Room names sit on the back wall so they never cover the equipment in front.
-    anchor: [center[0], overlay ? 0.2 : 0.6, m(b.y) + (overlay ? size[1] - 1.2 : 0.4)],
+    // Put room names at the front edge, clear of the equipment tags above the bodies.
+    anchor: [center[0], overlay ? 0.2 : 0.25, front - (overlay ? 0.5 : 0)],
+    labelAlternates: overlay ? undefined : [
+      [m(b.x + b.w * 0.3), 0.25, front],
+      [m(b.x + b.w * 0.7), 0.25, front],
+      [center[0], 0.18, center[2]],
+      [center[0], 0.18, m(b.y) + 1.2],
+    ],
     center,
     radius: Math.hypot(size[0], size[1]) / 2,
     height: 0.4,
     label: area.name,
-    priority: overlay ? 40 : 400,
+    priority: overlay ? 40 : 480,
     pickable: false,
     detail: area.kind,
     state: area.status === "alarm" ? "alarm" : area.status === "attention" ? "attention" : undefined,
@@ -212,7 +229,7 @@ function assetNode(asset: Asset, pal: Palette, severity: number, ghost: boolean)
   if (ghost) {
     // Out of this lens: still there and still pickable, but it recedes into the floor.
     for (const part of frame.parts) {
-      part.color = mix(part.color, pal.floor, 0.66);
+      part.color = mix(part.color, pal.daylight ? pal.processPlate : pal.floor, pal.daylight ? 0.54 : 0.66);
       part.emissive *= 0.25;
       part.edge *= 0.38;
     }
@@ -226,7 +243,7 @@ function assetNode(asset: Asset, pal: Palette, severity: number, ghost: boolean)
   frame.box(0, 0, 0, w + 0.5, Math.max(height, 1.2), d + 0.5, { color: [0, 0, 0], layer: "pick", edge: 0 });
 
   if (stateColor) {
-    frame.quad(0, 0.12, 0, ring * 0.9, ring * 0.9, { color: stateColor, alpha: 0.95, pattern: PATTERN.statusRing, layer: "blend" });
+    frame.quad(0, 0.12, 0, ring * 0.9, ring * 0.9, { color: stateColor, pattern: PATTERN.statusRing, layer: "blend" });
   }
   if (added) {
     // New device from a capture: its outline carries the placement colour, with a locator mast.
@@ -235,8 +252,8 @@ function assetNode(asset: Asset, pal: Palette, severity: number, ghost: boolean)
     // dropped when the rules engine flags it, ok once it stands in the recommended spot, neutral
     // accent while it is not assessed yet).
     const landing = Math.max(ring * 1.75, 8.5);
-    if (!stateColor) frame.quad(0, 0.12, 0, ring * 0.9, ring * 0.9, { color: tint, alpha: 0.95, pattern: PATTERN.statusRing, layer: "blend" });
-    frame.quad(0, 0.145, 0, landing, landing, { color: tint, alpha: 0.95, pattern: PATTERN.statusRing, layer: "blend" });
+    if (!stateColor) frame.quad(0, 0.12, 0, ring * 0.9, ring * 0.9, { color: tint, pattern: PATTERN.statusRing, layer: "blend" });
+    frame.quad(0, 0.145, 0, landing, landing, { color: tint, pattern: PATTERN.statusRing, layer: "blend" });
     for (const part of frame.parts) if (part.layer === "opaque" && part.edge > 0) { part.color = mix(part.color, tint, 0.35); part.edge = 1.95; }
     frame.cyl(0, height + 0.2, 0, 0.04, 3.2, { color: tint, emissive: 1, edge: 0 });
     frame.sphere(0, height + 3.6, 0, 0.26, 0.26, 0.26, { color: tint, emissive: 1, edge: 0 });
@@ -251,7 +268,7 @@ function assetNode(asset: Asset, pal: Palette, severity: number, ghost: boolean)
     center: [m(x), 0, m(y)],
     radius: reach / 2,
     height,
-    label: asset.id,
+    label: asset.id === "TEST-901" ? "TEST-901 · TEST SCENARIO" : asset.id,
     name: asset.name,
     priority: ghost && !state ? 1 : (added ? 5000 : 0) + (state ? 600 : 0) + (hasBody(kind) ? 0 : 300) + (MAIN_KINDS.has(kind) ? MAIN_TAG_BOOST : 0) + area * 4 + asset.criticality * 6,
     pickable: true,
@@ -292,7 +309,7 @@ function pipeNodes(twin: Twin, heights: ReadonlyMap<string, number>, pal: Palett
       const active = connection.active !== false && source.process?.running === true && source.status !== "offline";
       const base = pal.media[connection.medium];
       const color = dataOnly ? mix(base, pal.floor, 0.72) : connection.active === false ? mix(base, pal.floor, 0.5) : base;
-      const radius = UTILITY.has(connection.medium) ? 0.12 : 0.17;
+      const radius = (UTILITY.has(connection.medium) ? 0.12 : 0.17) * (pal.daylight ? 1.28 : 1);
       const style = { color, pattern: PATTERN.flow, param: active && !dataOnly ? 1 : 0 };
       const joint = { color: mix(color, pal.floor, 0.25), emissive: 0.5, edge: 0 };
 

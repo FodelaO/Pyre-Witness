@@ -86,7 +86,7 @@ describe("label declutter", () => {
 
   it("keeps the higher priority label when two collide", () => {
     const shown = declutter([box("low", 100, 1), box("high", 120, 9), box("apart", 400, 1)]);
-    expect([...shown].sort()).toEqual(["apart", "high"]);
+    expect([...shown.keys()].sort()).toEqual(["apart", "high"]);
   });
 
   it("always keeps forced labels (selected, hovered, crew)", () => {
@@ -95,14 +95,22 @@ describe("label declutter", () => {
     expect(shown.has("big")).toBe(false);
   });
 
-  it("frames the plant at about 85% of the stage width, clear of the bottom strip, for narrow and wide stages", () => {
-    for (const [width, height] of [[906, 771], [1332, 951], [1440, 900], [700, 700]]) {
+  it("uses a second room anchor when a crew plate blocks its first one", () => {
+    const shown = declutter([
+      { ...box("crew", 100, 1, true), y: 150, lift: 50 },
+      { ...box("room", 100, 9), alternates: [{ x: 100, y: 130 }] },
+    ]);
+    expect(shown.get("room")).toEqual({ x: 100, y: 130 });
+  });
+
+  it("frames the plant at about 90% of the stage width, clear of the bottom strip, for narrow and wide stages", () => {
+    for (const [width, height] of [[785, 591], [919, 591], [906, 771], [1332, 951], [1440, 900], [700, 700]]) {
       const pose = defaultPose(bounds, width / height, { bottom: 50 / height });
       const box = floorBox(pose, bounds, width / height);
       expect(box).not.toBeNull();
       if (!box) continue;
-      expect(box.maxX - box.minX).toBeGreaterThan(0.83);
-      expect(box.maxX - box.minX).toBeLessThan(0.87);
+      expect(box.maxX - box.minX).toBeGreaterThan(0.88);
+      expect(box.maxX - box.minX).toBeLessThan(0.92);
       expect(Math.abs((box.minX + box.maxX) / 2 - 0.5)).toBeLessThan(0.01);
       expect(box.minY).toBeGreaterThan(0.08);
       expect(box.maxY * height).toBeLessThan(height - 50);

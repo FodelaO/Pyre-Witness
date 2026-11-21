@@ -2,6 +2,8 @@
 import type { Area, Asset } from "@/twin/types";
 
 export function assetLabel({ id, origin, description, name }: Asset): string {
+  // The escalation test scenario's injected device is labelled as a test on every drawing.
+  if (id === "TEST-901") return `${id} · TEST SCENARIO`;
   return origin === "added" && /^NEW-[a-f0-9]{8}$/i.test(id) ? description || name : id;
 }
 

@@ -59,18 +59,18 @@ try {
 
   await page.goto(base, { waitUntil: "domcontentloaded" });
   await page.locator(".pw-top").waitFor();
-  const sun = page.getByRole("button", { name: "Switch to light mode", exact: true });
-  await checkTheme("dark");
-  const mounted = await sun.isVisible();
+  const moon = page.getByRole("button", { name: "Switch to dark mode", exact: true });
+  await checkTheme("light");
+  const mounted = await moon.isVisible();
   if (mounted) {
-    await sun.focus();
+    await moon.focus();
     await page.keyboard.press("Enter");
-    await checkTheme("light");
-    assert.equal(await page.evaluate(() => localStorage.getItem("pw-theme")), "light");
-    await page.getByRole("button", { name: "Switch to dark mode", exact: true }).focus();
-    await page.keyboard.press("Space");
     await checkTheme("dark");
     assert.equal(await page.evaluate(() => localStorage.getItem("pw-theme")), "dark");
+    await page.getByRole("button", { name: "Switch to light mode", exact: true }).focus();
+    await page.keyboard.press("Space");
+    await checkTheme("light");
+    assert.equal(await page.evaluate(() => localStorage.getItem("pw-theme")), "light");
     console.log("Keyboard switch and storage passed");
   }
 

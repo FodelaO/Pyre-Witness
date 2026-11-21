@@ -68,7 +68,7 @@ export interface FitOptions {
   bottom?: number;
 }
 
-export const HOME_VIEW = { yaw: -0.2, pitch: 0.7, fill: 0.85, top: 0.09, bottom: 0.09 } as const;
+export const HOME_VIEW = { yaw: -0.2, pitch: 0.79, fill: 0.9, top: 0.09, bottom: 0.09 } as const;
 
 /** Screen-space box (0..1 on both axes) of the plant floor rectangle, or null if a corner is behind the eye. */
 export function floorBox(pose: Pose, bounds: PlantBounds, aspect: number): { minX: number; maxX: number; minY: number; maxY: number } | null {
@@ -161,7 +161,6 @@ export function zoom(pose: Pose, factor: number): Pose {
   return clampPose({ ...pose, distance: pose.distance * factor });
 }
 
-export const easeOutCubic = (t: number) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 export const easeInOutCubic = (t: number) => {
   const c = clamp(t, 0, 1);
   return c < 0.5 ? 4 * c * c * c : 1 - Math.pow(-2 * c + 2, 3) / 2;
