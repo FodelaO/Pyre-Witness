@@ -52,7 +52,15 @@ export const deviceProfileSchema = z.object({
 }) satisfies z.ZodType<DeviceProfile>;
 
 const observedObjectClass = z.enum([...OBJECT_CLASSES, "unusable"]);
-export const perceptionProfileSchema = deviceProfileSchema.extend({ object_class: observedObjectClass });
+export const perceptionProfileSchema = deviceProfileSchema.extend({
+  object_class: observedObjectClass,
+  radios: deviceProfileSchema.shape.radios.describe(
+    "Evidenced radio capabilities, including ones with unknown enabled state. Use [] if none are evidenced and list unresolved radio capability in unknowns.",
+  ),
+  cloud_connectivity: deviceProfileSchema.shape.cloud_connectivity.describe(
+    "True for evidenced cloud capability or dependency. False for established local-only design or documented absence. Null when unknown.",
+  ),
+});
 
 const cyberMitigation = z.object({
   defaultCredentials: z.literal(false).optional(),

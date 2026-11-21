@@ -1,10 +1,11 @@
 /** Covers Decisions admission and Scout profiles with validated, offline wire fixtures. */
 import { expect, it, vi } from "vitest";
 import { z } from "zod";
-import type { CaptureInput, LinkSnapshot } from "@/pipeline/types";
+import type { CaptureInput, LinkSnapshot, TranscriptEntry } from "@/pipeline/types";
 import { EQUIPMENT_KINDS } from "@/twin/types";
 import { captureEvidence, gateCapture, perceive, UNUSABLE_CAPTURE_MESSAGE } from "./capture";
 import { deviceProfileSchema, perceptionProfileSchema } from "./schemas";
+import { withGeminiTranscript } from "./transcript";
 import type { GeminiClients } from "./transport";
 
 const noul = (value: number, confidence = 0.95) => ({ type: "noul", noul: value, confidence });
@@ -46,7 +47,12 @@ it.each([
 });
 
 it("requires a Scout classification while accepting older stored profiles", () => {
-  expect(z.toJSONSchema(perceptionProfileSchema).required).toContain("object_class");
+  const schema = z.toJSONSchema(perceptionProfileSchema);
+  expect(schema.required).toEqual(expect.arrayContaining(["object_class", "radios", "cloud_connectivity"]));
+  expect(schema.properties).toMatchObject({
+    radios: { description: expect.stringContaining("unknown enabled state") },
+    cloud_connectivity: { description: expect.stringContaining("Null when unknown") },
+  });
   expect(perceptionProfileSchema.shape.object_class.safeParse("unusable").success).toBe(true);
   expect(perceptionProfileSchema.shape.object_class.safeParse("passive_object").success).toBe(true);
   expect(deviceProfileSchema.shape.object_class.safeParse(undefined).success).toBe(true);
@@ -78,11 +84,19 @@ it.each([
     ...classification, object_class: "electrical_equipment", vendor: null, model: null, radios: [], ports: [],
     storage: null, default_credentials_visible: false, default_credentials_note: null, cloud_connectivity: null,
     power: null, capacity_or_size: null, material: null, food_grade: null, hazardous_area_rating: null,
-    ip_rating: null, evidence: [], unknowns: [], confidence: 0.91,
+    ip_rating: null, evidence: [
+      { source: "label", claim: "Label lists built-in Zigbee", confidence: 0.95 },
+      { source: "spec_sheet", claim: "Cloud connectivity: No", confidence: 0.95 },
+    ], unknowns: [], confidence: 0.91,
   };
   const create = vi.fn().mockResolvedValue({ status: "completed", output_text: JSON.stringify(raw) });
   const client = { create } as unknown as GeminiClients["interactions"];
-  await expect(perceive(client, "An equipment photo", new AbortController().signal)).resolves.toMatchObject(classification);
+  const entries: TranscriptEntry[] = [];
+  const observed = withGeminiTranscript((entry) => entries.push(entry),
+    () => perceive(client, "An equipment photo", new AbortController().signal));
+  await expect(observed).resolves.toMatchObject({ ...classification, radios: ["zigbee"], cloud_connectivity: false });
+  expect(entries).toHaveLength(1);
+  expect(entries[0].response?.json).toMatchObject({ radios: [], cloud_connectivity: null });
   const system = create.mock.calls[0][0].system_instruction;
   for (const kind of EQUIPMENT_KINDS) expect(system).toContain(`${kind}: `);
 });
