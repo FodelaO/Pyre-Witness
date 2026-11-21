@@ -153,6 +153,16 @@ describe("Conduits and risk paths", () => {
     expect([filling.x, filling.x + filling.w]).toContain(routes[2].gate.x);
   });
 
+  it("keeps the open packaging gate clear of the switch card in a short pane", () => {
+    const { conduits, assets } = SEED_TWIN;
+    const layout = buildPurdueLayout(SEED_TWIN, 430, new Set(), new Set(), 518);
+    const route = buildConduitRoutes(layout, conduits, assets, networkWires(assets))
+      .find(({ conduit }) => conduit.id === "C-F3-PACK")!;
+    const card = layout.cards.find(({ asset }) => asset.id === "SW-PK")!;
+    expect(layout.dense).toBe(true);
+    expect(route.gate.y + 9 <= card.y || route.gate.y - 9 >= card.y + card.h).toBe(true);
+  });
+
   it("traces given steps, keeps the selected cause, and marks DMZ and open-gate crossings", () => {
     const layout = buildPurdueLayout(fixture, 520);
     const routes = buildConduitRoutes(layout, fixture.conduits, fixture.assets, []);

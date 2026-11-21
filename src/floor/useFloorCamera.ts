@@ -37,6 +37,7 @@ export default function useFloorCamera(
   const selected = useRef<Asset | undefined>(undefined);
   const previousSelection = useRef<string | null>(null);
   const [fitPixelsPerUnit, setFitPixelsPerUnit] = useState(0.5);
+  const [pixelsPerUnit, setPixelsPerUnit] = useState(0.5);
   const [lensDetail, setLensDetail] = useState(false);
   const lensDetailRef = useRef(false);
   const [instrumentDetail, setInstrumentDetail] = useState(false);
@@ -106,6 +107,7 @@ export default function useFloorCamera(
         setInstrumentDetail(readableInstruments);
       }
       if (absolute !== visualScale.current.absolute || relative !== visualScale.current.relative) {
+        if (absolute !== visualScale.current.absolute) setPixelsPerUnit(absolute);
         world.style.setProperty("--pw-floor-inverse-scale", String(1 / absolute));
         world.style.setProperty("--pw-floor-detail", String(coverage((relative - 1.12) / 0.64)));
         world.style.setProperty("--pw-floor-telemetry", String(coverage((relative - 1.55) / 0.65)));
@@ -239,7 +241,7 @@ export default function useFloorCamera(
     }
   }, [bounds, selectedId, selectedPoint, selection, measure, measureTag, placeTag, setCamera]);
 
-  return { paneRef, svgRef, worldRef, tagRef, pose, fitPixelsPerUnit, lensDetail, instrumentDetail, resetFit, zoom, zoomAtCenter, setCamera, startGesture, stagePoint };
+  return { paneRef, svgRef, worldRef, tagRef, pose, fitPixelsPerUnit, pixelsPerUnit, lensDetail, instrumentDetail, resetFit, zoom, zoomAtCenter, setCamera, startGesture, stagePoint };
 }
 
 export type FloorCamera = ReturnType<typeof useFloorCamera>;

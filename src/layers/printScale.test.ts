@@ -1,18 +1,16 @@
-/** The data-lens lettering never shrinks, and never grows past 1.6x. */
+/** Checks legibility at floor and split-view scales. */
 import { describe, expect, it } from "vitest";
 import { printScale } from "./printScale";
 
 describe("printScale", () => {
   it("leaves a large drawing alone", () => {
-    expect(printScale(0.83)).toBe(1);
+    expect(printScale(0.9)).toBe(1);
     expect(printScale(2)).toBe(1);
   });
-  it("enlarges lettering on a small fitted drawing", () => {
-    expect(printScale(0.55)).toBeCloseTo(1.24, 2);
-    expect(printScale(0.475)).toBeCloseTo(1.43, 2);
+  it.each([0.475, 0.3, 0.26])("keeps text readable at %f px per drawing unit", (scale) => {
+    expect(10.2 * scale * printScale(scale)).toBeGreaterThanOrEqual(9);
   });
-  it("is capped and safe for degenerate input", () => {
-    expect(printScale(0.1)).toBe(1.6);
+  it("is safe for degenerate input", () => {
     expect(printScale(0)).toBe(1);
     expect(printScale(Number.NaN)).toBe(1);
   });

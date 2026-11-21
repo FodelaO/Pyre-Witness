@@ -1,8 +1,5 @@
-/**
- * Network lettering is drawn in plant units, so a small fitted drawing (a 1280x720 projector) shrinks it
- * to about 5 px. This returns how much to enlarge each mark about its own anchor so it prints near 8 px.
- */
+/** Keeps the network's smallest primary lettering (10.2 units) above 9 CSS pixels. */
 export function printScale(pixelsPerUnit: number): number {
-  if (!(pixelsPerUnit > 0)) return 1;
-  return Math.round(Math.min(1.6, Math.max(1, 0.68 / pixelsPerUnit)) * 100) / 100;
+  if (!Number.isFinite(pixelsPerUnit) || pixelsPerUnit <= 0) return 1;
+  return Math.max(1, 0.89 / pixelsPerUnit);
 }

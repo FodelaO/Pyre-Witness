@@ -3,7 +3,7 @@
 
 import { memo, useMemo, type CSSProperties } from "react";
 import { assetLabel } from "@/floor/assetLabel";
-import type { LabelBox } from "@/floor/labelPlacement";
+import { isClear, type LabelBox } from "@/floor/labelPlacement";
 import { distance, type Point } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import type { Area, Twin } from "@/twin/types";
@@ -26,22 +26,42 @@ function zoneStyle(name: string): string {
   return "cell";
 }
 
-function zoneLabel({ name, points }: ZoneHull, canvas: Twin["plant"]["canvas"], occupied: readonly LabelBox[]): LabelBox | undefined {
+function zoneLabel({ name, points }: ZoneHull, canvas: Twin["plant"]["canvas"], occupied: readonly LabelBox[], print: number): LabelBox | undefined {
   const top = Math.min(...points.map(({ y }) => y));
   const bottom = Math.max(...points.map(({ y }) => y));
   const left = Math.min(...points.map(({ x }) => x));
   const right = Math.max(...points.map(({ x }) => x));
   const topEdge = points.filter(({ y }) => y <= top + 5).map(({ x }) => x);
   const center = (Math.min(...topEdge) + Math.max(...topEdge)) / 2;
-  const w = name.length * 8 + 8;
-  const h = 15;
+  const w = (name.length * 8 + 8) * print;
+  const h = 16 * print;
   const x = [center - w / 2, (left + right - w) / 2, left, right - w];
   const y = [top - h - 6, bottom + 6, top - h - 24, bottom + 24, top + 6, bottom - h - 6];
-  const locations = y.flatMap((y) => x.map((x) => ({ x, y, w, h })));
-  return locations.find((box) => annotationFits(box, canvas, occupied));
+  const sides = [right + 8, left - w - 8];
+  const locations = [
+    ...y.flatMap((y) => x.map((x) => ({ x, y, w, h }))),
+    ...[top - h - 6, top + 6, (top + bottom - h) / 2, bottom + 6]
+      .flatMap((y) => sides.map((x) => ({ x, y, w, h }))),
+  ];
+  const placed = locations.find((box) => annotationFits(box, canvas, occupied));
+  if (placed || zoneStyle(name) === "cell") return placed;
+
+  // Narrow zones can need the first opening just beyond the hull.
+  const nearby = { x: left - w, y: top - 3 * h, w: right - left + 2 * w, h: bottom - top + 6 * h };
+  const blockers = occupied.filter((box) => !isClear(nearby, [box], 4));
+  const columns = [...x, ...sides, ...blockers.flatMap((box) => [box.x - w - 4, box.x + box.w + 4])]
+    .filter((x) => x >= nearby.x && x + w <= nearby.x + nearby.w)
+    .sort((a, b) => Math.abs(a - x[0]) - Math.abs(b - x[0]));
+  const rows = [...y, ...blockers.flatMap((box) => [box.y - h - 4, box.y + box.h + 4])]
+    .filter((y) => y >= nearby.y && y + h <= nearby.y + nearby.h)
+    .sort((a, b) => Math.abs(a - y[0]) - Math.abs(b - y[0]));
+  for (const y of rows) {
+    const box = columns.map((x) => ({ x, y, w, h })).find((box) => annotationFits(box, canvas, blockers));
+    if (box) return box;
+  }
 }
 
-function chipPositions(flows: readonly Flow[], gates: readonly Point[], canvas: Twin["plant"]["canvas"], occupied: readonly LabelBox[], limit = 8) {
+function chipPositions(flows: readonly Flow[], gates: readonly Point[], canvas: Twin["plant"]["canvas"], occupied: readonly LabelBox[], print: number, limit = 8) {
   const boxes = [...occupied, ...gates.map(({ x, y }) => ({ x: x - 12, y: y - 12, w: 24, h: 24 }))];
   const protocols = new Set<string>();
   const chips = [];
@@ -59,16 +79,17 @@ function chipPositions(flows: readonly Flow[], gates: readonly Point[], canvas: 
     const width = Math.max(39, label.length * 6.8 + 15);
     const vertical = Math.abs(Math.sin(angle)) > 0.65;
     const candidates = positionsOnLeg.flatMap((anchor) => [-1, 1].map((side) => {
-      const x = anchor.x + (vertical ? (width / 2 + 6) * side : 0);
-      const y = anchor.y + (vertical ? 0 : 13 * side);
-      return { anchor, labelAnchor: { x, y }, box: { x: x - width / 2, y: y - 9, w: width, h: 17 } };
+      const w = width * print;
+      const x = anchor.x + (vertical ? (w / 2 + 6) * side : 0);
+      const y = anchor.y + (vertical ? 0 : (9 * print + 4) * side);
+      return { anchor, labelAnchor: { x, y }, box: { x: x - w / 2, y: y - 9 * print, w, h: 17 * print } };
     }));
     const candidate = candidates.find(({ anchor, box }) => annotationFits(box, canvas, boxes)
       && gates.every((gate) => distance(anchor, gate) > 20));
     if (!candidate) continue;
     boxes.push(candidate.box);
     protocols.add(flow.protocol);
-    chips.push({ id: flow.id, ...candidate, angle: angle * 180 / Math.PI, label });
+    chips.push({ id: flow.id, ...candidate, angle: angle * 180 / Math.PI, label, width });
   }
   return chips;
 }
@@ -84,8 +105,9 @@ export default memo(function NetworkDrawing({ model, showLabels, combined, rooms
   const focused = useMemo(() => new Set(highlights), [highlights]);
   const { zones, cables, flows, gates, chips, occupied, labels } = useMemo(() => {
     const occupied = networkLabelObstacles(combined ? rooms : [], scale, marks);
-    const zones = model.zoneHulls.filter(({ points }) => points.length >= 3).map((zone) => {
-      const label = zoneLabel(zone, model.canvas, occupied);
+    const zones = model.zoneHulls.filter(({ points }) => points.length >= 3)
+      .sort((a, b) => Number(zoneStyle(a.name) === "cell") - Number(zoneStyle(b.name) === "cell")).map((zone) => {
+      const label = zoneLabel(zone, model.canvas, occupied, print);
       if (label) occupied.push(label);
       return { ...zone, tier: zoneStyle(zone.name), path: `${linePath(zone.points)} Z`, label };
     });
@@ -95,10 +117,10 @@ export default memo(function NetworkDrawing({ model, showLabels, combined, rooms
     })).filter(({ length }) => length > 0);
     const crossings = [...model.networkLinks, ...model.dataFlows].flatMap((line) => line.crossings);
     const gates = [...new Map(crossings.map((gate) => [gate.conduitId, gate])).values()];
-    const chips = chipPositions(flows, gates, model.canvas, occupied);
+    const chips = chipPositions(flows, gates, model.canvas, occupied, print);
     const labels = new Map(model.assets.map((asset) => [asset.id, assetLabel(asset)]));
     return { zones, cables, flows, gates, chips, occupied, labels };
-  }, [model, combined, rooms, scale, marks]);
+  }, [model, combined, rooms, scale, marks, print]);
 
   function activeFlow({ from, to }: Flow) {
     return (focused.has(from) && focused.has(to)) || from === hoveredId || to === hoveredId ||
@@ -108,7 +130,7 @@ export default memo(function NetworkDrawing({ model, showLabels, combined, rooms
   const focusId = hoveredId ?? selectedId;
   const focusedZone = hoveredId ? model.assets.find(({ id }) => id === hoveredId)?.network.area : undefined;
   const focusFlows = focusId ? flows.filter(activeFlow) : [];
-  const visibleChips = showLabels ? chips : chipPositions(focusFlows, gates, model.canvas, occupied, 2);
+  const visibleChips = showLabels ? chips : chipPositions(focusFlows, gates, model.canvas, occupied, print, 2);
 
   return (
     <g className="pw-lens-network" pointerEvents="none" aria-label="Twin network zones, cabling and modeled traffic">
@@ -159,10 +181,10 @@ export default memo(function NetworkDrawing({ model, showLabels, combined, rooms
           <path key={id} className="pw-lens-direction" d="M-4 -3 4 0 -4 3Z"
             transform={`translate(${anchor.x} ${anchor.y}) rotate(${angle})`} />
         ))}
-        {visibleChips.map(({ id, labelAnchor, label, box }) => {
+        {visibleChips.map(({ id, labelAnchor, label, width }) => {
           return (
             <g key={id} className="pw-lens-protocol" transform={`translate(${labelAnchor.x} ${labelAnchor.y}) scale(${print})`}>
-              <rect x={-box.w / 2} y={-9} width={box.w} height={box.h} rx={3} />
+              <rect x={-width / 2} y={-9} width={width} height={17} rx={3} />
               <title>{label}</title>
               <text textAnchor="middle" y={3}>{label}</text>
             </g>

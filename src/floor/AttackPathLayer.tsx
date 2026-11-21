@@ -1,10 +1,11 @@
 /** Visualizes the risk report's existing paths on the fictional floor plan. */
-import { memo, useId, useMemo } from "react";
+import { memo, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { LensMode } from "@/layers/lensStore";
 import { useRunStore } from "@/pipeline/runStore";
 import { containsPoint, distance, entryPointById, nodePosition, type Point } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import { MEDIA, type Asset, type AttackPath, type AttackStep, type Twin } from "@/twin/types";
-import { chooseLabelBox, type LabelBox } from "./labelPlacement";
+import { isClear, screenLabelBox, type LabelBox } from "./labelPlacement";
 import { roundedPath, routeMidpoint, routePoints } from "./routing";
 import { pathHasFocus } from "./twinFocus";
 
@@ -77,36 +78,76 @@ interface Segment {
   step: AttackStep;
   d: string;
   label: Point;
-  techniqueLabel?: Point;
+  points: Point[];
   from: Point;
   to: Point;
   paths: Set<AttackPath>;
 }
 
-function placeTechniqueLabels(segments: Segment[]) {
-  const occupied: LabelBox[] = [];
+const floorMarks = [
+  ".pw-floor-asset-tag", ".pw-floor-asset-reading", ".pw-floor-tank-level",
+  ".pw-floor-zone-label-back", ".pw-floor-zone-chip rect", ".pw-floor-entry text",
+  ".pw-floor-pipe-label", ".pw-lens-zone-label", ".pw-lens-digital-entry text",
+  ".pw-lens-protocol rect", ".pw-lens-vuln", ".pw-lens-software rect",
+  ".pw-floor-caption", ".pw-floor-tag-anchor",
+].join(", ");
+
+function reserveFloorMarks(pane: Element): LabelBox[] {
+  return Array.from(pane.querySelectorAll(floorMarks)).flatMap((mark) => {
+    const { visibility, opacity } = getComputedStyle(mark);
+    if (mark.closest('.pw-lens-data[aria-hidden="true"]') || visibility === "hidden") return [];
+    if (mark.matches(".pw-floor-asset-tag") && opacity === "0" &&
+      !mark.closest(".pw-floor-asset")?.matches(':focus-visible, [data-tag-focus]')) return [];
+    const { x, y, width, height } = mark.getBoundingClientRect();
+    return width && height ? [{ x, y, w: width, h: height }] : [];
+  });
+}
+
+function project({ x, y }: Point, { a, b, c, d, e, f }: DOMMatrixReadOnly): Point {
+  return { x: a * x + c * y + e, y: b * x + d * y + f };
+}
+
+function placeTechniqueLabels(segments: [string, Segment][], matrix: DOMMatrix, occupied: LabelBox[]) {
+  const labels = new Map<string, Point>();
+  const inverse = matrix.inverse();
   const techniquePositions = new Map<string, Point[]>();
-  for (const segment of segments) {
+  for (const [key, segment] of segments) {
     const technique = segment.step.technique;
     if (!technique) continue;
     const nearby = techniquePositions.get(technique.id) ?? [];
     if (nearby.some((point) => distance(point, segment.label) < 140)) continue;
-    const w = technique.id.length * 12 + 8;
-    const h = 24;
-    const { x, y } = segment.label;
-    const at = (dx: number, dy: number): LabelBox => ({ x: x - w / 2 + dx, y: y - h + dy, w, h });
-    const box = chooseLabelBox(at(0, -7), [at(0, -21), at(0, 11), at(14, -35), at(-14, 25)], occupied);
+    const legs = segment.points.slice(1).map((end, i) => {
+      const start = segment.points[i];
+      return { start, end, length: distance(start, end) };
+    }).sort((a, b) => b.length - a.length);
+    const anchors = legs.flatMap(({ start, end }) => [0.5, 0.3, 0.7, 0.15, 0.85].map((at) => ({
+      x: start.x + (end.x - start.x) * at,
+      y: start.y + (end.y - start.y) * at,
+    })));
+    const positions = [segment.label, ...anchors].flatMap((point) => {
+      const { x, y } = project(point, matrix);
+      const side = screenLabelBox(x, y, technique.id).w / 2 + 4;
+      return [{ x, y: y - 5 }, { x, y: y + 14 }, { x: x + side, y: y + 3 }, { x: x - side, y: y + 3 }];
+    });
+    const box = positions.map(({ x, y }) => screenLabelBox(x, y, technique.id))
+      .find((box) => isClear(box, occupied, 3));
+    if (!box) continue;
     occupied.push(box);
-    segment.techniqueLabel = { x: box.x + w / 2, y: box.y + h };
+    labels.set(key, project({ x: box.x + box.w / 2, y: box.y + 9 }, inverse));
     nearby.push(segment.label);
     techniquePositions.set(technique.id, nearby);
   }
+  return labels;
 }
 
-export default memo(function AttackPathLayer({ twin, focused }: { twin: Twin; focused: ReadonlySet<string> }) {
+export default memo(function AttackPathLayer({ twin, focused, scale, lens }: {
+  twin: Twin; focused: ReadonlySet<string>; scale: number; lens: LensMode;
+}) {
   const paths = useTwinStore((state) => state.risk.paths);
   const captured = useRunStore((state) => state.placedAssetId);
   const arrow = `${useId()}-risk-arrow`;
+  const group = useRef<SVGGElement>(null);
+  const [labels, setLabels] = useState<ReadonlyMap<string, Point>>(() => new Map());
 
   const segments = useMemo(() => {
     const assets = new Map(twin.assets.map((asset) => [asset.id, asset]));
@@ -127,7 +168,7 @@ export default memo(function AttackPathLayer({ twin, focused }: { twin: Twin; fo
         const points = finishBeforeTarget(pointsFor(step, twin, assets, from, to));
         const d = roundedPath(points, 9);
         if (!d) continue;
-        byStep.set(key, { step, from, to, d, label: routeMidpoint(points), paths: new Set([path]) });
+        byStep.set(key, { step, from, to, d, points, label: routeMidpoint(points), paths: new Set([path]) });
       }
     }
 
@@ -139,16 +180,51 @@ export default memo(function AttackPathLayer({ twin, focused }: { twin: Twin; fo
     const dim: typeof segments = [];
     const emphasized: typeof segments = [];
     for (const [key, segment] of segments) {
-      if ([...segment.paths].some((path) => active.has(path))) emphasized.push([key, { ...segment }]);
+      if ([...segment.paths].some((path) => active.has(path))) emphasized.push([key, segment]);
       else dim.push([key, segment]);
     }
-    placeTechniqueLabels(emphasized.map(([, segment]) => segment));
     return [dim, emphasized];
   }, [segments, paths, focused, captured]);
 
+  useLayoutEffect(() => {
+    const world = group.current?.closest<SVGGElement>(".pw-floor-world");
+    const pane = world?.closest(".pw-plant-floor");
+    if (!world || !pane || lens === "material" || !emphasized.length) return;
+    let frame = 0;
+    const place = () => {
+      const matrix = world.getScreenCTM();
+      if (matrix?.a && getComputedStyle(world).visibility !== "hidden") {
+        setLabels(placeTechniqueLabels(emphasized, matrix, reserveFloorMarks(pane)));
+      }
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(place);
+    };
+    const afterZoom = (event: TransitionEvent) => {
+      if (event.target === world && event.propertyName === "transform") schedule();
+    };
+    const observer = new MutationObserver(schedule);
+    if (pane.parentElement) observer.observe(pane.parentElement, { attributes: true, attributeFilter: ["data-view3d"] });
+    for (const data of world.querySelectorAll(".pw-lens-data")) {
+      observer.observe(data, { childList: true, subtree: true, attributes: true, attributeFilter: ["transform", "aria-hidden"] });
+    }
+    world.addEventListener("transitionend", afterZoom);
+    world.addEventListener("focusin", schedule);
+    world.addEventListener("focusout", schedule);
+    schedule();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      world.removeEventListener("transitionend", afterZoom);
+      world.removeEventListener("focusin", schedule);
+      world.removeEventListener("focusout", schedule);
+    };
+  }, [emphasized, scale, lens]);
+
   if (!segments.length) return null;
   return (
-    <g className="pw-floor-attacks" pointerEvents="none" role="group" aria-label="Simulated attack paths">
+    <g ref={group} className="pw-floor-attacks" pointerEvents="none" role="group" aria-label="Simulated attack paths">
       <defs>
         <marker id={arrow} viewBox="0 0 9 8" refX={8} refY={4} markerWidth={4.5} markerHeight={4} orient="auto">
           <path className="pw-floor-attack-arrow" d="M0 0 9 4 0 8 2 4Z" />
@@ -157,17 +233,20 @@ export default memo(function AttackPathLayer({ twin, focused }: { twin: Twin; fo
       {dim.map(([key, segment]) => (
         <path key={key} className="pw-floor-attack-route pw-floor-attack-base" d={segment.d} data-via={segment.step.via} />
       ))}
-      {emphasized.map(([key, segment]) => (
-        <g key={key} className="pw-floor-attack" data-via={segment.step.via} data-emphasis="selected">
-          {segment.step.via === "rf" && <RadioWaves from={segment.from} to={segment.to} />}
-          <path className="pw-floor-attack-route" d={segment.d} markerEnd={`url(#${arrow})`} />
-          {segment.step.technique && segment.techniqueLabel && (
-            <g transform={`translate(${segment.techniqueLabel.x} ${segment.techniqueLabel.y})`}>
-              <text className="pw-floor-attack-technique pw-floor-screen-label" textAnchor="middle">{segment.step.technique.id}</text>
-            </g>
-          )}
-        </g>
-      ))}
+      {emphasized.map(([key, segment]) => {
+        const label = labels.get(key);
+        return (
+          <g key={key} className="pw-floor-attack" data-via={segment.step.via} data-emphasis="selected">
+            {segment.step.via === "rf" && <RadioWaves from={segment.from} to={segment.to} />}
+            <path className="pw-floor-attack-route" d={segment.d} markerEnd={`url(#${arrow})`} />
+            {segment.step.technique && label && (
+              <g transform={`translate(${label.x} ${label.y})`}>
+                <text className="pw-floor-attack-technique pw-floor-screen-label" textAnchor="middle">{segment.step.technique.id}</text>
+              </g>
+            )}
+          </g>
+        );
+      })}
     </g>
   );
 });

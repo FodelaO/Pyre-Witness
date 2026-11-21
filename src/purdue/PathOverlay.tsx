@@ -1,5 +1,6 @@
 /** Animates existing attack paths and annotates technique and boundary crossings. */
 import { useId, useMemo } from "react";
+import { isClear } from "@/floor/labelPlacement";
 import type { AttackPath } from "@/twin/types";
 import type { ConduitRoute } from "./conduits";
 import type { Box, PurdueLayout } from "./layout";
@@ -13,36 +14,47 @@ interface PathOverlayProps {
   focused: ReadonlySet<string>;
 }
 
-function overlaps(a: Box, b: Box): boolean {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
-
 export function PathOverlay({ layout, routes, paths, focused }: PathOverlayProps) {
   const arrow = useId();
   const segments = useMemo(() => buildRiskSegments(layout, routes, paths, focused), [layout, routes, paths, focused]);
   const labels = useMemo(() => {
     const labels: { text: string; box: Box; emphasis: string; key: string }[] = [];
-    const obstacles: Box[] = [...layout.cards, ...layout.fieldGroups, ...layout.entries];
+    const obstacles: Box[] = [
+      ...layout.cards, ...layout.fieldGroups, ...layout.entries,
+      ...routes.map(({ gate, conduit, enforcerKind }) => {
+        const name = layout.compact && enforcerKind === "network_switch" ? "" : conduit.enforcedBy ?? "";
+        const w = 24 + (name ? name.length * 5.5 + 3 : 0);
+        return { x: gate.x - w / 2, y: gate.y - 10, w, h: 20 };
+      }),
+    ];
+    const shown = new Map<number, Set<string>>();
     for (const segment of segments.slice().reverse()) {
       if (segment.emphasis !== "selected" || !segment.techniques.size) continue;
-      const text = Array.from(segment.techniques).join(" · ");
-      const w = text.length * 5.7 + 8;
       const { x, y } = routeLabelPoint(segment.points);
       for (const offset of [-9, 12, -24, 27]) {
+        const top = Math.max(1, Math.min(layout.height - 16, y + offset - 6));
+        const lane = layout.bands.findIndex(({ y, h }) => top + 6.5 >= y && top + 6.5 < y + h);
+        const seen = shown.get(lane) ?? new Set<string>();
+        const techniques = [...segment.techniques].filter((technique) => !seen.has(technique));
+        if (!techniques.length) continue;
+        const text = techniques.join(" · ");
+        const w = text.length * 5.7 + 8;
         const box = {
           x: Math.max(layout.railWidth + 4, Math.min(layout.width - w - 3, x - w / 2)),
-          y: Math.max(1, Math.min(layout.height - 16, y + offset - 6)),
+          y: top,
           w,
           h: 13,
         };
-        if (obstacles.some((obstacle) => overlaps(box, obstacle))) continue;
+        if (!isClear(box, obstacles, 1)) continue;
         labels.push({ text, box, emphasis: segment.emphasis, key: segment.key });
         obstacles.push(box);
+        for (const technique of techniques) seen.add(technique);
+        shown.set(lane, seen);
         break;
       }
     }
     return labels;
-  }, [layout, segments]);
+  }, [layout, routes, segments]);
 
   return (
     <>

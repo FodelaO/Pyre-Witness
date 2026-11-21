@@ -96,17 +96,17 @@ export default memo(function FloorStage({ twin, selectedId, highlighted, direct,
           <Blueprint plant={plant} />
           <g className="lens-material-only"><ZoneLayer areas={areas} selectedId={selectedId} highlighted={highlighted} /></g>
           <g className="lens-material-only"><PipeLayer assets={assets} hidden={materialHidden} /></g>
-          <DataLayer pass="underlay" zoom={lensZoom} fitScale={camera.fitPixelsPerUnit} />
+          <DataLayer pass="underlay" zoom={lensZoom} fitScale={camera.fitPixelsPerUnit} pixelsPerUnit={camera.pixelsPerUnit} />
           <ConnectorLayer publishInData={viewMode === "split"} />
           <g className="lens-material-only"><EntryPoints points={physicalEntries} selectedId={selectedId} highlighted={highlighted} rightEdge={bounds.x + bounds.w} /></g>
           <AssetLayer assets={assets} selectedId={selectedId} highlighted={highlighted} direct={direct} washdown={washdown}
-            instrumentDetail={camera.instrumentDetail} fitScale={camera.fitPixelsPerUnit} />
+            instrumentDetail={camera.instrumentDetail} fitScale={camera.fitPixelsPerUnit} pixelsPerUnit={camera.pixelsPerUnit} lens={lens} />
           {previewModel && <GhostLayer />}
           <g className="lens-material-only">
             <ZoneLabels areas={areas} scale={camera.fitPixelsPerUnit} selectedId={selectedId} highlighted={highlighted} />
           </g>
-          <g className="lens-data-only"><AttackPathLayer twin={twin} focused={focused} /></g>
-          <DataLayer pass="annotations" zoom={lensZoom} fitScale={camera.fitPixelsPerUnit} />
+          <g className="lens-data-only"><AttackPathLayer twin={twin} focused={focused} scale={camera.pixelsPerUnit} lens={lens} /></g>
+          <DataLayer pass="annotations" zoom={lensZoom} fitScale={camera.fitPixelsPerUnit} pixelsPerUnit={camera.pixelsPerUnit} />
           <SimLayer />
           <CrewLayer />
           <DropPin />

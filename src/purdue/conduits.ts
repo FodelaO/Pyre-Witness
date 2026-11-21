@@ -1,4 +1,5 @@
 /** Places the declared conduit gates on the edges of their destination zones. */
+import { isClear } from "@/floor/labelPlacement";
 import type { Point } from "@/twin/geometry";
 import { PURDUE_LEVELS, type Asset, type Conduit, type EquipmentKind } from "@/twin/types";
 import { type Anchor, type PurdueLayout, type Zone, zoneWidthAt } from "./layout";
@@ -53,16 +54,31 @@ function verticalRoute(layout: PurdueLayout, from: Zone, to: Zone, a?: Anchor, b
   return { gate, points };
 }
 
-function horizontalRoute(from: Zone, to: Zone, a?: Anchor, b?: Anchor) {
+function horizontalRoute(layout: PurdueLayout, from: Zone, to: Zone, open: boolean, a?: Anchor, b?: Anchor) {
   const direction = from.x < to.x ? 1 : -1;
   const startY = a ? center(a).y : center(from).y;
   const gateY = inset(b ? center(b).y : startY, to.y, to.h, 10);
   const fromEdge = direction > 0 ? from.x + zoneWidthAt(from, startY) : from.x;
-  const toEdge = direction > 0 ? to.x : to.x + zoneWidthAt(to, gateY);
+  const onBoundary = (y: number) => ({ x: direction > 0 ? to.x : to.x + zoneWidthAt(to, y), y });
   const start = { x: a ? direction > 0 ? a.x + a.w : a.x : fromEdge, y: startY };
-  const gate = { x: toEdge, y: gateY };
+  let gate = onBoundary(gateY);
+  if (open) {
+    const halfWidth = layout.compact ? 11 : 12;
+    const halfHeight = layout.compact ? 9 : 10;
+    const gap = 3;
+    const titles = layout.zones.map(({ x, y, w, name, head }) => ({
+      x: x + 4, y: y + (layout.dense ? 11 : 6), w: Math.min((head?.w ?? w) - 8, name.length * 6 + 4), h: 13,
+    }));
+    const obstacles = [...layout.cards, ...layout.fieldGroups, ...layout.entries, ...titles];
+    const candidates = [gateY, ...obstacles.flatMap(({ y, h }) => [y - halfHeight - gap, y + h + halfHeight + gap])]
+      .filter((y) => y >= to.y + halfHeight && y <= to.y + to.h - halfHeight)
+      .sort((a, b) => Math.abs(a - gateY) - Math.abs(b - gateY));
+    gate = candidates.map(onBoundary).find(({ x, y }) => isClear({
+      x: x - halfWidth, y: y - halfHeight, w: halfWidth * 2, h: halfHeight * 2,
+    }, obstacles, gap)) ?? gate;
+  }
   const end = b ? { x: direction > 0 ? b.x : b.x + b.w, y: center(b).y } : gate;
-  const mid = (fromEdge + toEdge) / 2;
+  const mid = (fromEdge + gate.x) / 2;
   const points = [start, { x: mid, y: start.y }, { x: mid, y: gate.y }, gate, { x: end.x, y: gate.y }, end];
   return { gate, points };
 }
@@ -115,7 +131,7 @@ export function buildConduitRoutes(
     const useVertical = disjointLevels || (to.first !== from.first && differentLevels);
     const geometry = useVertical
       ? verticalRoute(layout, from, to, a?.box, b?.box)
-      : horizontalRoute(from, to, a?.box, b?.box);
+      : horizontalRoute(layout, from, to, !conduit.enforcedBy, a?.box, b?.box);
     routes.push({
       ...geometry, conduit, fromId: a?.id, toId: b?.id, wireKey: wire && pairKey(wire.from, wire.to),
       enforcerKind: conduit.enforcedBy ? assetsById.get(conduit.enforcedBy)?.physical.kind : undefined,

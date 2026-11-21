@@ -12,8 +12,17 @@ function overlap(a: LabelBox, b: LabelBox): number {
   return width * height;
 }
 
-export function isClear(box: LabelBox, obstacles: LabelBox[]): boolean {
-  return obstacles.every((obstacle) => overlap(box, obstacle) === 0);
+export function isClear(box: LabelBox, obstacles: readonly LabelBox[], gap = 0): boolean {
+  return obstacles.every(({ x, y, w, h }) =>
+    box.x + box.w + gap <= x || x + w + gap <= box.x ||
+    box.y + box.h + gap <= y || y + h + gap <= box.y,
+  );
+}
+
+/** The floor's 9 px monospace lettering, including its painted outline. */
+export function screenLabelBox(x: number, baseline: number, text: string, scale = 1): LabelBox {
+  const w = (text.length * 6 + 4) / scale;
+  return { x: x - w / 2, y: baseline - 9 / scale, w, h: 12 / scale };
 }
 
 export function chooseLabelBox(first: LabelBox, alternatives: LabelBox[], obstacles: LabelBox[]): LabelBox {
