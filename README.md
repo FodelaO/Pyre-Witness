@@ -33,6 +33,24 @@ Light mode is the default. The twin opens in 3D on browsers with WebGL2. Use the
 
 Screenshots from the running app.
 
+## Feature tour
+
+One real capture, start to finish, on the latest build: real Gemini calls on the simulated plant, captured from the running app on Nov 21, 2026.
+
+| 1 · Capture in progress | 2 · The answer |
+| :---: | :---: |
+| <img src="docs/media/tour-capture-running.jpg" alt="A USB flash drive photo running through the pipeline: Decisions API gate at 87 percent, Scout has identified a SanDisk USB flash drive, the Inspector reports 3 findings where it was dropped in Filler 3, the Architect is still reasoning" width="100%"> | <img src="docs/media/tour-capture-result.jpg" alt="Result panel: device profile with removable storage, recommended placement in the corporate office at Purdue L4, rules check passed, estimated loss here 31 thousand dollars versus 0 at the recommended spot" width="100%"> |
+| A sample photo of a USB drive, dropped in **Filler 3**. The Decisions API gate says *proceed* (87 %), **Scout** (Hydrogen) names it in 4.9 s, and the **Inspector** (rules engine) flags 3 findings at the drop point while the **Architect** (Carbon) is still reasoning. The crew stands where the work is. | **Where it goes:** corporate office, Purdue L4, *rules check passed*. Removable storage is flagged, attack paths are drawn on the floor, and the loss estimate compares both spots: **here $31k, there $0** per event. |
+
+| 3 · Move there | 4 · Same twin in 3D |
+| :---: | :---: |
+| <img src="docs/media/tour-move-there.jpg" alt="After clicking Move there: the USB drive sits in the corporate office, the panel says at recommended location, estimated loss now 0 dollars, plant risk back to 46" width="100%"> | <img src="docs/media/tour-3d.jpg" alt="The plant in 3D with labelled equipment, the AI crew at their desks, plant risk 46 elevated and escalation armed" width="100%"> |
+| One click: the device moves, the rules engine re-checks, plant risk goes back from **47 to 46** and the estimated loss to **$0**. | The same live twin, selection and attack arcs in 3D, drawn by a hand-written WebGL2 renderer (no 3D library). Heights are illustrative. |
+
+**5 · Proof it works** (`/proof`): Run 5 against the saved single-call baseline, the test set (clean, messy, edge cases, non-devices, links, text), where it still fails, and what changed after each run.
+
+<img src="docs/media/tour-proof.jpg" alt="The Proof it works page for Run 5: comparison with the single-call baseline, test-set composition with credited photos, remaining failures with images, hard-input pass rates, and the run-by-run history" width="100%">
+
 ## How it works
 
 ```mermaid
