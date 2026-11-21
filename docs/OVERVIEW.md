@@ -1,6 +1,6 @@
 # Pyre Witness: overview
 
-Long-form companion to [`README.md`](../README.md). Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md). Timeline: [`BUILD_LOG.md`](BUILD_LOG.md). Judges: [`JUDGES.md`](JUDGES.md).
+See the [README](../README.md), [architecture](ARCHITECTURE.md), [build log](BUILD_LOG.md) and [judge guide](JUDGES.md).
 
 **Snap any device. See where it belongs in your plant, and what risk it brings, before you plug it in.**
 
@@ -19,14 +19,14 @@ The twin updates live: the device appears on the floor and the Purdue map, new p
 
 | Part | What it does | Code |
 | --- | --- | --- |
-| Plant floor | Top-down drawing, `29` parametric equipment kinds, animated pipes, attack paths | `src/floor`, `src/equipment` |
-| Lens | `Material` / `Both` / `Data` (keys `1` `2` `3`); `Levels` in Data shows Purdue levels | `src/layers` |
+| Plant floor | Light theme by default. The floor opens in 3D with WebGL2. `2D` / `3D` switches views. Both show equipment, pipes and paths | `src/floor`, `src/equipment`, `src/view3d` |
+| Lens | `Material` / `Both` / `Data` (keys `1` `2` `3`). `Levels` in Data shows Purdue levels | `src/layers` |
 | Purdue map | L0 to L5 and the L3.5 DMZ, conduits, linked selection | `src/purdue` |
 | Capture rail | `Camera`, `Upload`, `Product link`, `Describe device`, `Pin location`, `Phone QR` | `src/capture`, `src/handoff` |
-| Crew | Scout, Architect, Inspector, Chief move with real pipeline events; `idle patrol` otherwise | `src/crew` |
+| `AI crew` dock | Model status dots on crew cards. `Gemini` in the dock header opens the services board. Select a crew member for their transcript | `src/crew`, `src/health` |
 | Results panel | Risk dial, plant loss exposure, placement answer, `Move there`, risks, paths, mitigations, `Model the twin`, `Fit preview` | `src/panel`, `src/econ`, `src/modeler`, `src/fit` |
 | Simulate | `6` tabletop scenarios, `1×` / `4×`, approval of safeguards | `src/sim` |
-| Top bar | `Watch`, `Gemini n/10`, `Proof`, risk score | `src/shell/TopBar.tsx` |
+| Top bar | Small green pulsing status dot opens Threat Watch. Also has `Proof`, view and theme controls, and the risk score | `src/shell/TopBar.tsx` |
 | Voice | `Hold to talk` (or Space); briefing read aloud | `src/voice` |
 | Transcript | `T`: every prompt and raw response | `src/transcript` |
 
@@ -57,7 +57,7 @@ Latencies: 6-worker reliability batch (`docs/log/pipeline-speed.md`) and `docs/l
 5. Rules engine checks the recommendation. If it disagrees, Carbon gets one revision through `previous_interaction_id`. Still blocked: hold.
 6. Chief writes 2 to 3 lines from the checked facts.
 
-Every step is a typed SSE event; the crew, panel, transcript and twin read the same stream. Full capture `28.905 s` p50 in the reliability batch, `24.6 s` median in eval Run 4.
+The crew, panel, transcript and twin read the same event stream. The crew's work appears directly on the 3D drawing during a capture. Run 5 took `23.3 s` median and `42.0 s` p95 end to end. The separate reliability batch took `28.905 s` p50. [Full report](../eval/report/REPORT.md) · [Reliability log](log/pipeline-speed.md)
 
 Passive objects (a mug, a chair) get physical and food-safety findings only, no cyber claims.
 
@@ -65,14 +65,14 @@ Passive objects (a mug, a chair) get physical and food-safety findings only, no 
 
 - **Simulation** (simulated): process mass and energy model; `6` replays: `CIP Crossover`, `Ammonia Release`, `Chiller Trip`, `CO₂ Upset`, `Site Ransomware`, `Rogue Wireless`. Mitigations wait for approval; the rerun is compared with the original.
 - **Threat Watch**: CISA KEV, CISA ICS, UK NCSC and openFDA beverage recalls; each item scored against the plant inventory; Decisions triage; Neon summary; human `Approve` / `Reject`. Live check: `21` KEV, `19` ICS, `2` NCSC, `4` openFDA events gave `7` rows matched to plant assets and `39` other items behind one disclosure. Recalls are mapped to plant consequences with a loss figure (Voila juice on `FIL-3`, `$3M est.` per comparable event). Source: `docs/log/watch-relevance.md`.
-- **Escalation call**: when an estimated loss (default `$100,000` per event) or the plant risk (default `60`, or `8` points over baseline) crosses a threshold, the app raises a call to a paired phone. The Chief's briefing is spoken by `gemini-3.8-flash-tts`. The phone can `Approve action` (applied to the twin) or `Acknowledge`. A real cellular call can be placed from the paired phone's own dialer: no carrier integration. Sources: `docs/CALL_DEMO.md`, `docs/log/escalation-call.md`.
-- **3D view**: `2D` / `3D` switch in the top bar. The same live twin, drawn by a hand-written WebGL2 renderer, no 3D library. Heights are illustrative. Source: `docs/log/view3d.md`.
+- **Escalation call.** A threshold crossing raises an alert (defaults `$100,000` per event, risk `60`, or `8` points over baseline). Use the bell chip's `Add your phone` and `Pair phone` controls. `Run test alert` adds a rogue LTE gateway labelled `TEST SCENARIO` without a model call. Tap `Call [name] · [masked number]` on the paired phone to open its dialer for a real call. This flow uses no carrier integration. The app's separate `Answer` control plays the optional Chief briefing using Gemini TTS. [On-call demo](CALL_DEMO.md)
+- **3D view.** A WebGL2 renderer draws the same twin, including crew work such as evidence, placement and checks. The top bar's `2D` / `3D` switch has the tooltip `3D view · heights illustrative`. Pinning and simulation use the 2D drawing. [3D log](log/view3d.md) · [View switch](../src/view3d/View3DToggle.tsx)
 - **Samples tray**: `Samples` on the capture rail, six credited photos that run the real pipeline (`docs/DEMO_KIT.md`).
-- **Theme**: dark and light (`src/theme`).
+- **Theme.** Light is the default. The top bar's `Switch to dark mode` control changes the palette. [Theme control](../src/theme/ThemeToggle.tsx)
 - **Managed-agent comparison**: Antigravity on the same feeds, `72.05 s`, marked partial when a feed failed.
 - **Twin modeller**: drop CSV, photos, PDF or video; review ghost assets; apply.
 - **Fit preview**: image of the device at the recommended and dropped spots.
-- **Health**: `10` live service probes behind the `Gemini n/10` chip.
+- **Health.** `Gemini` in the `AI crew` dock opens the `10` live service probes. [Crew dock](../src/crew/CrewDock.tsx)
 - **Economic loss**: see below.
 
 ## Rules engine and risk score
@@ -94,22 +94,27 @@ Deterministic, Open FAIR structure (`src/econ`, `docs/log/loss-model.md`):
 
 ## Evaluation
 
-Harness in `eval/`, results on `/proof`. Dataset: `71` items (`54` Wikimedia Commons photos, `8` product links, `9` text). Baseline: one `gemini-4-hydrogen` call with a prose plant description.
+Run 5 uses the same saved fair baseline as Run 4, one `gemini-4-hydrogen` call with a prose plant description. Both answered 68 of 71 captures (54 Wikimedia Commons photos, 9 descriptions and 8 product links). Scores use shared answers. End-to-end timings use all 71 attempts. Significance uses the 5% level. Run 5 recorded zero system execution errors. [Summary](../eval/report/SUMMARY.md) · [Full report](../eval/report/REPORT.md)
 
-Run 4 against the saved fair baseline, `66` of `71` answered by both (`eval/report/SUMMARY.md`, `eval/report/REPORT.md`):
+| Metric | Single-call Hydrogen | Pyre Witness | Paired result |
+| --- | ---: | ---: | --- |
+| Plant area accuracy | 86.4% (51/59) | 91.5% (54/59) | Inconclusive (`p=0.549`) |
+| Equipment kind accuracy | 95.0% (57/60) | 98.3% (59/60) | Inconclusive (`p=0.625`) |
+| Purdue level accuracy | 94.5% (52/55) | 94.5% (52/55) | Tie |
+| Device vs non-device accuracy | 100.0% (68/68) | 100.0% (68/68) | Tie |
+| Key-risk recall | 51.7% (62/120) | 70.0% (84/120) | Significant gain of 18.3 pp (95% paired bootstrap interval +9.3 to +26.9 pp, 56 pairs) |
+| Forbidden-area recommendations | 5.5% (3/55) | 0.0% (0/55) | Inconclusive (`p=0.250`) |
+| Radio recall | 100.0% (12/12) | 100.0% (12/12) | Tie |
+| Cloud flag accuracy | 88.5% (23/26) | 88.5% (23/26) | Tie |
+| Device category accuracy | 87.3% (48/55) | 80.0% (44/55) | Hydrogen leads, inconclusive |
+| Device-type naming match | 67.3% (37/55) | 78.2% (43/55) | Inconclusive |
+| Median time per capture | 13.3 s | 23.3 s | Significantly slower |
+| p95 time per capture | 18.4 s | 42.0 s | Significantly slower |
 
-| Metric (shared answers) | Single-call Hydrogen | Pyre Witness |
-| --- | ---: | ---: |
-| Forbidden-area recommendations | `5.6%` (3/54) | `0.0%` (0/54) |
-| Key-risk recall | `51.7%` (61/118) | `58.5%` (69/118) |
-| Equipment kind | `94.8%` (55/58) | `98.3%` (57/58) |
-| Plant area (`n=57`) | `87.7%` | `89.5%` |
-| Purdue level (`n=54`) | `96.3%` | `94.4%` |
-| Device vs non-device (`n=66`) | `100%` | `100%` |
-| Valid ATT&CK ids | `86.0%` (`n=50`) | `100.0%` (`n=28`) |
-| Median latency | `13.3 s` | `24.6 s` |
+- Run 3 trailed Hydrogen on equipment kind and key-risk recall. Run 4 fixed those gaps with kind guidance and a risk list that combines model risks, rules findings and Scout evidence.
+- Run 4 trailed on radio recall (33.3%) and cloud flags (23.1%). Asking Scout for explicit connectivity evidence brought Run 5 up to Hydrogen's rates on both.
 
-One Hydrogen call is a strong baseline. Run 3 lost to it on equipment kind and key-risk recall. The fix (kind definitions in the Scout prompt; a final risk list that is complete by construction) produced Run 4, which ties or leads on every metric in this table except Purdue level. The single call still leads on radio recall (`100.0%` vs `33.3%`), cloud flags (`88.5%` vs `23.1%`), device category and device-type naming (`eval/report/REPORT.md`). On the headline metrics no difference is statistically significant on `71` items (area `p=1.00`, kind `p=0.625`, forbidden areas `p=0.250`); the single call is significantly better on radio recall and cloud flags. One development set that informed the iterations; no held-out set. Run history is in `BUILD_LOG.md`.
+One development set informed the iterations. No held-out set has been evaluated. See `/proof` for failure cases and the build log for run history. [Build log](BUILD_LOG.md)
 
 Reliability batch: `61/63` completed at 6 workers, `2` correct rejections, `0` operational failures (`docs/log/pipeline-speed.md`).
 
@@ -143,7 +148,7 @@ Pages: `/` app, `/gallery` symbols, `/proof` evaluation, `/capture` phone captur
 
 ## Limits
 
-- Radio recall `33.3%` and cloud-flag accuracy `23.1%` in Run 4; the single call leads on both (`100.0%`, `88.5%`).
+- The shared-answer recall gain leaves `36` of `120` labelled risks missed. Hydrogen still leads in observed category accuracy (`87.3%` vs `80.0%`, inconclusive). [Full report](../eval/report/REPORT.md)
 - Escalation call: physical handset audio, vibration and a carrier connection unverified.
 - Security: single-user demo, no login, plain HTTP on the LAN (`docs/SECURITY.md`).
 - Rules and replays are screening tools, not RF surveys, ACL parsers or dispersion models.

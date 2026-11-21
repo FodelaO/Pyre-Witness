@@ -1,6 +1,6 @@
 # Pyre Witness: architecture
 
-How the code is built, as of 13:40 EST on Nov 21, 2026. Read from the code; numbers cite a file or log.
+Architecture as of Nov 21, 2026.
 
 Legend: **[model]** = a Gemini call. **[deterministic]** = plain TypeScript, same input gives same output. **[simulated]** = fictional plant data or a what-if replay, labelled in the UI.
 
@@ -13,12 +13,13 @@ flowchart LR
     Phone["Phone /capture<br/>QR handoff"]
     Run["useRunStore + pipelineBus<br/>src/pipeline"]
     Twin["useTwinStore<br/>twin + risk"]
-    Views["Floor / Purdue / lenses<br/>src/floor src/purdue src/layers"]
-    Crew["Crew + activity feed<br/>src/crew"]
+    Views["Floor (3D default) / Purdue / lenses<br/>src/view3d src/floor src/purdue src/layers"]
+    Crew["Crew dock and work cues<br/>src/crew src/view3d"]
     Panel["Results panel<br/>src/panel + src/econ"]
     Tx["Transcript drawer (T)<br/>src/transcript"]
     Sim["Process model + tabletop<br/>src/sim [simulated]"]
     Rules["Rules engine<br/>src/rules [deterministic]"]
+    Escalation["Escalation bell and phone pairing<br/>src/escalation"]
   end
   subgraph Server["Next.js API routes (only place Gemini is called)"]
     Analyze["/api/analyze, /api/reassess<br/>src/pipeline/server"]
@@ -33,8 +34,10 @@ flowchart LR
   Cap -->|"SSE"| Analyze
   Analyze -->|"PipelineEvent stream"| Run
   Run --> Crew & Panel & Tx & Twin
+  Crew --> Views & Tx
+  Crew --> Health
   Twin --> Rules --> Twin
-  Twin --> Views & Sim
+  Twin --> Views & Sim & Escalation
   Panel --> Fit & Voice & Model
   Watch --> Panel
   Analyze --> G["Decisions, Hydrogen, Carbon, Neon"]
@@ -57,7 +60,7 @@ flowchart LR
 | `src/pipeline` | Event contracts, run store, SSE client, server orchestration, self-check | orchestration |
 | `src/link` | SSRF-guarded product page fetch and extraction | deterministic |
 | `src/capture`, `src/handoff` | Camera, upload, link, text, pin; same-LAN phone QR handoff | UI |
-| `src/crew` | Four crew members driven by pipeline events; `idle patrol` between runs | UI |
+| `src/crew` | Crew state and dock readouts driven by pipeline events. `idle patrol` between runs | UI |
 | `src/panel` | Results panel, placement answer, mitigation queue, asset inspector | UI |
 | `src/transcript` | Prompts, raw responses, tokens, timing; JSON / Markdown export | UI |
 | `src/sim` | Process model, `6` tabletop scenarios, counterfactuals | simulated, deterministic |
@@ -65,11 +68,11 @@ flowchart LR
 | `src/modeler` | Files to proposed ghost assets, human apply | model |
 | `src/fit` | Fit preview images | model (image) |
 | `src/voice` | TTS briefing; push-to-talk Live voice with `5` tools | model (audio) |
-| `src/health` | `10` service probes, `Gemini n/10` chip | live probes |
+| `src/health` | `10` service probes, model status dots and the `Gemini` control in the `AI crew` header | live probes |
 | `src/econ` | Economic loss model and loss figures | deterministic, assumed costs |
-| `src/view3d` | Optional 3D view of the same twin; hand-written WebGL2, no 3D library; `2D` / `3D` switch | deterministic drawing |
-| `src/escalation` | Threshold policy, alert card, phone pairing over LAN streams, call script, phone approve / acknowledge | deterministic + TTS |
-| `src/theme` | Dark / light theme switch | UI |
+| `src/view3d` | Default 3D drawing, WebGL2 renderer, crew work overlays, `2D` / `3D` switch | deterministic drawing |
+| `src/escalation` | Thresholds, labelled test alert, paired-phone browser alert and dialer handoff | deterministic + optional TTS |
+| `src/theme` | Light default and dark palette. Remembers the browser's choice | UI |
 | `src/proof` | `/proof` evaluation report | reads `eval/report` |
 | `eval/` | Paired evaluation harness, `71`-item dataset | model + scoring |
 | `scripts/` | `smoke-pipeline`, `bench-pipeline`, `daily-watch`, `health`, `smoke-modeler` | CLI |
@@ -99,7 +102,7 @@ Thinking: Hydrogen, Carbon and Neon all run at `low`. Carbon can be overridden w
 
 1. `link.*`: optional product page fetch. [deterministic]
 2. `gate.*`: Decisions gate. On a `4 s` timeout the run continues, labelled. [model]
-3. `perception.*`: Scout returns a `DeviceProfile`. [model]
+3. `perception.*` publishes Scout's `DeviceProfile`. Scout reports explicit connectivity evidence and distinguishes what a device supports from what is enabled. [model]
 4. `selfcheck.*`, phase `as-dropped`: rules engine at the pinned spot. [deterministic]
 5. `reasoning.*`: Architect gets a compact twin and returns an `Assessment`. Grounding drops unknown asset and ATT&CK ids. [model]
 6. `selfcheck.*`, phase `recommendation`. [deterministic]
@@ -114,7 +117,8 @@ Deadlines: link 18 s, gate 20 s, Scout 45 s, Carbon 120 s, revision 60 s, Chief 
 
 | Consumer | Uses |
 | --- | --- |
-| `src/crew` (`director.ts`, `crewStore.ts`) | Who walks where; activity feed |
+| `src/crew` (`director.ts`, `crewStore.ts`) | Crew movement and dock readout |
+| `src/view3d` (`crewWork.ts`, `Overlay.tsx`) | Projects the active capture, evidence, placement, rules checks and briefing into the 3D drawing |
 | `src/panel` (`SidePanel`, `PlacementAnswer`) | Device card, placement answer, risks, paths, mitigations |
 | `src/transcript` | `transcript.entry` events |
 | `src/floor/AttackPathLayer.tsx` | Paths from `selfcheck.path` |
@@ -158,7 +162,7 @@ Selection and hover are shared across views through `useTwinStore`.
 4. Neon proposes changes; the rules engine measures each proposal's score change. [model + deterministic]
 5. Human `Approve` / `Reject`.
 
-Runs on first open each UTC day, on `Run now`, or via `scripts/daily-watch.ts`. Managed-agent comparison: `/api/watch/managed` runs `antigravity-preview-09-2026` on the same feeds. Measured: local `16.60 s`, hosted `72.05 s`, hosted report `partial` (`docs/log/threat-watch.md`).
+The top bar's pulsing status dot opens Threat Watch. The watch runs on first open each UTC day, on `Run now` or via `scripts/daily-watch.ts`. The tooltip reports monitoring and feed state. `/api/watch/managed` runs `antigravity-preview-09-2026` on the same feeds. The logged local run took `16.60 s` and the hosted run took `72.05 s`, with a `partial` hosted report. [Top bar](../src/shell/TopBar.tsx) · [Watch log](log/threat-watch.md)
 
 ## Twin modeller (`src/modeler`) [model]
 
@@ -170,7 +174,7 @@ Press `T`. One entry per Gemini attempt (retries included) and per rules-engine 
 
 ## Health probes (`src/health`)
 
-`10` services: Decisions, Scout, Architect, Chief, TTS, Live, Fit preview, Files API, Managed agents, Threat feeds. `/api/health` serves the last snapshot and revalidates after 60 s; the chip polls every 30 s. Image probe at most every 15 min, managed probe every 30 min. Last recorded: `10 / 10` healthy at 18:06 UTC (`docs/log/gemini-health.md`).
+`Gemini` in the `AI crew` dock header opens the service board. Crew cards show a dot for the assigned model. The Inspector's dot marks a local rules engine. The board covers `10` services (Decisions, Scout, Architect, Chief, TTS, Live, Fit preview, Files API, Managed agents and Threat feeds). `/api/health` serves the last snapshot and revalidates after 60 s. The browser polls every 30 s after initial checks. Image probes run at most every 15 min and managed probes every 30 min. [Crew dock](../src/crew/CrewDock.tsx) · [Health log](log/gemini-health.md)
 
 ## Economic loss model (`src/econ`) [deterministic, assumed costs]
 
@@ -187,26 +191,26 @@ Open FAIR structure: loss event frequency × loss magnitude.
 
 ## 3D view (`src/view3d`) [deterministic drawing]
 
-- Reads the same stores as the 2D floor: twin, rules-engine risk, selection, run store, crew.
-- Hand-written WebGL2: one GLSL ES 3.00 program, instanced primitives, offscreen pick pass. No 3D library.
-- Positions, rotations, pipes, flows, attack arcs and alarm rings come from twin data; every height is illustrative.
-- Any failure flips back to 2D with a one-line notice. Review route `/3d`. `45` unit tests (`docs/log/view3d.md`).
+- The app defaults to light mode. It opens in 3D when WebGL2 is available. Theme and view choices are stored in the browser. The `2D` / `3D` switch tooltip reads `3D view · heights illustrative`.
+- The 3D view reads the same twin, rules-engine risk, selection, run and crew stores as 2D. The WebGL2 renderer uses one GLSL ES 3.00 program, instanced primitives and an offscreen pick pass.
+- Twin data drives the equipment, pipes, flows, arcs and alarms. Pipeline events supply the crew's 3D overlays, including Scout's evidence, the Inspector's checks, the Architect's placement and the Chief's briefing.
+- Pinning and simulation playback temporarily use 2D. A rendering failure falls back to 2D with a notice. `/3d` is the review route. [3D log](log/view3d.md) · [View switch](../src/view3d/View3DToggle.tsx)
 
 ## Escalation call (`src/escalation`)
 
-- Policy: one record per sustained cause above threshold for 500 ms: a rules-engine finding, a plant-risk episode, or a completed simulation outcome. Defaults: `$100,000` per event, risk `60`, or `8` points over baseline. [deterministic]
-- Desktop and paired phone exchange call events over short-lived LAN streams; pairing by QR, link valid 45 minutes.
-- `Answer` sends the deterministic script verbatim to `api/voice/speak` (`gemini-3.8-flash-tts`). [model, audio only]
+- The policy creates one record per cause above threshold for 500 ms (a rules finding, a risk episode or a completed simulation outcome). The defaults are `$100,000` per event, risk `60`, or `8` points over baseline. [deterministic]
+- `Add your phone` saves the destination in the desktop browser. `Pair phone` issues a same-LAN QR link valid for 45 minutes. The desktop and phone exchange alert events over local streams.
+- `Run test alert` adds a rogue LTE gateway labelled `TEST SCENARIO` and uses the same rules and threshold policy without a model call.
+- `Answer` sends the script verbatim to `/api/voice/speak` for the optional browser briefing (`gemini-3.8-flash-tts`). [model, audio only]
 - `Approve action` rechecks the offered move or mitigation on the desktop and applies it through the twin store. `Acknowledge` records receipt.
-- The phone's own dialer can place a real cellular call (`tel:` link); the desktop records the tap. No carrier integration.
-- Docs: `docs/CALL_DEMO.md`, `docs/log/escalation-call.md`.
+- The paired phone's `Call [name] · [masked number]` link uses `tel:` to open its dialer for a real call. The desktop records the tap. The paired flow uses no carrier integration. [On-call demo](CALL_DEMO.md) · [Escalation log](log/escalation-call.md)
 
 ## Evaluation harness (`eval/`)
 
 - Dataset: `71` items: `27` clean photos, `16` messy, `3` edge, `8` non-device photos, `8` links, `9` text. `54` photos from Wikimedia Commons (`eval/dataset/SOURCES.md`).
-- Baseline: one `gemini-4-hydrogen` call with a prose plant description; same deadline and retries as Scout (`eval/baseline.ts`).
-- System: the full pipeline (`eval/system.ts`). Judge: `gemini-decision-1` on anonymized answers (`eval/judge.ts`).
-- Statistics: Wilson 95% intervals; exact McNemar on paired area labels.
+- The baseline is one `gemini-4-hydrogen` call with a prose plant description and the same deadline and retries as Scout. Run 5 uses the saved fair baseline from `run-3-baseline`. [Full report](../eval/report/REPORT.md)
+- The system runs the full pipeline. A separate `gemini-decision-1` request judges anonymized device-type names. [Full report](../eval/report/REPORT.md)
+- The report uses Wilson 95% intervals for proportions, exact paired McNemar tests for area, kind and forbidden placements, and paired bootstrap intervals for differences such as key-risk recall and latency. One development set informed the iterations. No held-out set has been evaluated. [Full report](../eval/report/REPORT.md)
 - Output: `eval/report/REPORT.md`, `SUMMARY.md`, `FAILURES.md`, `latest.json`; archives in `eval/report/run-*`. `/proof` reads `latest.json`.
 - Run history: `docs/BUILD_LOG.md`, `docs/log/eval-run.md`.
 
@@ -214,4 +218,4 @@ Open FAIR structure: loss event frequency × loss magnitude.
 
 | Real (live calls, live data) | Deterministic code | Simulated, labelled |
 | --- | --- | --- |
-| Gemini, Decisions, Live, TTS, image, Files, Antigravity; CISA, NCSC and openFDA feeds; product pages | Rules engine, attack paths, risk score, loss model, inventory match and recall mapping, grounding, 3D view, escalation policy | Plant, inventory, telemetry, tabletop replays, cost inputs, crew `idle patrol` |
+| Gemini, Decisions, Live, TTS, image, Files, Antigravity, CISA, NCSC and openFDA feeds, product pages | Rules engine, attack paths, risk score, loss model, inventory match and recall mapping, grounding, 3D view, escalation policy | Plant, inventory, telemetry, tabletop replays, cost inputs, labelled escalation test, crew `idle patrol` |

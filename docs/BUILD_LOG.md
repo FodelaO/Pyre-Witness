@@ -43,8 +43,9 @@ Notes on the clock:
 | 18:34 (13:34) | Fair single-call baseline finishes (4.1 min), saved as `run-3-baseline` | `eval/report/REPORT.md` |
 | 18:54 (13:54) | Run 4 freeze marker; system collection starts | `eval-run.md` |
 | 19:02 (14:02) | Run 4 report written: 71/71 captures, 66 shared answers | `eval/report/REPORT.md` |
+| 20:32 (15:32) | Run 5 report written. 71/71 captures, 68 shared answers, zero system execution errors | [Summary](../eval/report/SUMMARY.md) · [Full report](../eval/report/REPORT.md) |
 
-Commits after 14:02 EST and the later features (3D view, escalation call, theme, watch relevance, Samples tray, security pass, loss model audit) cite their feature logs: `view3d.md`, `escalation-call.md`, `watch-relevance.md`, `loss-model.md` (Audit), `gemini-health.md`, `docs/DEMO_KIT.md`, `docs/SECURITY.md`.
+Later features included light and 3D defaults, crew work on the 3D drawing, Watch in the top bar's pulsing dot, model health in the `AI crew` dock, and a paired-phone test alert labelled `TEST SCENARIO`. [View switch](../src/view3d/View3DToggle.tsx) · [Crew work](../src/view3d/Overlay.tsx) · [Top bar](../src/shell/TopBar.tsx) · [Crew dock](../src/crew/CrewDock.tsx) · [On-call demo](CALL_DEMO.md)
 
 Run 2 has no UTC start in its log; its report file is dated 13:11 EST.
 
@@ -63,19 +64,19 @@ Run 2 has no UTC start in its log; its report file is dated 13:11 EST.
 - First build: Decisions on `v1beta`, Interactions on the stable `v1` client.
 - Later: both clients on one shared `v1beta` transport, with one retry on HTTP 429 and 5xx. The logs do not record the exact error that led to the switch.
 
-### Evaluation runs 1 to 4 (`eval-run.md`)
+### Evaluation runs 1 to 5
 
 | Run | Setup | Outcome |
 | --- | --- | --- |
 | 1 | Carbon `medium`, 6 workers | `0` placements. `59` of 67 hit the 120 s Carbon deadline. p50 `129.2 s` |
 | 2 | Updated object-assessment pipeline, Carbon `low`, 8 workers | `35` assessments (32 devices, 3 passive). `34` errors, `21` at the gate. p50 `23.5 s` |
 | 3 | Frozen pipeline after the speed work, Carbon `low`, 6 workers | `69` assessments (63 devices, 6 passive), `0` errors. p50 `26.0 s`. Lost to the fair baseline on equipment kind and key-risk recall |
-| 4 | Kind definitions in the Scout prompt; final risk list complete by construction; 6 workers | 71/71 recorded, 66 shared answers, `2` system errors. Kind `57/58`, key-risk recall `69/118`. All-attempt area fell from `57/62` to `51/62` and tied the baseline. Median `24.6 s` |
+| 4 | Function-first equipment-kind guidance and a risk list combining model risks, rules findings and Scout evidence. 6 workers | 71/71 recorded, 66 shared answers, 2 system errors. Fixed the equipment-kind and key-risk recall gaps. Radio recall and cloud flags trailed Hydrogen |
+| 5 | Scout asked for explicit connectivity evidence and separate capability and enabled state. Merged risks sorted before capping. 4 workers | 71/71 recorded, 68 shared answers, zero system execution errors. Matched Hydrogen on radio recall (`100.0%`) and cloud flags (`88.5%`) |
 
-Baseline fairness:
-- Runs 1 to 3 first reused the Run 1 baseline. It had `48` errors: `46` were valid answers rejected by local length caps the request schema never sent.
-- That made the baseline look much worse. The comparison was re-run with a fair baseline, caps removed, saved as `run-3-baseline` and reused unchanged for Run 4.
-- Current result (Run 4, shared answers, single call vs Pyre Witness): forbidden areas `3/54` vs `0/54`; key-risk recall `51.7%` vs `58.5%`; kind `94.8%` vs `98.3%`; area `87.7%` vs `89.5%`; Purdue level `96.3%` vs `94.4%`. None of these headline differences is significant on `71` items; the single call is significantly better on radio recall and cloud flags. One development set that informed the iterations; no held-out set (`eval/report/SUMMARY.md`, `eval/report/REPORT.md`). Earlier reports are archived in `eval/report/run-*`.
+The fair baseline kept the original single-call Hydrogen prompt and request schema. The scorer accepted valid answers that exceeded local length caps absent from the schema. Run 4 and Run 5 reused the same saved `run-3-baseline` outputs. [Full report](../eval/report/REPORT.md)
+
+In Run 5, key-risk recall rose from `51.7%` to `70.0%` on shared answers, a significant `18.3 pp` gain (95% paired bootstrap interval `+9.3` to `+26.9 pp`, 56 pairs). Forbidden-area recommendations fell from `3/55` to `0/55` with an inconclusive difference. Area, kind and naming match were also inconclusive. Hydrogen led on observed category accuracy (`87.3%` vs `80.0%`, inconclusive) and was significantly faster on all-attempt median (`13.3 s` vs `23.3 s`) and p95 (`18.4 s` vs `42.0 s`). One development set informed the iterations. No held-out set has been evaluated. [Summary](../eval/report/SUMMARY.md) · [Full report](../eval/report/REPORT.md) · [Results table](OVERVIEW.md#evaluation)
 
 ### Other fixes
 

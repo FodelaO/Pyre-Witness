@@ -15,7 +15,7 @@ Pyre Witness works one step earlier. An engineer takes 1–3 photos of a device,
 3. **What risk does it bring?** Physical, cyber and compliance, mapped to MITRE ATT&CK for ICS.
 4. **Which new attack paths does it open?** For example: *a Wi-Fi radio next to the filler HMI opens a path from the parking lot to the PLC.*
 
-The twin updates live. The device appears on the plant floor and on the Purdue map, new attack paths are drawn, and the plant risk score changes. Move it to the recommended zone and the risk drops.
+The twin updates live. The device appears on the plant floor and the Purdue map, with any new attack paths and an updated plant risk score. Moving it to the recommended zone reruns the rules check.
 
 > **Demo plant:** *Bebidas del Norte, Line 3*, a **fictional** cola bottling line. All plant data is simulated and labelled as such.
 
@@ -25,13 +25,13 @@ The twin updates live. The device appears on the plant floor and on the Purdue m
 
 ## See it
 
-One screen. A three-way lens switches between the material pipeline, the data / software pipeline, and both with the connectors between them.
+Light mode is the default. The twin opens in 3D on browsers with WebGL2. Use the top bar's `2D` / `3D` switch to change the view. Its tooltip reads `3D view · heights illustrative`. The lens switches between `Material`, `Both` and `Data`.
 
 | Material: what flows through the pipes | Both: where the two meet | Data: who talks to whom |
 | :---: | :---: | :---: |
 | <img src="docs/media/lens-material.png" alt="Plant floor with tanks, filler, pipes and the AI crew dock" width="100%"> | <img src="docs/media/lens-both.png" alt="Plant floor with the control network drawn over the equipment and rule findings on the assets" width="100%"> | <img src="docs/media/lens-data.png" alt="Network view by cell with the live threat watch matching advisories to plant assets" width="100%"> |
 
-Screenshots of the running app (`npm run dev`), not mock-ups.
+Screenshots from the running app.
 
 ## How it works
 
@@ -49,7 +49,7 @@ flowchart LR
 | Step | Who | What happens |
 | --- | --- | --- |
 | Gate | **Decisions API** (`gemini-decision-1`) | Checks that the input is usable before spending model calls. If the gate is unavailable the run continues and says so. |
-| Perceive | **Scout** (`gemini-4-hydrogen`, fast) | Reads the photos: device type, brand/model from labels, radios, ports, storage, camera/mic, default-password stickers. Says what it could not see. |
+| Perceive | **Scout** (`gemini-4-hydrogen`) | Identifies the device and records evidence for radios, cloud connectivity, ports and other features. Reports what remains unknown. |
 | Reason | **Architect** (`gemini-4-carbon`, deep reasoning) | Places the device in *this* plant: area, Purdue level, connections. Explains risks and required controls. |
 | Verify | **Inspector** (rules engine, **not a model**) | Re-checks the Architect's answer against deterministic plant rules and a graph search for attack paths. If they disagree, the Architect revises once. If no spot is compliant, the answer is **hold**. |
 | Brief | **Chief** (`gemini-4-neon`) | Writes the 2–3 line summary for the engineer, and can say it aloud. |
@@ -65,17 +65,17 @@ flowchart LR
   </tr>
 </table>
 
-The crew walks the plant floor as these steps actually run. Their movement and the activity feed are driven by real pipeline events, never by timers. When nothing is happening they do an **idle patrol** that is labelled as such and never shows findings. Press **T** for the full transcript of every run: each request, each raw response, token counts and timings, with JSON and Markdown export.
+Pipeline events drive crew movement and draw the crew's work in 3D, including Scout's evidence, the Inspector's checks, the Architect's placement and the Chief's briefing. Between runs the crew shows `idle patrol`. Press **T** for the transcript, with requests, responses, token counts, timings and JSON or Markdown export.
 
 ## The digital twin
 
 Two linked views of the same model. Select an asset in one and it lights up in the other.
 
-- **Plant floor.** Top-down schematic of the bottling line with real equipment shapes (hand-drawn parametric SVG): water treatment, syrup room, blending & carbonation, filler, packaging, CO₂ and NH₃ utilities, control room, corporate office. It also models the context around the plant: parking lot, visitor corridor, hazardous NH₃ area, food-grade washdown area. Pipes are colour-coded by medium (water, syrup, product, CO₂, glycol/NH₃, CIP caustic, network).
+- **Plant floor.** The 3D drawing and 2D schematic share the same layout and equipment. The bottling line includes water treatment, syrup, blending and carbonation, filling, packaging, CO₂ and NH₃ utilities, the control room and the corporate office. The twin also marks the parking lot, visitor corridor, NH₃ hazard area and food-grade washdown area. Pipe colours indicate medium.
 - **Purdue map.** The same assets by level (L0 process → L1 control → L2 supervisory → L3 site operations → L3.5 IT/OT DMZ → L4/L5 enterprise and cloud), with conduits and firewalls.
 - **Lens.** Material ↔ Both ↔ Data (keys `1` `2` `3`). The data side shows the software pipeline, cyber findings and the threat watch; the middle shows both pipelines and the connectors between them.
 
-## More than a text box
+## What you can do
 
 | | What it does | Gemini service |
 | --- | --- | --- |
@@ -84,10 +84,11 @@ Two linked views of the same model. Select an asset in one and it lights up in t
 | **Voice** | The Chief reads the briefing; hold to talk and ask about the plant | `gemini-3.8-flash-tts`, `gemini-3.8-live` |
 | **Fit preview** | A picture of the device in place, labelled as an AI-generated visualisation | `gemini-nano-banana-2.1` |
 | **Simulation** | Six what-if events (ammonia release, ransomware, carbonation upset, CIP, chiller, wireless). Deterministic, labelled SIMULATION, with mitigations a human approves and a re-run to compare | none (deterministic) |
-| **Threat watch** | Reads CISA KEV, CISA ICS advisories and NCSC news, matches them to the plant's inventory, proposes changes, waits for approval | Decisions API (triage), Gemini 4 Neon, Antigravity managed agent (comparison) |
+| **Threat watch** | The small green pulsing status dot in the top bar opens the watch. It matches CISA, NCSC and openFDA items to plant assets and asks a human to approve changes | Decisions API (triage), Gemini 4 Neon, Antigravity managed agent (comparison) |
+| **Escalation** | The bell menu has `Add your phone`, `Pair phone` and `Run test alert`. The test adds a labelled `TEST SCENARIO` rogue LTE gateway without a model call. The paired phone can open its dialer with one tap. No carrier integration is needed for that flow | rules engine, optional Gemini TTS for the browser briefing |
 | **Twin modeller** | Drop a CSV, photos, a video or a PDF: proposed twin updates to review | Decisions API (input gate), Files API, Gemini 4 Hydrogen, Gemini 4 Neon |
 | **Loss estimate** | Every finding, advisory, placement and simulated event carries one number: the estimated dollar loss if it manifests, next to the drawing of the asset. *Show more* itemizes the full calculation asset by asset (FAIR: frequency x magnitude, Monte Carlo, fixed seed) | none (deterministic, assumed plant costs) |
-| **Service health** | The top bar shows every Google service the app depends on, probed live | all of the above |
+| **Service health** | Model status dots are on the crew cards. `Gemini` in the `AI crew` dock header opens the services board | live probes |
 
 ## Rules engine (Inspector)
 
@@ -115,34 +116,33 @@ Deterministic checks the model's answer is verified against:
 
 ## How we test it
 
-The hackathon asks for proof beyond the demo. Our evaluation harness (`npm run eval`) compares:
+**Run 5** compares the full pipeline with the same saved fair baseline used in Run 4, one `gemini-4-hydrogen` call with a prose plant description. Both received the same photo bytes, text or product URL. The set has 71 captures (54 Wikimedia Commons photos, 9 descriptions and 8 product links), with 63 devices and 8 non-devices.
 
-- **Baseline:** one single Gemini call with the photo: *"Where should this device go in an industrial plant and what risks does it bring?"* No twin, no rules.
-- **Pyre Witness:** perception, then reasoning over the twin, then the rules check.
+Both answered 68 of 71 captures. The table uses shared answers for scores and all 71 attempts for end-to-end timing. Device-type naming uses a separate blinded Decisions API judgment. Significance uses the 5% level.
 
-Metrics: device identification, correct Purdue level, correct plant area, key risks found (radio, removable media, default credentials, cloud, personal device), unsafe recommendations, and how often the rules engine forced a revision. The test images are openly licensed photos that we did not take, never images we staged to pass. Failures are reported, not hidden.
+| Metric | Single-call Hydrogen | Pyre Witness | Paired result |
+| --- | ---: | ---: | --- |
+| Plant area accuracy | 86.4% (51/59) | 91.5% (54/59) | Inconclusive (`p=0.549`) |
+| Equipment kind accuracy | 95.0% (57/60) | 98.3% (59/60) | Inconclusive (`p=0.625`) |
+| Purdue level accuracy | 94.5% (52/55) | 94.5% (52/55) | Tie |
+| Device vs non-device accuracy | 100.0% (68/68) | 100.0% (68/68) | Tie |
+| Key-risk recall | 51.7% (62/120) | 70.0% (84/120) | Significant gain of 18.3 pp (95% paired bootstrap interval +9.3 to +26.9 pp, 56 pairs) |
+| Forbidden-area recommendations | 5.5% (3/55) | 0.0% (0/55) | Inconclusive (`p=0.250`) |
+| Radio recall | 100.0% (12/12) | 100.0% (12/12) | Tie |
+| Cloud flag accuracy | 88.5% (23/26) | 88.5% (23/26) | Tie |
+| Device category accuracy | 87.3% (48/55) | 80.0% (44/55) | Hydrogen leads, inconclusive |
+| Device-type naming match | 67.3% (37/55) | 78.2% (43/55) | Inconclusive |
+| Median time per capture | 13.3 s | 23.3 s | Significantly slower |
+| p95 time per capture | 18.4 s | 42.0 s | Significantly slower |
 
-- **Dataset:** 71 labelled captures: 54 openly licensed photos from Wikimedia Commons (taken by other people, before this project), 9 written descriptions and 8 live product links; 55 devices and 8 non-devices; 30 clean, 20 messy, 13 edge cases. Labels and licences are in `eval/dataset/`.
-- **How it is scored:** both systems get the same input (image bytes or text only, never the file name or the label). A deterministic scorer compares each answer with the labels; device-type naming is judged by a separate, blinded Decisions API call. Results are paired on the captures both systems answered, with Wilson 95% intervals and exact McNemar tests.
-- **Latest result (run 4 against a fair re-run of the baseline, 66 of 71 answered by both):**
+These results use one development set that informed the changes. No held-out set has been evaluated. [Summary](eval/report/SUMMARY.md) · [Full report](eval/report/REPORT.md)
 
-| Metric | Single call | Pyre Witness |
-| --- | --- | --- |
-| Recommended a forbidden area | 5.6% (3/54) | **0.0% (0/54)** |
-| Key risks found | 51.7% (61/118) | **58.5% (69/118)** |
-| Equipment kind correct | 94.8% (55/58) | **98.3% (57/58)** |
-| Plant area correct | 87.7% | 89.5% (n=57, not significant) |
-| Purdue level correct | 96.3% | 94.4% |
-| Device vs non-device | 100% | 100% |
-| Radio recall | **100% (12/12)** | 33.3% (4/12) |
-| Cloud flag correct | **88.5% (23/26)** | 23.1% (6/26) |
-| Device category correct | **87.0%** | 81.5% (n=54) |
-| Device type named correctly | **66.7%** | 61.1% (n=54) |
-| Median time per capture | **13.3 s** | 24.6 s |
+- Run 3 trailed Hydrogen on equipment kind and key-risk recall. Run 4 fixed those gaps with kind guidance and a risk list that combines model risks, rules findings and Scout evidence.
+- Run 4 trailed on radio recall (33.3%) and cloud flags (23.1%). Asking Scout for explicit connectivity evidence brought Run 5 up to Hydrogen's rates on both.
 
-- **What that means:** a single Gemini 4 call is a strong baseline. The pipeline never recommended a forbidden area, finds more of the labelled risks overall, and matches it on equipment kind and plant area. The single call is clearly better at listing radios and flagging cloud connectivity in the device profile, and slightly better at naming the device; that is our next fix. What the pipeline adds that one call cannot: a deterministic check of every answer, attack paths in this plant, a risk score, a dollar estimate and a live twin. Apart from radios and cloud flags, no difference is statistically significant on 71 items, and it is one development set that we iterated on (no held-out set yet).
-- **Where to look:** open **`/proof`** in the running app: every run, the baseline next to the system, the failures with their images, and what we changed after seeing them. Full report in `eval/report/`.
-- **Reliability:** on 63 captures at six in parallel, 61 completed, 2 were correctly rejected (a defocused photo and a landscape), and none failed operationally (median 29 s).
+Open `Proof` (`/proof`) for the runs, failure cases and changes after each run. Run 5 recorded zero system execution errors. [Summary](eval/report/SUMMARY.md)
+
+In the separate six-worker reliability batch, 61 of 63 captures completed and two were correctly rejected. The median was 28.905 s with zero execution failures. [Reliability log](docs/log/pipeline-speed.md)
 
 ## Run it locally
 
@@ -212,7 +212,8 @@ Built from scratch during the hackathon. The commit history shows the timeline.
 - ✅ Voice, fit preview, twin modeller, live service health
 - ✅ Evaluation harness against a single-call baseline (`/proof`)
 - ✅ Estimated economic loss per finding, advisory, placement and simulation (deterministic, assumed plant costs)
-- 🚧 Optional 3D view; one-minute demo video
+- ✅ Light theme and 3D by default, with 2D and dark mode available
+- ✅ Paired-phone escalation and labelled test alert
 
 ## What is real and what is simulated
 
