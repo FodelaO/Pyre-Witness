@@ -8,6 +8,7 @@ import LensToggle from "@/layers/LensToggle";
 import type { LensMode } from "@/layers/lensStore";
 import { displayedRiskChange, riskDelta, riskScore } from "@/panel/riskNumber";
 import ThemeToggle from "@/theme/ThemeToggle";
+import PlayDemo from "@/tour/PlayDemo";
 import { useTwinStore } from "@/twin/store";
 import View3DToggle from "@/view3d/View3DToggle";
 import { useWatchStore } from "@/watch/watchStore";
@@ -63,6 +64,7 @@ export function TopBar({ mode, levels, lensNotice, drawerOpen, watchOpen, onTogg
         )}
       </div>
       <div className="pw-top-actions">
+        <PlayDemo />
         <button type="button" className="pw-top-watch" aria-expanded={watchOpen} aria-controls="pw-watch"
           aria-label={watch.label} data-pw-tip={watch.label}
           onClick={(event) => onToggleWatch(event.currentTarget)}>

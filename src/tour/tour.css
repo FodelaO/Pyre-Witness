@@ -1,0 +1,73 @@
+/* Tour spotlight, caption, and reduced-motion treatment. */
+.pw-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  isolation: isolate;
+  overflow: hidden;
+  pointer-events: none;
+  --pw-tour-shade: rgb(5 12 18 / 51%);
+}
+html[data-theme="light"] .pw-tour { --pw-tour-shade: rgb(17 30 40 / 40%); }
+.pw-tour-shade {
+  position: absolute;
+  inset: 0;
+  background: var(--pw-tour-shade);
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+.pw-tour-ring {
+  position: absolute;
+  inset: 0 auto auto 0;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--pw-text) 45%, var(--pw-panel));
+  box-shadow: 0 0 0 200vmax var(--pw-tour-shade), 0 0 16px rgb(0 0 0 / 14%);
+  opacity: 0;
+  transition: transform 260ms ease-out, width 240ms ease-out, height 240ms ease-out, opacity 180ms ease;
+}
+.pw-tour[data-target="true"] .pw-tour-shade { opacity: 0; }
+.pw-tour[data-target="true"] .pw-tour-ring { opacity: 1; }
+.pw-tour-card {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: min(320px, calc(100vw - 24px));
+  padding: 10px 12px 12px;
+  overflow: hidden;
+  border: 1px solid var(--pw-line-strong);
+  border-radius: 8px;
+  background: var(--pw-panel);
+  color: var(--pw-text);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
+  transition: transform 250ms ease-out;
+}
+.pw-tour-card[data-proof="true"] { width: min(362px, calc(100vw - 24px)); }
+.pw-tour-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--pw-text-dim);
+  font-size: 11px;
+  font-weight: 620;
+}
+.pw-tour-card h2 { margin: 4px 0 1px; font-size: 15px; line-height: 1.3; font-weight: 670; }
+.pw-tour-card p { margin: 0; color: var(--pw-text-dim); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.pw-tour-card p[data-skipped="true"] { color: var(--pw-attention); }
+.pw-tour-track { position: absolute; inset: auto 0 0; height: 2px; background: var(--pw-line); }
+.pw-tour-track > div { height: 100%; transform-origin: left; background: var(--pw-text-dim); transition: transform 250ms ease; }
+.pw-tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.pw-tour-actions > button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 7px;
+  border: 1px solid var(--pw-line);
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.pw-tour-actions > button:hover { background: var(--pw-panel-2); }
+@media (prefers-reduced-motion: reduce) {
+  .pw-tour-shade, .pw-tour-ring, .pw-tour-card, .pw-tour-track > div { transition: none; }
+}
