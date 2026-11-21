@@ -1,17 +1,24 @@
 /** Reads the watch's SSE frames across arbitrary fetch chunk boundaries. */
 import type { Twin } from "@/twin/types";
-import type { WatchEvent, WatchReport } from "./types";
+import { WATCH_FORCE_HEADER, type WatchEvent, type WatchReport, type WatchRunResult } from "./types";
+
+export class WatchRateLimitError extends Error {}
 
 export async function readWatchStream(
   mode: WatchReport["mode"],
   twin: Twin,
   onEvent: (event: WatchEvent) => void,
-): Promise<WatchReport> {
+  force = false,
+): Promise<WatchRunResult> {
   const response = await fetch(`/api/watch/${mode === "local" ? "run" : "managed"}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    headers: {
+      "Content-Type": "application/json", Accept: "text/event-stream",
+      ...(mode === "local" && force ? { [WATCH_FORCE_HEADER]: "1" } : {}),
+    },
     body: JSON.stringify(twin),
   });
+  if (response.status === 429) throw new WatchRateLimitError("Review limit reached · try again later.");
   if (!response.ok || !response.body || !response.headers.get("content-type")?.includes("text/event-stream")) {
     throw new Error("Could not open the threat watch stream.");
   }
@@ -36,7 +43,10 @@ export async function readWatchStream(
         }
         runId = event.runId;
         if (event.type === "error") throw new Error(event.message);
-        if (event.type === "done") return event.report;
+        if (event.type === "done") {
+          const { report, cached, checkedAt, note } = event;
+          return { report, cached, checkedAt, note };
+        }
         onEvent(event);
       }
     }

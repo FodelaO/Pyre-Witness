@@ -11,11 +11,13 @@ import { rankWatchItems, type WatchRelevance } from "./relevance";
 import type { WatchReport } from "./types";
 import { useWatchLive } from "./useWatchLive";
 import { WatchLiveLoss } from "./WatchLiveLoss";
+import { useWatchStore } from "./watchStore";
 import "./watchSignals.css";
 
 const sources = Object.keys(LIVE_SOURCE_LABELS) as LiveItem["source"][];
 const shortLabel: Record<LiveItem["source"], string> = { "cisa-kev": "KEV", "cisa-ics": "ICS", "ncsc-news": "NCSC", "openfda": "FDA" };
 const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+const shortClock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 function FeedIndicator({ source, result }: { source: LiveItem["source"]; result?: LiveSourceResult }) {
   const status = result?.error ? "failed" : result && result.ms >= 2500 ? "slow" : result ? "ok" : "pending";
@@ -122,6 +124,7 @@ export function WatchSignalDesk({ report, reviewing, onReview }: {
   onReview: () => void;
 }) {
   const { snapshot, checking, error, nextAt, checkNow } = useWatchLive();
+  const feed = useWatchStore((state) => state.feedStatus);
   const highlight = useRowHighlight();
   const twin = useEconomicTwin();
   const check = snapshot?.check;
@@ -130,15 +133,16 @@ export function WatchSignalDesk({ report, reviewing, onReview }: {
   const matched = rows.filter(({ assetIds }) => assetIds.length);
   const other = rows.filter(({ assetIds }) => !assetIds.length);
   const headline = report?.stages.some(({ name, state }) => name === "reassessment" && state === "done") ? report.headline : undefined;
-  const online = checks?.some((source) => !source.error);
+  const label = { pending: "Awaiting check", live: "Live", stale: "Stale", offline: "Feed offline" }[feed];
 
   return (
     <section className="pw-signal-desk" aria-label="Plant intelligence" aria-busy={checking}>
       <div className="pw-signal-header">
         <div className="pw-signal-live" aria-live="polite">
-          {checking ? <>Checking {sources.length} sources…</> : error ?? (check ? <>
-            <strong>{online ? "Live" : "Feeds offline"}</strong> · checked <time dateTime={new Date(check.checkedAt).toISOString()}>{clock.format(check.checkedAt)}</time> · {checks?.length} sources
-          </> : <>Checking {sources.length} sources…</>)}
+          {check ? <>
+            <strong>{label}</strong> · checked <time dateTime={new Date(check.checkedAt).toISOString()}>{(feed === "stale" ? shortClock : clock).format(check.checkedAt)}</time>
+            {feed !== "stale" && <> · {checks?.length} sources</>}
+          </> : error ?? <>Checking {sources.length} sources…</>}
         </div>
         <button type="button" className="pw-panel-button pw-signal-run" disabled={checking} onClick={() => { void checkNow(); onReview(); }}>
           <RefreshCw size={12} aria-hidden />Run now
@@ -150,6 +154,7 @@ export function WatchSignalDesk({ report, reviewing, onReview }: {
         </div>
         {nextAt && <span>Next <time dateTime={new Date(nextAt).toISOString()}>{clock.format(nextAt)}</time></span>}
       </div>
+      {check && error && <div className="pw-signal-basis" role="status">{error}</div>}
       <div className="pw-signal-basis">Inventory assumed (simulated plant) · matched by rule</div>
       {(headline || reviewing) && <div className="pw-signal-chief" title={headline} aria-live="polite">
         <strong>Chief</strong> · {headline ?? "Reviewing advisories…"}
@@ -158,7 +163,7 @@ export function WatchSignalDesk({ report, reviewing, onReview }: {
         {matched.map((row) => <SignalRow key={liveItemKey(row.item)} row={row} twin={twin} highlight={highlight}
           isNew={snapshot?.added.has(liveItemKey(row.item)) ?? false} />)}
       </ul>}
-      {check && online && !matched.length && <div className="pw-signal-empty">No current matches for this plant.</div>}
+      {check && feed === "live" && !matched.length && <div className="pw-signal-empty">No current matches for this plant.</div>}
       <OtherItems rows={other} added={snapshot?.added} />
     </section>
   );

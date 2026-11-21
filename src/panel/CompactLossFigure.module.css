@@ -1,0 +1,64 @@
+/* Responsive presentation of the audited figure's existing loss markup. */
+.scope {
+  container: result-loss / inline-size;
+  min-inline-size: 0;
+}
+
+.more { display: none; }
+
+@container result-loss (max-width: 320px) {
+  .scope[data-compact-ready] :where([data-loss-asset][open] > div) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .scope[data-show-all] :where([data-loss-asset][open] > div) {
+    max-block-size: min(52dvh, 28rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .scope[data-compact-ready] :where([data-loss-asset][open] > div > *) { flex: none; }
+  .scope[data-compact-ready] :where([data-loss-asset][open] > div > details > summary) { display: none; }
+
+  .scope[data-compact-ready]:not([data-show-all])
+    :where([data-loss-asset][open] > div > :not(
+      [data-loss-involved], [data-loss-downtime], [data-loss-total], ul, .more
+    )) { display: none; }
+
+  .scope[data-compact-ready]:not([data-show-all])
+    :where(ul[aria-label="Asset losses"] > [data-loss-item]:nth-child(n + 5)),
+  .scope[data-origin-count="1"]:not([data-show-all])
+    :where(ul[aria-label="Asset losses"] > [data-loss-item]:nth-child(n + 4)),
+  .scope[data-origin-count="2"]:not([data-show-all])
+    :where(ul[aria-label="Asset losses"] > [data-loss-item]:nth-child(n + 3)) { display: none; }
+
+  .scope[data-compact-ready] :where([data-loss-total]) {
+    position: sticky;
+    inset-block-end: 0;
+    z-index: 1;
+    order: 3;
+    padding-block: 6px;
+    background: var(--pw-panel);
+  }
+
+  .scope .more {
+    order: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    align-self: flex-start;
+    padding: 4px 2px;
+    color: var(--pw-info);
+    cursor: pointer;
+  }
+
+  .more[aria-expanded="true"] {
+    position: sticky;
+    inset-block-end: 31px;
+    z-index: 1;
+    background: var(--pw-panel);
+  }
+
+  .more[aria-expanded="true"] svg { transform: rotate(180deg); }
+}

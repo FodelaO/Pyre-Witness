@@ -2,6 +2,7 @@
 "use client";
 
 import { Bluetooth, Cloud, Droplets, Flame, HardDrive, Layers, LockKeyhole, Nfc, Plug, Radio, RadioTower, Ruler, ScanLine, Utensils, Wifi, type LucideIcon } from "lucide-react";
+import type { LensMode } from "@/layers/lensStore";
 import type { DeviceProfile, Evidence } from "@/pipeline/types";
 import type { Radio as RadioKind } from "@/twin/types";
 import { Disclosure, PanelHeading, percent, readableId, TextPreview } from "./PanelParts";
@@ -41,7 +42,7 @@ function EvidenceRows({ evidence }: { evidence: Evidence[] }) {
   );
 }
 
-export function DeviceCard({ profile, thumbnail }: { profile: DeviceProfile; thumbnail?: string }) {
+export function DeviceCard({ profile, thumbnail, mode }: { profile: DeviceProfile; thumbnail?: string; mode: LensMode }) {
   const model = [profile.vendor, profile.model].filter(Boolean).join(" · ");
   const storage = profile.storage?.trim();
   const storageChip = storage && !/^(none|no|n\/?a|unknown)$/i.test(storage);
@@ -63,7 +64,7 @@ export function DeviceCard({ profile, thumbnail }: { profile: DeviceProfile; thu
         )}
         <div><h3>{profile.device_type}</h3>{model && <p>{model}</p>}</div>
       </div>
-      {(profile.radios.length > 0 || profile.ports.length > 0 || storageChip || removable || profile.default_credentials_visible || profile.cloud_connectivity) && (
+      {mode !== "material" && (profile.radios.length > 0 || profile.ports.length > 0 || storageChip || removable || profile.default_credentials_visible || profile.cloud_connectivity) && (
         <div className="pw-panel-chips" aria-label="Device interfaces and flags">
           {profile.radios.map((radio) => <DeviceChip key={radio} {...RADIOS[radio]} />)}
           {profile.ports.map((port, index) => <DeviceChip key={`${port}-${index}`} icon={Plug} label={port} />)}
@@ -72,7 +73,7 @@ export function DeviceCard({ profile, thumbnail }: { profile: DeviceProfile; thu
           {removable ? <DeviceChip icon={HardDrive} label="Removable storage" attention /> : storageChip && <DeviceChip icon={HardDrive} label={storage} />}
         </div>
       )}
-      {showRatings && (
+      {mode !== "data" && showRatings && (
         <div className="pw-panel-chips" aria-label="Device ratings and specifications">
           {profile.ip_rating && <DeviceChip icon={Droplets} label={profile.ip_rating} />}
           {profile.hazardous_area_rating && <DeviceChip icon={Flame} label={profile.hazardous_area_rating} />}

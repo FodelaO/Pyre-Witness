@@ -5,8 +5,9 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { useEffect, type ReactNode } from "react";
 import { create } from "zustand";
+import { PlantLossExposure } from "@/econ/mountsPlant";
 import { useTwinStore } from "@/twin/store";
-import { formatDelta, formatNumber } from "./PanelParts";
+import { displayedRiskChange, riskDelta, riskScore } from "./riskNumber";
 
 const HISTORY_SIZE = 24;
 const ARC = "M8 61 A53 53 0 0 1 114 61";
@@ -46,11 +47,11 @@ export function RiskDial({ action }: { action?: ReactNode }) {
   const score = useTwinStore((state) => state.risk.score);
   const band = useTwinStore((state) => state.risk.band);
   const baseline = useTwinStore((state) => state.baselineScore);
-  const delta = score - baseline;
+  const delta = displayedRiskChange(score, baseline);
   const DeltaIcon = delta > 0 ? ArrowUpRight : delta < 0 ? ArrowDownRight : Minus;
   const reducedMotion = useReducedMotion();
   const dialValue = useMotionValue(score);
-  const display = useTransform(dialValue, Math.round);
+  const display = useTransform(dialValue, riskScore);
 
   useEffect(() => {
     const { record } = useRiskHistory.getState();
@@ -77,7 +78,7 @@ export function RiskDial({ action }: { action?: ReactNode }) {
       </div>
       <div className="pw-panel-dial-body">
         <div className="pw-panel-gauge" role="meter" aria-label="Plant risk score" aria-valuemin={0} aria-valuemax={100}
-          aria-valuenow={score} aria-valuetext={`${formatNumber(score)} of 100, ${band}`}>
+          aria-valuenow={riskScore(score)} aria-valuetext={`${riskScore(score)} of 100, ${band}`}>
           <svg viewBox="0 0 122 70" aria-hidden="true">
             <path className="pw-panel-gauge-track" d={ARC} />
             <path className="pw-panel-gauge-fill" d={ARC} pathLength="100" strokeDasharray={`${score} 100`} />
@@ -88,12 +89,13 @@ export function RiskDial({ action }: { action?: ReactNode }) {
         </div>
         <div className="pw-panel-dial-band">
           <strong>{band}</strong>
-          <span className="pw-panel-delta pw-mono" data-direction={Math.sign(delta)} title={`Baseline ${formatNumber(baseline)}`}>
-            <DeltaIcon size={13} aria-hidden />{formatDelta(delta)} <span>vs baseline</span>
+          <span className="pw-panel-delta pw-mono" data-direction={Math.sign(delta)} title={`Baseline ${riskScore(baseline)}`}>
+            <DeltaIcon size={13} aria-hidden />{riskDelta(delta)} <span>vs baseline</span>
           </span>
         </div>
         <RiskHistory score={score} />
       </div>
+      <PlantLossExposure />
     </section>
   );
 }

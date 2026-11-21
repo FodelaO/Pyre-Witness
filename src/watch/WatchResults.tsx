@@ -1,10 +1,10 @@
 /** Renders a compact evidence list and the watch-specific approval cards. */
 "use client";
 
-import { WatchLoss } from "@/econ/mountsWatch";
 import { useTwinStore } from "@/twin/store";
 import { threatKey, WATCH_SOURCES } from "./sources";
 import type { Candidate, ThreatItem, WatchFinding, WatchReport } from "./types";
+import { WatchAdvisoryLoss } from "./WatchLiveLoss";
 
 const chip = "rounded border border-pw-line-strong px-1.5 py-0.5 font-mono text-[10px]";
 
@@ -31,7 +31,6 @@ function candidateRows(candidates: Candidate[]): Row[] {
 
 function ThreatRow({ row }: { row: Row }) {
   const { threat, assetIds, finding } = row;
-  const hasAsset = useTwinStore((state) => state.twin.assets.some((asset) => assetIds.includes(asset.id)));
   const triage = finding?.triage ?? row.disposition;
   const evidence = [WATCH_SOURCES[threat.source].label, ...threat.cves, triage].filter(Boolean).join(" · ");
   // Several advisories can share one product title, so the identifier is what tells the rows apart.
@@ -46,7 +45,7 @@ function ThreatRow({ row }: { row: Row }) {
       )}
       <a className="block min-w-0 text-pw-text hover:text-pw-info [overflow-wrap:anywhere]" href={threat.url}
         target="_blank" rel="noopener noreferrer" title={evidence} aria-label={`${threat.title} · ${evidence}`}>{threat.title}</a>
-      {hasAsset && row.disposition !== "excluded" && <WatchLoss item={threat} assetIds={assetIds} />}
+      {assetIds.length > 0 && row.disposition !== "excluded" && <WatchAdvisoryLoss item={threat} assetIds={assetIds} />}
     </li>
   );
 }

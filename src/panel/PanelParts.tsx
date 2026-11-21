@@ -12,18 +12,20 @@ export function formatNumber(value: number) {
   return decimal.format(value);
 }
 
-export function formatDelta(value: number) {
-  const rounded = Math.round(value * 100) / 100;
-  if (rounded === 0) return "0";
-  return `${rounded > 0 ? "+" : "−"}${formatNumber(Math.abs(rounded))}`;
-}
-
 export function percent(fraction: number) {
   return Math.round(Math.min(100, Math.max(0, fraction * 100)));
 }
 
 export function readableId(value: string) {
   return value.replaceAll("_", " ");
+}
+
+const KIND_WORDS: Record<string, string> = { plc: "PLC", hmi: "HMI", ro: "RO", uv: "UV", wifi: "Wi-Fi", ap: "AP", ip: "IP", usb: "USB" };
+
+/** Equipment kind as a short label that keeps acronyms upper-case: `plc_cabinet` -> "PLC cabinet". */
+export function kindLabel(kind: string) {
+  const text = kind.split("_").map((word) => KIND_WORDS[word] ?? word).join(" ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export function PanelSection({ children }: { children: ReactNode }) {

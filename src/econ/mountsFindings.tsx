@@ -20,7 +20,8 @@ export function FindingLoss({ finding, checkedTwin }: { finding: RuleFinding; ch
     const scenario = scenarioFromFinding(twin, finding);
     return scenario && estimateLoss(twin, scenario);
   }, [twin, finding]);
-  return estimate ? <LossFigure estimate={estimate} /> : null;
+  // The plant header is "/ yr"; a finding is one event, so the unit is stated beside the amount.
+  return estimate ? <LossFigure estimate={estimate} qualifier="per event" /> : null;
 }
 
 export function ComplianceGapLoss({ item }: { item: ComplianceItem }) {
@@ -31,5 +32,5 @@ export function ComplianceGapLoss({ item }: { item: ComplianceItem }) {
     const scenario = scenarioFromCompliance(twin, item, assetId);
     return scenario && estimateLoss(twin, scenario);
   }, [twin, item, assetId]);
-  return estimate ? <LossFigure estimate={estimate} /> : null;
+  return estimate ? <LossFigure estimate={estimate} qualifier="per event" /> : null;
 }

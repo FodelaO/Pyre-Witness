@@ -2,8 +2,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WATCH_FEED_STALE_MS, watchFeedStatus } from "./feedStatus";
 import { recordLiveCheck } from "./liveHistory";
 import { LIVE_CHECK_INTERVAL_MS, type LiveCheck } from "./liveTypes";
+import { useWatchStore } from "./watchStore";
 
 export function useWatchLive() {
   const inFlight = useRef(false);
@@ -22,6 +24,7 @@ export function useWatchLive() {
       const response = await fetch("/api/watch/feeds", { cache: "no-store", signal: AbortSignal.timeout(25_000) });
       if (!response.ok) throw new Error(`Feed check HTTP ${response.status}`);
       const check: LiveCheck = await response.json();
+      useWatchStore.getState().setFeedCheck(check);
       setSnapshot({ check, added: recordLiveCheck(check) });
       setNextAt(check.checkedAt + LIVE_CHECK_INTERVAL_MS);
     } catch (reason) {
@@ -44,6 +47,14 @@ export function useWatchLive() {
     const timer = window.setTimeout(checkNow, Math.max(0, nextAt - Date.now()));
     return () => window.clearTimeout(timer);
   }, [checkNow, checking, nextAt]);
+
+  useEffect(() => {
+    const check = snapshot?.check;
+    if (!check || watchFeedStatus(check) !== "live") return;
+    const timer = window.setTimeout(() => useWatchStore.getState().setFeedCheck(check),
+      Math.max(0, check.checkedAt + WATCH_FEED_STALE_MS + 1 - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [snapshot]);
 
   return { snapshot, checking, error, nextAt, checkNow };
 }

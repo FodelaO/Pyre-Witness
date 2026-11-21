@@ -1,0 +1,18 @@
+/* Source grouping and measured benefits in the approval queue. */
+.pw-panel-mitigation-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.pw-panel-mitigation-group > h3 {
+  margin-block-end: 5px;
+  color: var(--pw-text-dim);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.pw-panel-mitigation-group[data-active-outcome] > h3 {
+  color: var(--pw-text);
+}
+
+.pw-panel-proposal-action .pw-panel-actions { margin-inline-start: auto; }

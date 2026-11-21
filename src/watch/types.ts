@@ -98,6 +98,16 @@ export interface WatchReport {
   managed?: ManagedWatchProgress;
 }
 
+export const WATCH_FORCE_HEADER = "x-pyre-watch-force";
+export const WATCH_REVIEW_CACHE_MS = 5 * 60_000;
+
+export interface WatchRunResult {
+  report: WatchReport;
+  cached?: boolean;
+  checkedAt?: number;
+  note?: string;
+}
+
 export type WatchEventData =
   | { type: "started"; date: string }
   | { type: "working"; name: WatchStage["name"] }
@@ -105,7 +115,8 @@ export type WatchEventData =
   | { type: "matches"; candidates: Candidate[]; unmatchedNews?: ThreatItem[] }
   | { type: "managed-progress"; progress: ManagedWatchProgress }
   | { type: "stage"; stage: WatchStage }
-  | { type: "done"; report: WatchReport }
+  | ({ type: "snapshot" } & WatchRunResult)
+  | ({ type: "done" } & WatchRunResult)
   | { type: "error"; message: string };
 
 export type WatchEvent = { runId: string; at: number } & WatchEventData;

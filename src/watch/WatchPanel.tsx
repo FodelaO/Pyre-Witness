@@ -4,7 +4,6 @@
 import { ChevronDown, Radar } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { MitigationQueue } from "@/panel/MitigationQueue";
-import { shouldRetryRestoredWatch } from "@/panel/watchFreshness";
 import { watchStatus } from "@/shell/watchStatus";
 import { useTwinStore } from "@/twin/store";
 import { WATCH_SOURCES } from "./sources";
@@ -24,8 +23,9 @@ export function WatchRun({ run, managed = false }: { run: WatchRunState; managed
   const keyMissing = run.stages.some(({ state, detail }) => state === "failed" && /GEMINI_API_KEY/i.test(detail));
   const modelUnavailable = run.stages.some(({ name, state }) => name !== "feeds" && state === "failed");
   const status = watchStatus(run);
-  const elapsedSeconds = (run.stages.reduce((total, stage) => total + stage.ms, 0) / 1000).toFixed(1);
   const report = run.report;
+  const reportStages = report?.stages ?? run.stages;
+  const elapsedSeconds = (reportStages.reduce((total, stage) => total + stage.ms, 0) / 1000).toFixed(1);
   const mitigations = useTwinStore((state) => state.mitigations);
   const proposals = report?.recommendations.length ? mitigations.filter(({ id, proposedBy }) => proposedBy === "threat-watch"
     && report.recommendations.some((item) => item.id === id)) : [];
@@ -76,7 +76,7 @@ export function WatchRun({ run, managed = false }: { run: WatchRunState; managed
             Model review <time dateTime={new Date(report.finishedAt).toISOString()}>{new Date(report.finishedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
             {" · "}{elapsedSeconds} s
           </summary>
-          <ul>{run.stages.map((stage) => (
+          <ul>{reportStages.map((stage) => (
             <li key={stage.name}>{stage.model ?? stageLabel[stage.name]} · {stage.ms} ms · {stage.state}</li>
           ))}</ul>
         </details>
@@ -87,6 +87,8 @@ export function WatchRun({ run, managed = false }: { run: WatchRunState; managed
 
 export default function WatchPanel({ open, reveal = 0, onOpenChange }: { open: boolean; reveal?: number; onOpenChange: (open: boolean) => void }) {
   const run = useWatchStore((state) => state.local);
+  const review = useWatchStore((state) => state.review);
+  const feed = useWatchStore((state) => state.feedStatus);
   const managed = useWatchStore((state) => state.managed);
   const runDaily = useWatchStore((state) => state.runDaily);
   const runNow = useWatchStore((state) => state.runNow);
@@ -94,12 +96,7 @@ export default function WatchPanel({ open, reveal = 0, onOpenChange }: { open: b
   const lastReveal = useRef(0);
 
   useEffect(() => {
-    const before = useWatchStore.getState().local;
     runDaily();
-    // Daily admission restores cached reports synchronously. Fresh runs enter running here,
-    // so a subsequent provider failure cannot trigger another automatic request.
-    const { local, runNow: retry } = useWatchStore.getState();
-    if (shouldRetryRestoredWatch(before, local)) void retry();
   }, [runDaily]);
   useEffect(() => {
     if (!open || reveal === lastReveal.current) return;
@@ -108,17 +105,18 @@ export default function WatchPanel({ open, reveal = 0, onOpenChange }: { open: b
   }, [open, reveal]);
 
   const status = watchStatus(run);
+  const label = { pending: "Ready", live: "Live", stale: "Stale", offline: "Feed offline" }[feed];
   return (
     <details id="pw-watch" className="pw-watch pw-panel-disclosure" open={open}
       onToggle={(event) => { if (event.target === event.currentTarget) onOpenChange(event.currentTarget.open); }}>
       <summary ref={summary}>
         <span><Radar size={16} aria-hidden />Threat watch</span>
-        <span className="pw-watch-state"><i className="pw-status-dot" data-status={status} aria-hidden />{status}</span>
+        <span className="pw-watch-state"><i className="pw-status-dot" data-status={status} aria-hidden />{label}</span>
         <ChevronDown size={14} className="pw-panel-disclosure-caret" aria-hidden />
       </summary>
       <div className="pw-watch-body">
-        <WatchSignalDesk report={run.report} reviewing={run.status === "running"} onReview={() => void runNow()} />
-        <WatchRun run={run} />
+        <WatchSignalDesk report={review.report} reviewing={review.status === "running"} onReview={() => void runNow()} />
+        <WatchRun run={review} />
         <details className="pw-watch-notes">
           <summary>Antigravity comparison</summary>
           <div className="pw-watch-managed">

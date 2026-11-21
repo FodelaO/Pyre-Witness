@@ -1,0 +1,48 @@
+/* Fit requests are compact actions until an illustration is loading or available. */
+.pw-panel-fit-tools {
+  padding: 8px 18px;
+  border-block-end: 1px solid var(--pw-line);
+  color: var(--pw-text-dim);
+  font-size: 12px;
+}
+
+.pw-panel-fit-tools > summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pw-panel-fit-tools .pw-fit {
+  border: 0;
+  padding: 0;
+}
+
+.pw-panel-fit-tools .pw-fit:not(:has(.pw-fit-enlarge, .pw-fit-skeleton)) .pw-fit-heading {
+  display: none;
+}
+
+.pw-panel-fit-tools .pw-fit-tile:not(:has(.pw-fit-enlarge, .pw-fit-skeleton)) {
+  background: none;
+  border: 0;
+}
+
+.pw-panel-fit-tools .pw-fit-tile:not(:has(.pw-fit-enlarge, .pw-fit-skeleton)) :is(.pw-fit-tile-footer, .pw-fit-findings, .pw-fit-error, .pw-fit-tile-heading > p) {
+  display: none;
+}
+
+.pw-panel-fit-tools .pw-fit-tile:not(:has(.pw-fit-enlarge, .pw-fit-skeleton)) :is(.pw-fit-tile-heading, .pw-fit-media) {
+  padding: 0;
+  background: none;
+}
+
+.pw-panel-fit-tools .pw-fit-media .pw-fit-generate {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: auto;
+  min-height: 28px;
+  aspect-ratio: auto;
+  font-size: 11px;
+}
+
+.pw-panel-fit-tools .pw-fit-generate svg { width: 13px; height: 13px; }

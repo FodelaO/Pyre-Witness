@@ -3,10 +3,13 @@
 
 import { ArrowRight, Cable, Footprints, Globe, Network, Radio, Route, Router, Usb, Waves } from "lucide-react";
 import { Fragment, useEffect, useId, useRef } from "react";
+import { useCaptureAssessmentTwin } from "@/econ/mountsCapture";
+import { assetLabel } from "@/floor/assetLabel";
 import type { SelfCheckResult } from "@/pipeline/types";
 import { assetById, entryPointById } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import type { AttackPath, AttackStep, Twin } from "@/twin/types";
+import { FindingRow } from "./AssetInspector";
 import { Disclosure, PanelHeading, readableId } from "./PanelParts";
 
 const VIA = {
@@ -33,8 +36,9 @@ function Hop({ step }: { step: AttackStep }) {
 function PathRow({ path, twin }: { path: AttackPath; twin: Twin }) {
   const highlighted = useRef<string[] | null>(null);
   const hopDetails = useId();
-  const target = assetById(twin, path.target) ?? entryPointById(twin, path.target);
-  const targetLabel = target?.id ?? readableId(path.target);
+  const targetAsset = assetById(twin, path.target);
+  const target = targetAsset ?? entryPointById(twin, path.target);
+  const targetLabel = targetAsset ? assetLabel(targetAsset) : target?.name ?? readableId(path.target);
   const hops = path.steps.map(({ via, technique }) => [VIA[via].label, technique?.id].filter(Boolean).join(" ")).join(", ");
 
   function highlight() {
@@ -56,7 +60,7 @@ function PathRow({ path, twin }: { path: AttackPath; twin: Twin }) {
     const entry = entryPointById(twin, id);
     return (
       <span className="pw-panel-node" data-target={id === path.target} title={asset?.name ?? entry?.name ?? id}>
-        {asset ? <span className="pw-mono">{asset.id}</span> : entry?.name ?? readableId(id)}
+        {asset ? <span className="pw-mono">{assetLabel(asset)}</span> : entry?.name ?? readableId(id)}
       </span>
     );
   }
@@ -91,8 +95,9 @@ function PathRow({ path, twin }: { path: AttackPath; twin: Twin }) {
   );
 }
 
-export function AttackPathList({ paths, selfCheck, heading }: { paths: AttackPath[]; selfCheck: SelfCheckResult | null; heading: string }) {
+export function AttackPathList({ paths, selfCheck, heading, placement }: { paths: AttackPath[]; selfCheck: SelfCheckResult | null; heading?: string; placement?: "as-dropped" | "recommendation" }) {
   const twin = useTwinStore((state) => state.twin);
+  const checkedTwin = useCaptureAssessmentTwin(placement);
   const unique = new Map<string, AttackPath>();
   for (const path of [...paths, ...(selfCheck?.paths ?? [])]) {
     const key = `${path.source}:${path.id}`;
@@ -100,7 +105,7 @@ export function AttackPathList({ paths, selfCheck, heading }: { paths: AttackPat
   }
   return (
     <>
-      <PanelHeading icon={Route}>{heading} {unique.size > 0 && <span className="pw-panel-muted pw-mono">{unique.size}</span>}</PanelHeading>
+      {heading && <PanelHeading icon={Route}>{heading} {unique.size > 0 && <span className="pw-panel-muted pw-mono">{unique.size}</span>}</PanelHeading>}
       {unique.size > 0 ? (
         <ul className="pw-panel-list">{Array.from(unique, ([key, path]) => <PathRow key={key} path={path} twin={twin} />)}</ul>
       ) : <p className="pw-panel-muted">No new paths reported.</p>}
@@ -109,6 +114,11 @@ export function AttackPathList({ paths, selfCheck, heading }: { paths: AttackPat
           <p><Network size={13} aria-hidden />
             <span>Rules engine {selfCheck.passed ? "passed placement" : "flagged placement"} · {selfCheck.paths.length} {selfCheck.paths.length === 1 ? "path" : "paths"}{selfCheck.revised ? " · Architect revised once" : ""}</span>
           </p>
+          {selfCheck.findings.length > 0 && (
+            <Disclosure label={`Rules engine findings · ${selfCheck.findings.length}`}>
+              <ul className="pw-panel-list">{selfCheck.findings.map((finding, index) => <FindingRow key={`${finding.ruleId}-${index}`} finding={finding} checkedTwin={checkedTwin} />)}</ul>
+            </Disclosure>
+          )}
           {selfCheck.disagreements.length > 0 && (
             <Disclosure label={`${selfCheck.disagreements.length} ${selfCheck.disagreements.length === 1 ? "disagreement" : "disagreements"}`}>
               <ul className="pw-panel-bullets">{selfCheck.disagreements.map((item, index) => <li key={index}>{item}</li>)}</ul>

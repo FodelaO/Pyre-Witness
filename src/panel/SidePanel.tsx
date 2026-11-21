@@ -1,24 +1,27 @@
 /** Pinned risk, assessment and watch readouts for the plant. */
 "use client";
 
-import { AudioLines, Crosshair, List, Radio } from "lucide-react";
-import { lazy, useEffect, useRef, useState } from "react";
+import { AudioLines, Crosshair, ImagePlus, List, Radio } from "lucide-react";
+import { lazy, useEffect, useMemo, useRef, useState } from "react";
+import { useLensStore } from "@/layers/lensStore";
+import ModelerPanel from "@/modeler/ModelerPanel";
+import { useModelerStore } from "@/modeler/modelerStore";
+import SourcesStrip from "@/modeler/SourcesStrip";
 import { useRunStore, type RunState } from "@/pipeline/runStore";
 import { Slot } from "@/shell/Slot";
 import { useTwinStore } from "@/twin/store";
+import { useWatchStore } from "@/watch/watchStore";
 import { AssetInspector } from "./AssetInspector";
-import { AttackPathList } from "./AttackPathList";
-import { ComplianceChips } from "./ComplianceChips";
 import { DeviceCard } from "./DeviceCard";
 import { MitigationQueue } from "./MitigationQueue";
-import { NeverPlace } from "./NeverPlace";
 import { Disclosure, PanelHeading, PanelSection, TextPreview } from "./PanelParts";
 import { PanelWorkspace } from "./PanelWorkspace";
-import { PlacementAnswer } from "./PlacementAnswer";
 import { RiskDial } from "./RiskDial";
-import { RiskList } from "./RiskList";
+import { RunAnswers } from "./RunAnswers";
+import { placementChecks } from "./runEvidence";
 import { RunError, RunProgress } from "./RunProgress";
 import { SimulationComparison } from "./SimulationComparison";
+import "./fitPreviewPanel.css";
 
 const ActivityFeed = lazy(() => import("@/crew/ActivityFeed"));
 const FitPreview = lazy(() => import(/* turbopackOptional: true */ "@/fit/FitPreview"));
@@ -43,28 +46,41 @@ function runThumbnail(run: RunState) {
 type Props = {
   captureOpen: boolean;
   setCaptureEditor: (editor: HTMLDivElement | null) => void;
+  modelerOpen: boolean;
+  onModelerOpen: (open: boolean) => void;
+  previewModel: boolean;
   watchOpen: boolean;
+  watchReveal: number;
   onWatchOpen: (open: boolean) => void;
 };
 
-export default function SidePanel({ captureOpen, setCaptureEditor, watchOpen, onWatchOpen }: Props) {
+export default function SidePanel({ captureOpen, setCaptureEditor, modelerOpen, onModelerOpen, previewModel, watchOpen, watchReveal, onWatchOpen }: Props) {
+  const mode = useLensStore((state) => state.mode);
   const run = useRunStore();
-  const { runId, status, stage, events, gate, error, summary, profile, assessment, selfCheck, placedAssetId } = run;
+  const { runId, status, stage, events, gate, error, summary, profile, assessment, placedAssetId } = run;
   const mitigations = useTwinStore((state) => state.mitigations);
+  const localWatch = useWatchStore((state) => state.local.report?.recommendations);
+  const managedWatch = useWatchStore((state) => state.managed.report?.recommendations);
+  // Watch proposals are reviewed in Threat watch. A still-pending one that the current review no longer lists was
+  // superseded by a newer review, so it is not repeated here; only decided ones stay as history.
+  const runMitigations = useMemo(() => mitigations.filter(({ id, proposedBy, status }) => proposedBy !== "threat-watch"
+    || (status !== "proposed" && !(localWatch?.some((item) => item.id === id) || managedWatch?.some((item) => item.id === id)))),
+  [mitigations, localWatch, managedWatch]);
+  const selectedId = useTwinStore((state) => state.selectedId);
   const [dismissedRun, setDismissedRun] = useState<string | null | undefined>(undefined);
   const scroll = useRef<HTMLDivElement>(null);
   const running = status === "running";
   const hasRun = status !== "idle";
   const focused = hasRun && (running || dismissedRun !== runId);
   const thumbnail = focused && profile ? runThumbnail(run) : undefined;
-  const firstProposal = events.findIndex((event) => event.type === "reasoning.done");
-  const dropped = events.find((event, index) => event.type === "selfcheck.done" && (firstProposal < 0 || index < firstProposal));
-  const checkingRevision = events.findLastIndex((event) => event.type === "revision.done")
-    > events.findLastIndex((event) => event.type === "selfcheck.done");
-  const checked = checkingRevision ? null : selfCheck;
-  const pendingPlacement = running || (status === "error" && (!checked || (!checked.revised && checked.disagreements.length > 0)));
+  const checks = placementChecks(events);
+  const pendingPlacement = running || !checks.recommendation;
 
   useEffect(() => { if (runId) scroll.current?.scrollTo({ top: 0 }); }, [runId]);
+  useEffect(() => {
+    const modeler = useModelerStore.getState();
+    if (!previewModel && modeler.previewId) modeler.preview(null);
+  }, [previewModel]);
 
   function toggleResults() {
     setDismissedRun(focused ? runId : undefined);
@@ -79,50 +95,43 @@ export default function SidePanel({ captureOpen, setCaptureEditor, watchOpen, on
         </button>
       )} />
       <PanelWorkspace captureOpen={captureOpen} setCaptureEditor={setCaptureEditor} readoutsRef={scroll}>
+        <div className="pw-panel-modeler" hidden={mode === "data"}>
+          <Slot name="Twin modeler">
+            <ModelerPanel open={modelerOpen} onOpenChange={onModelerOpen}><SourcesStrip /></ModelerPanel>
+          </Slot>
+        </div>
         {focused ? (
           <>
-            {summary && (
+            {error && <PanelSection><RunError message={error.message} /></PanelSection>}
+            {(running || (!profile && gate)) && (
+              <PanelSection><RunProgress {...{ status, stage, events, gate, error }} /></PanelSection>
+            )}
+            {profile && <PanelSection><DeviceCard profile={profile} thumbnail={thumbnail} mode={mode} /></PanelSection>}
+            <RunAnswers {...{ mode, assessment, placedAssetId, ...checks }} objectClass={profile?.object_class} pending={pendingPlacement} />
+            {summary && mode === "both" && (
               <PanelSection>
                 <PanelHeading icon={AudioLines} aside={
                   <span className="pw-panel-voice">
                     <Slot name="Chief briefing audio" quiet><SpeakButton text={summary} /></Slot>
                   </span>
-                }>Chief briefing</PanelHeading>
+                }>Chief briefing <span className="pw-panel-muted">· AI guidance</span></PanelHeading>
                 <div className="pw-panel-briefing"><TextPreview text={summary} label="Full briefing" lines={3} /></div>
               </PanelSection>
             )}
-            {error && <PanelSection><RunError message={error.message} /></PanelSection>}
-            {(running || (!profile && gate)) && (
-              <PanelSection><RunProgress {...{ status, stage, events, gate, error }} /></PanelSection>
-            )}
-            {profile && <PanelSection><DeviceCard profile={profile} thumbnail={thumbnail} /></PanelSection>}
-            {dropped?.type === "selfcheck.done" && (
-              <PanelSection><Disclosure label={`As-dropped rules check · ${dropped.result.paths.length} ${dropped.result.paths.length === 1 ? "path" : "paths"}`}>
-                <AttackPathList paths={assessment?.attack_paths ?? []} selfCheck={dropped.result} heading="As-dropped paths" />
-              </Disclosure></PanelSection>
-            )}
-            {assessment && (
-              <>
-                <PanelSection><PlacementAnswer assessment={assessment} placedAssetId={placedAssetId} pending={pendingPlacement} /></PanelSection>
-                <PanelSection><NeverPlace places={assessment.never_place} /></PanelSection>
-                <PanelSection><RiskList risks={assessment.risks} />
-                  {assessment.compliance.length > 0 && (
-                    <Disclosure label="Compliance references"><ComplianceChips items={assessment.compliance} /></Disclosure>
-                  )}
-                </PanelSection>
-                <PanelSection><AttackPathList paths={dropped ? [] : assessment.attack_paths} selfCheck={checked}
-                  heading={dropped ? "Recommendation rules check" : "Attack paths"} /></PanelSection>
-              </>
-            )}
           </>
-        ) : <PanelSection><AssetInspector /></PanelSection>}
-        {mitigations.length > 0 && <PanelSection><MitigationQueue items={mitigations} /></PanelSection>}
+        ) : <PanelSection><AssetInspector mode={mode} /></PanelSection>}
+        {focused && mode === "data" && selectedId && <PanelSection><AssetInspector mode={mode} /></PanelSection>}
+        {runMitigations.length > 0 && <PanelSection><MitigationQueue items={runMitigations} /></PanelSection>}
         <SimulationComparison />
-        {focused && profile && assessment && <Slot name="Fit preview" quiet><FitPreview /></Slot>}
+        {focused && profile && assessment && !running && checks.recommendation?.passed !== false && mode !== "data" && (
+          <Disclosure className="pw-panel-fit-tools" label={<span><ImagePlus size={14} aria-hidden />Fit preview</span>}>
+            <Slot name="Fit preview" quiet><FitPreview /></Slot>
+          </Disclosure>
+        )}
         {focused && profile && !running && (
           <PanelSection><Disclosure label="Analysis details"><RunProgress {...{ status, stage, events, gate, error }} /></Disclosure></PanelSection>
         )}
-        <Slot name="Threat watch" quiet><WatchPanel open={watchOpen} onOpenChange={onWatchOpen} /></Slot>
+        <Slot name="Threat watch" quiet><WatchPanel open={watchOpen} reveal={watchReveal} onOpenChange={onWatchOpen} /></Slot>
       </PanelWorkspace>
       <div className="pw-panel-feed">
         <Disclosure label={<span><Radio size={15} aria-hidden />Crew activity</span>}>

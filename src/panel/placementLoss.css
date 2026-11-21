@@ -1,0 +1,23 @@
+/* Compact single-event estimates beside the placement action. */
+.pw-placement-loss {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px;
+  border-block-start: 1px solid var(--pw-line);
+  color: var(--pw-text);
+  font-size: 12px;
+}
+
+.pw-placement-loss strong {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pw-placement-loss-unit {
+  display: block;
+  color: var(--pw-text-dim);
+  font-size: 10px;
+}

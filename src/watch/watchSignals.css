@@ -20,7 +20,9 @@
 .pw-signal-list { min-width: 0; margin: 1px 0 0; padding: 0; list-style: none; }
 .pw-signal-row { display: grid; min-width: 0; gap: 3px; padding: 6px 3px 4px; border-top: 1px solid var(--pw-line); cursor: pointer; }
 .pw-signal-row:is(:hover, :focus-within) { background: var(--pw-panel-2); }
-.pw-signal-row-meta { display: flex; align-items: center; gap: 5px; min-width: 0; }
+/* Source, age, advisory id and triage tag stay whole; when the rail is narrow the tag drops to its own line. */
+.pw-signal-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0 5px; min-width: 0; }
+.pw-signal-row-meta > * { white-space: nowrap; }
 .pw-signal-new { color: var(--pw-ok); }
 .pw-signal-triage { margin-inline-start: auto; white-space: nowrap; }
 .pw-signal-title { display: flex; align-items: center; gap: 5px; min-width: 0; width: fit-content; max-width: 100%; font-size: 13px; line-height: 1.25; font-weight: 630; }

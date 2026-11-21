@@ -2,7 +2,9 @@
 "use client";
 
 import { Check, CircleHelp, ClipboardCheck, Minus } from "lucide-react";
+import { ComplianceGapLoss } from "@/econ/mountsFindings";
 import type { ComplianceItem } from "@/pipeline/types";
+import { CompactLossFigure } from "./CompactLossFigure";
 import { PanelHeading } from "./PanelParts";
 
 const STATUS = {
@@ -37,7 +39,9 @@ export function ComplianceChips({ items }: { items: ComplianceItem[] }) {
           <div key={framework}>
             <h3>{framework}</h3>
             <div className="pw-panel-chips">
-              {clauses.map((item, index) => <Clause key={`${item.clause}-${index}`} item={item} />)}
+              {clauses.map((item, index) => item.status === "gap"
+                ? <div key={`${item.clause}-${index}`} className="w-full min-w-0"><Clause item={item} /><CompactLossFigure><ComplianceGapLoss item={item} /></CompactLossFigure></div>
+                : <Clause key={`${item.clause}-${index}`} item={item} />)}
             </div>
           </div>
         ))}

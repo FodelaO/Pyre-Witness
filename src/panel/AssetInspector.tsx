@@ -2,11 +2,16 @@
 "use client";
 
 import { Activity, Cloud, Crosshair, HardDrive, LockKeyhole, MapPin, Radio, Shield, ShieldAlert, Unplug } from "lucide-react";
+import { FindingLoss } from "@/econ/mountsFindings";
 import { formatTelemetry, telemetryNumber, withTelemetryUnit } from "@/floor/telemetryFormat";
+import type { LensMode } from "@/layers/lensStore";
 import { areaById, assetById } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
-import type { Asset, RuleFinding, TelemetryPoint } from "@/twin/types";
-import { Disclosure, PanelHeading, PurdueBadge, readableId, TechniqueChip } from "./PanelParts";
+import type { Asset, RuleFinding, TelemetryPoint, Twin } from "@/twin/types";
+import { AssetDataEvidence } from "./AssetDataEvidence";
+import { CompactLossFigure } from "./CompactLossFigure";
+import { showsRisk } from "./panelLens";
+import { Disclosure, kindLabel, PanelHeading, PurdueBadge, readableId, TechniqueChip } from "./PanelParts";
 import { RISK_ICONS } from "./RiskList";
 
 function CyberFlags({ cyber }: { cyber: NonNullable<Asset["cyber"]> }) {
@@ -41,73 +46,80 @@ function TelemetryRow({ point: { tag, label, value, unit, lo, hi } }: { point: T
   );
 }
 
-function FindingRow({ finding }: { finding: RuleFinding }) {
+export function FindingRow({ finding, checkedTwin }: { finding: RuleFinding; checkedTwin?: Twin }) {
   const Icon = RISK_ICONS[finding.kind];
   return (
     <li>
       <Disclosure label={<span className="pw-panel-finding-label"><Icon size={13} aria-hidden /><strong>{finding.title}</strong>
+        {finding.technique && <span className="pw-mono pw-panel-finding-id" title={finding.technique.name}>{finding.technique.id}</span>}
         <span className="pw-panel-chip pw-mono" title={`Severity ${finding.severity} of 5`}>S{finding.severity}</span></span>}>
         <p>{finding.detail}</p>
         {finding.fix && <p><strong>Mitigation</strong> {finding.fix}</p>}
         {finding.technique && <TechniqueChip technique={finding.technique} />}
         {finding.references.length > 0 && <ul className="pw-panel-bullets">{finding.references.map((reference, index) => <li key={index}>{reference}</li>)}</ul>}
       </Disclosure>
+      <CompactLossFigure><FindingLoss finding={finding} checkedTwin={checkedTwin} /></CompactLossFigure>
     </li>
   );
 }
 
-export function AssetInspector() {
+export function AssetInspector({ mode }: { mode: LensMode }) {
   const selectedArea = useTwinStore((state) => state.twin.areas.find((candidate) => candidate.id === state.selectedId));
   const asset = useTwinStore((state) => state.selectedId ? assetById(state.twin, state.selectedId) : undefined);
   const area = useTwinStore((state) => asset ? areaById(state.twin, asset.physical.area) : undefined);
   const conduit = useTwinStore((state) => state.twin.conduits.find((item) => item.id === asset?.network.conduit));
   const findings = useTwinStore((state) => state.risk.findings);
   const select = useTwinStore((state) => state.select);
+  const showMaterial = mode !== "data";
+  const showData = mode !== "material";
   if (!asset && selectedArea) return (
     <>
       <PanelHeading icon={MapPin}>Selected area</PanelHeading>
       <div className="pw-panel-asset-identity">
-        <h3>{selectedArea.name}</h3><p>{selectedArea.statusNote ?? selectedArea.kind}</p>
+        <h3>{selectedArea.name}</h3><p>{selectedArea.statusNote ?? kindLabel(selectedArea.kind)}</p>
       </div>
-      <div className="pw-panel-chips" aria-label="Typical Purdue levels">
+      {showData && <div className="pw-panel-chips" aria-label="Typical Purdue levels">
         {selectedArea.typicalLevels.map((level) => <PurdueBadge key={level} level={level} />)}
-      </div>
+      </div>}
     </>
   );
   if (!asset) return (
     <>
       <PanelHeading icon={Crosshair}>Asset inspector</PanelHeading>
-      <p className="pw-panel-muted">Select an asset on the floor or Purdue map.</p>
+      <p className="pw-panel-muted">Select an asset on the drawing.</p>
     </>
   );
 
-  const assetFindings = findings.filter((finding) => finding.assetId === asset.id);
+  const assetFindings = findings.filter((finding) => finding.assetId === asset.id && showsRisk(mode, finding));
   const telemetry = asset.process?.telemetry ?? [];
   return (
     <>
       <PanelHeading icon={Crosshair} aside={<span className="pw-panel-chip pw-mono">{asset.id}</span>}>Asset inspector</PanelHeading>
-      <div className="pw-panel-asset-identity"><h3>{asset.name}</h3><p>{readableId(asset.physical.kind)}</p></div>
+      <div className="pw-panel-asset-identity"><h3>{asset.name}</h3><p>{kindLabel(asset.physical.kind)}</p></div>
       <dl className="pw-panel-facts">
-        <dt>Floor</dt><dd>{area ? (
+        {showMaterial && <><dt>Floor</dt><dd>{area ? (
           <button type="button" className="pw-panel-link" onClick={() => select(area.id)}>{area.name}</button>
-        ) : readableId(asset.physical.area)}</dd>
-        <dt>Network</dt><dd><PurdueBadge level={asset.network.level} />{asset.network.area}</dd>
-        <dt>Conduit</dt><dd>{conduit?.name ?? asset.network.conduit ?? "None"}</dd>
+        ) : readableId(asset.physical.area)}</dd></>}
+        {showData && <><dt>Network</dt><dd><PurdueBadge level={asset.network.level} />{asset.network.area}</dd>
+        {asset.network.conduit && <><dt>Conduit</dt><dd>{conduit?.name ?? asset.network.conduit}</dd></>}</>}
         <dt>Criticality</dt><dd><span className="pw-mono">{asset.criticality}/5</span>{asset.safetyCritical ? "Safety critical" : ""}</dd>
       </dl>
-      {asset.cyber && <CyberFlags cyber={asset.cyber} />}
-      {telemetry.length > 0 && (
+      {showData && asset.cyber && <CyberFlags cyber={asset.cyber} />}
+      {showMaterial && telemetry.length > 0 && (
         <div className="pw-panel-subsection">
           <h3><Activity size={13} aria-hidden />Telemetry</h3>
           <ul className="pw-panel-telemetry">{telemetry.map((point) => <TelemetryRow key={point.tag} point={point} />)}</ul>
         </div>
       )}
-      {assetFindings.length > 0 && (
+      {(assetFindings.length > 0 || mode === "data") && (
         <div className="pw-panel-subsection">
           <h3><ShieldAlert size={13} aria-hidden />Rules engine findings <span className="pw-mono pw-panel-muted">{assetFindings.length}</span></h3>
-          <ul className="pw-panel-list">{assetFindings.map((finding, index) => <FindingRow key={`${finding.ruleId}-${index}`} finding={finding} />)}</ul>
+          {assetFindings.length ? (
+            <ul className="pw-panel-list">{assetFindings.map((finding, index) => <FindingRow key={`${finding.ruleId}-${index}`} finding={finding} />)}</ul>
+          ) : <p className="pw-panel-muted">No cyber findings for this node.</p>}
         </div>
       )}
+      {showData && <AssetDataEvidence assetId={asset.id} findings={findings} />}
     </>
   );
 }
