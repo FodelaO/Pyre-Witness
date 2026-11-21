@@ -84,8 +84,9 @@ Two linked views of the same model. Select an asset in one and it lights up in t
 | **Voice** | The Chief reads the briefing; hold to talk and ask about the plant | `gemini-3.8-flash-tts`, `gemini-3.8-live` |
 | **Fit preview** | A picture of the device in place, labelled as an AI-generated visualisation | `gemini-nano-banana-2.1` |
 | **Simulation** | Six what-if events (ammonia release, ransomware, carbonation upset, CIP, chiller, wireless). Deterministic, labelled SIMULATION, with mitigations a human approves and a re-run to compare | none (deterministic) |
-| **Threat watch** | Reads CISA KEV, CISA ICS advisories and NCSC news, matches them to the plant's inventory, proposes changes, waits for approval | Gemini 4 Neon, Antigravity managed agent (comparison) |
-| **Twin modeller** | Drop a CSV, photos, a video or a PDF: proposed twin updates to review | Files API, Gemini 4 Hydrogen, Gemini 4 Neon |
+| **Threat watch** | Reads CISA KEV, CISA ICS advisories and NCSC news, matches them to the plant's inventory, proposes changes, waits for approval | Decisions API (triage), Gemini 4 Neon, Antigravity managed agent (comparison) |
+| **Twin modeller** | Drop a CSV, photos, a video or a PDF: proposed twin updates to review | Decisions API (input gate), Files API, Gemini 4 Hydrogen, Gemini 4 Neon |
+| **Loss estimate** | Every finding, advisory, placement and simulated event carries one number: the estimated dollar loss if it manifests, next to the drawing of the asset. *Show more* itemizes the full calculation asset by asset (FAIR: frequency x magnitude, Monte Carlo, fixed seed) | none (deterministic, assumed plant costs) |
 | **Service health** | The top bar shows every Google service the app depends on, probed live | all of the above |
 
 ## Rules engine (Inspector)
@@ -108,6 +109,7 @@ Deterministic checks the model's answer is verified against:
 | `FOOD-02`, `FOOD-03` | Foreign-material and brittle-material control near open product |
 | `MGMT-01` | Devices outside plant asset and patch management |
 | `SAFE-01` | Reachability of safety-critical targets after path evaluation |
+| `PLACE-01` | A device has no compliant home in the plant: hold |
 
 **Plant risk score (0–100).** A transparent index built from rule findings (weighted by severity) and attack-path evidence toward crown-jewel assets (PLCs, safety system). Bands: low < 20, guarded 20–39, elevated 40–59, high 60–79, critical ≥ 80. It is inspired by IEC 62443 zones and conduits and labelled with MITRE ATT&CK for ICS. It is a heuristic for decision support, not a certification.
 
@@ -120,8 +122,22 @@ The hackathon asks for proof beyond the demo. Our evaluation harness (`npm run e
 
 Metrics: device identification, correct Purdue level, correct plant area, key risks found (radio, removable media, default credentials, cloud, personal device), unsafe recommendations, and how often the rules engine forced a revision. The test images are openly licensed photos that we did not take, never images we staged to pass. Failures are reported, not hidden.
 
-- **Dataset:** 71 items (54 openly licensed device photos, text descriptions, product links), listed with sources in `eval/`.
-- **Results:** open **`/proof`** in the running app. It shows each run, the baseline next to the system, the failures with their images, and what we changed after seeing them.
+- **Dataset:** 71 labelled captures: 54 openly licensed photos from Wikimedia Commons (taken by other people, before this project), 9 written descriptions and 8 live product links; 55 devices and 8 non-devices; 30 clean, 20 messy, 13 edge cases. Labels and licences are in `eval/dataset/`.
+- **How it is scored:** both systems get the same input (image bytes or text only, never the file name or the label). A deterministic scorer compares each answer with the labels; device-type naming is judged by a separate, blinded Decisions API call. Results are paired on the captures both systems answered, with Wilson 95% intervals and exact McNemar tests.
+- **Latest result (run 4 against a fair re-run of the baseline, 66 of 71 answered by both):**
+
+| Metric | Single call | Pyre Witness |
+| --- | --- | --- |
+| Recommended a forbidden area | 5.6% (3/54) | **0.0% (0/54)** |
+| Key risks found | 51.7% (61/118) | **58.5% (69/118)** |
+| Equipment kind correct | 94.8% (55/58) | **98.3% (57/58)** |
+| Plant area correct | 87.7% | 89.5% (n=57, not significant) |
+| Purdue level correct | 96.3% | 94.4% |
+| Device vs non-device | 100% | 100% |
+| Median time per capture | **13.3 s** | 24.6 s |
+
+- **What that means:** a single Gemini 4 call is a strong baseline. The pipeline matches it on identification and placement, never recommended a forbidden area, finds more of the labelled risks, and adds what one call cannot: a deterministic check of every answer, attack paths in this plant, a risk score, a dollar estimate and a live twin. None of the differences is statistically significant on 71 items, and it is one development set that we iterated on (no held-out set yet). Run 3 lost to the baseline on equipment kind and risk recall; run 4 is the fix.
+- **Where to look:** open **`/proof`** in the running app: every run, the baseline next to the system, the failures with their images, and what we changed after seeing them. Full report in `eval/report/`.
 - **Reliability:** on 63 captures at six in parallel, 61 completed, 2 were correctly rejected (a defocused photo and a landscape), and none failed operationally (median 29 s).
 
 ## Run it locally
@@ -169,6 +185,7 @@ src/
   fit/         fit preview image
   modeler/     twin modeller (CSV, photos, video, PDF)
   health/      live checks of every Google service used
+  econ/        estimated economic loss per detection (FAIR, deterministic)
   data/        MITRE ATT&CK for ICS reference, compliance catalogue
 eval/          evaluation harness, dataset, runs
 docs/          architecture, build log per feature
@@ -180,7 +197,7 @@ More detail: [`docs/OVERVIEW.md`](docs/OVERVIEW.md) · [`docs/ARCHITECTURE.md`](
 
 Built from scratch during the hackathon. The commit history shows the timeline.
 
-- ✅ Twin data model and Line 3 seed (92 assets), with geometry tests
+- ✅ Twin data model and Line 3 seed (92 assets, 13 areas, 6 entry points), with geometry tests
 - ✅ Parametric SVG equipment library (process, control/network, wireless and portable devices)
 - ✅ Deterministic rules engine, attack-path graph and risk score, with tests
 - ✅ Interactive plant floor, Purdue map and the material / both / data lens
@@ -190,7 +207,8 @@ Built from scratch during the hackathon. The commit history shows the timeline.
 - ✅ Daily threat watch with human approval
 - ✅ Voice, fit preview, twin modeller, live service health
 - ✅ Evaluation harness against a single-call baseline (`/proof`)
-- 🚧 Estimated economic loss per detection; one-minute demo video
+- ✅ Estimated economic loss per finding, advisory, placement and simulation (deterministic, assumed plant costs)
+- 🚧 Optional 3D view; one-minute demo video
 
 ## What is real and what is simulated
 
