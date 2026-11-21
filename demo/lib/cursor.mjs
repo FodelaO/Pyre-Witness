@@ -72,7 +72,7 @@ export function makeCursor(page, log = console.log) {
      * effect (some controls swallow mouse clicks; see the report), activates it with the keyboard
      * (focus + Enter), which is still a real user input handled by the app's own handler.
      */
-    async click(locator, { ms = 650, verify, label = "element" } = {}) {
+    async click(locator, { ms = 650, verify, label = "element", keyFallback } = {}) {
       const c = await centerOf(locator);
       await glide(c.x, c.y, ms);
       await page.waitForTimeout(120);
@@ -83,8 +83,8 @@ export function makeCursor(page, log = console.log) {
         await page.waitForTimeout(250);
         if (!(await verify())) {
           log(`  ! mouse click on ${label} had no effect; activating it with the keyboard (focus + Enter)`);
-          await locator.focus();
-          await page.keyboard.press("Enter");
+          if (keyFallback) await keyFallback();
+          else { await locator.focus(); await page.keyboard.press("Enter"); }
           await page.waitForTimeout(200);
           if (!(await verify())) throw new Error(`${label} did not respond to mouse or keyboard`);
         }

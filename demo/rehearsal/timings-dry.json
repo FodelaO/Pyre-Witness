@@ -1,0 +1,147 @@
+{
+  "run": "dry",
+  "size": "1280x720",
+  "base": "http://localhost:4119",
+  "photo": null,
+  "captured": false,
+  "at": "2026-11-21T18:39:59.631Z",
+  "appMs": 71912,
+  "steps": [
+    {
+      "id": "01",
+      "name": "open-app",
+      "ok": true,
+      "ms": 6417,
+      "risk": "46",
+      "note": "chip: Gemini services, 10 of 10 healthy",
+      "shot": "demo/rehearsal/shots/dry-01-open-app.png"
+    },
+    {
+      "id": "02",
+      "name": "lens-data",
+      "ok": true,
+      "ms": 4726,
+      "risk": "46",
+      "note": "Data",
+      "shot": "demo/rehearsal/shots/dry-02-lens-data.png"
+    },
+    {
+      "id": "03",
+      "name": "lens-both",
+      "ok": true,
+      "ms": 1774,
+      "risk": "46",
+      "note": "Both",
+      "shot": "demo/rehearsal/shots/dry-03-lens-both.png"
+    },
+    {
+      "id": "04",
+      "name": "select-plc-f3",
+      "ok": true,
+      "ms": 1410,
+      "risk": "46",
+      "note": "selected",
+      "shot": "demo/rehearsal/shots/dry-04-select-plc-f3.png"
+    },
+    {
+      "id": "05",
+      "name": "simulate-cip-crossover",
+      "ok": true,
+      "ms": 4653,
+      "risk": "46",
+      "note": "Contained in 00:12 · ZSC-311 hardwired permissive",
+      "shot": "demo/rehearsal/shots/dry-05-simulate-cip-crossover.png"
+    },
+    {
+      "id": "06",
+      "name": "approve-mitigation",
+      "ok": false,
+      "ms": 7432,
+      "risk": "46",
+      "note": "locator.scrollIntoViewIfNeeded: Timeout 5000ms exceeded.",
+      "shot": "demo/rehearsal/shots/dry-06-approve-mitigation.png"
+    },
+    {
+      "id": "07",
+      "name": "rerun-simulation",
+      "ok": true,
+      "ms": 3893,
+      "risk": "46",
+      "note": "Contained in 00:12 · ZSC-311 hardwired permissive",
+      "shot": "demo/rehearsal/shots/dry-07-rerun-simulation.png"
+    },
+    {
+      "id": "08",
+      "name": "threat-watch",
+      "ok": true,
+      "ms": 4477,
+      "risk": "46",
+      "note": "Threat watch · Complete; approvals waiting: 3",
+      "shot": "demo/rehearsal/shots/dry-08-threat-watch.png"
+    },
+    {
+      "id": "09",
+      "name": "transcript",
+      "ok": true,
+      "ms": 2693,
+      "risk": "46",
+      "note": "steps listed; prompt:NO raw:yes tokens:NO :: Run transcript 3 runs · 26 steps shown Download transcript RUN All runs Simulation · cip · 13:38:26 Simulation · cip · 13:38:09 Threat watch · Daily threat watc",
+      "shot": "demo/rehearsal/shots/dry-09-transcript.png"
+    },
+    {
+      "id": "10",
+      "name": "transcript-close",
+      "ok": true,
+      "ms": 4020,
+      "risk": "46",
+      "note": "",
+      "shot": "demo/rehearsal/shots/dry-10-transcript-close.png"
+    },
+    {
+      "id": "11",
+      "name": "health-chip",
+      "ok": true,
+      "ms": 2584,
+      "risk": "46",
+      "note": "Gemini services, 10 of 10 healthy",
+      "shot": "demo/rehearsal/shots/dry-11-health-chip.png"
+    },
+    {
+      "id": "12",
+      "name": "health-chip-close",
+      "ok": true,
+      "ms": 362,
+      "risk": "46",
+      "note": "",
+      "shot": "demo/rehearsal/shots/dry-12-health-chip-close.png"
+    },
+    {
+      "id": "13",
+      "name": "proof-page",
+      "ok": false,
+      "ms": 18227,
+      "risk": "46",
+      "note": "page.waitForURL: Timeout 15000ms exceeded.",
+      "shot": "demo/rehearsal/shots/dry-13-proof-page.png"
+    },
+    {
+      "id": "14",
+      "name": "proof-scroll",
+      "ok": true,
+      "ms": 3968,
+      "risk": "46",
+      "note": "",
+      "shot": "demo/rehearsal/shots/dry-14-proof-scroll.png"
+    },
+    {
+      "id": "15",
+      "name": "back-to-plant",
+      "ok": false,
+      "ms": 5276,
+      "risk": "46",
+      "note": "locator.click: Timeout 5000ms exceeded.",
+      "shot": "demo/rehearsal/shots/dry-15-back-to-plant.png"
+    }
+  ],
+  "problems": []
+}

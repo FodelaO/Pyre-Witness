@@ -1,178 +1,217 @@
-# Pyre Witness — Architecture
+# Pyre Witness: architecture
 
-This document maps the implemented codebase, shared contracts, data flows, deterministic rules, tabletop scenarios, and evaluation harness.
+How the code is built, as of 13:40 EST on Nov 21, 2026. Read from the code; numbers cite a file or log.
 
-## Directory map
+Legend: **[model]** = a Gemini call. **[deterministic]** = plain TypeScript, same input gives same output. **[simulated]** = fictional plant data or a what-if replay, labelled in the UI.
 
-| Path | Responsibility |
-| --- | --- |
-| `src/app/` | Next.js 16.4 App Router entry pages (`/`, `/gallery`, `/proof`, `/capture`) and server-only API routes (`/api/analyze`, `/api/reassess`, `/api/fit`, `/api/handoff/*`, `/api/voice/*`, `/api/watch/*`). |
-| `src/shell/` | Client root (`dynamic(..., { ssr: false })`), error-isolated lazy `<Slot>` wrappers, top bar, view switcher, responsive results rail, and brand mark. |
-| `src/twin/` | Digital twin data model (`types.ts`), Zustand twin store (`store.ts`), drop-pin store (`dropPoint.ts`), pure floor geometry (`geometry.ts`), immutable mitigation engine (`effects.ts`), and the 92-asset seed plant (`seed.ts`, `seed/`). |
-| `src/equipment/` | 29 hand-drawn parametric SVG equipment symbols (16 process, 6 control/network, 7 user devices), `SymbolFrame`, shared LED/motion CSS, and `/gallery` contact sheet. |
-| `src/floor/` | Top-down 1600 x 1000 SVG plant floor schematic: camera pan/zoom/gestures, room/overlay zones, animated orthogonal pipes, media legend, attack paths, entry points, and drag-to-reassess. |
-| `src/purdue/` | Linked Purdue Enterprise Reference Architecture map (Levels 0–5 + L3.5 DMZ): cell columns, collapsible Level 0 groups, conduit gates, attack-path overlays, and drag-to-relevel. |
-| `src/rules/` | Pure TypeScript Inspector rules engine (browser + server): 13 rules (`rules/*.ts`), compliance resolver, BFS reachability graph, ordinal 0–100 risk index, and `rankPlacements`. |
-| `src/data/` | Checked-in reference datasets: MITRE ATT&CK for ICS v20.1 (`attack-ics.ts`, 104 techniques) and a 58-clause compliance catalogue (`compliance.ts`). |
-| `src/gemini/` | Model registry (`models.ts`), GenAI SDK transport and retry helpers (`transport.ts`), Zod schemas (`schemas.ts`), Decisions/Hydrogen capture calls (`capture.ts`), and Carbon/Neon assessment calls (`assess.ts`). |
-| `src/pipeline/` | Shared pipeline contracts (`types.ts`), browser event bus (`bus.ts`), run store (`runStore.ts`), browser SSE client (`client.ts`), profile-to-asset mapper (`assetFromProfile.ts`), and server orchestration (`server/`). |
-| `src/link/` | Server-side SSRF-guarded product URL fetcher (`safeFetch.ts`), HTML/JSON-LD/spec-table extractor (`extract.ts`), and main-image downloader (`image.ts`). |
-| `src/capture/` | Floating desktop capture card, on-demand camera, drag/drop/paste photo drafts, shared JPEG encoder (<= 1600 px, q=0.85), floor drop-pin chip, and phone QR receiver. |
-| `src/handoff/` | Same-LAN phone-to-desktop photo handoff wire format, bounded upload reader, 10-minute in-memory mailbox, and SSE stream client. |
-| `src/panel/` | Right-hand results rail: sticky `RiskDial`, Chief briefing card, progressive device/placement/exclusion/risk/path/compliance cards, `MitigationQueue`, and `AssetInspector`. |
-| `src/crew/` | Four crew avatars (Scout, Architect, Inspector, Chief), floor pathfinder and desk office, `pipelineBus` director, `idle patrol` sampler, and 200-entry `ActivityFeed`. |
-| `src/sim/` | Living process mass/energy balance loop (`process/`), deterministic tabletop incident engine (`engine.ts`, `scenarios/`), floor overlays (`SimLayer.tsx`), and transport dock (`SimControls.tsx`). |
-| `src/watch/` | Daily Threat Watch: concurrent CISA KEV / CISA ICS / UK NCSC fetchers (`feeds/`), seed inventory matcher, Decisions triage, Neon synthesis, Antigravity remote-agent runner, and `WatchPanel`. |
-| `src/fit/` | On-demand photorealistic installation preview (`FitPreview.tsx`, lightbox, LRU cache, twin-grounded prompt builder) backed by `gemini-nano-banana-2.1`. |
-| `src/voice/` | Spoken Chief briefing (`SpeakButton.tsx`, WAV cache) and push-to-talk Live voice (`TalkToChief.tsx`, PCM16 worklet, ephemeral tokens, 5 validated client tools). |
-| `src/proof/` | Server-loaded `/proof` report UI (`ProofReport`, `MetricBars`, `FailureGallery`, `reportSource.ts`) reading `eval/report/latest.json`. |
-| `eval/` | Paired evaluation harness (`run.ts`, `baseline.ts`, `system.ts`, `judge.ts`, `metrics.ts`, `statistics.ts`, `validate.ts`), 71-item dataset (`dataset/`), and report output (`report/`). |
-| `scripts/` | Standalone CLI runners: `smoke-pipeline.ts` (text, photo, or link pipeline check) and `daily-watch.ts` (headless cron Threat Watch writing `watch/reports/<UTC-date>.json`). |
+## System diagram
 
-## Shared contracts
+```mermaid
+flowchart LR
+  subgraph Browser["Browser (client-rendered, src/shell)"]
+    Cap["Capture rail + card<br/>src/capture"]
+    Phone["Phone /capture<br/>QR handoff"]
+    Run["useRunStore + pipelineBus<br/>src/pipeline"]
+    Twin["useTwinStore<br/>twin + risk"]
+    Views["Floor / Purdue / lenses<br/>src/floor src/purdue src/layers"]
+    Crew["Crew + activity feed<br/>src/crew"]
+    Panel["Results panel<br/>src/panel + src/econ"]
+    Tx["Transcript drawer (T)<br/>src/transcript"]
+    Sim["Process model + tabletop<br/>src/sim [simulated]"]
+    Rules["Rules engine<br/>src/rules [deterministic]"]
+  end
+  subgraph Server["Next.js API routes (only place Gemini is called)"]
+    Analyze["/api/analyze, /api/reassess<br/>src/pipeline/server"]
+    Watch["/api/watch/run, /api/watch/managed"]
+    Model["/api/model/ingest"]
+    Fit["/api/fit"]
+    Voice["/api/voice/speak, /api/voice/session"]
+    Health["/api/health"]
+    Handoff["/api/handoff/*"]
+  end
+  Phone --> Handoff --> Cap
+  Cap -->|"SSE"| Analyze
+  Analyze -->|"PipelineEvent stream"| Run
+  Run --> Crew & Panel & Tx & Twin
+  Twin --> Rules --> Twin
+  Twin --> Views & Sim
+  Panel --> Fit & Voice & Model
+  Watch --> Panel
+  Analyze --> G["Decisions, Hydrogen, Carbon, Neon"]
+  Watch --> G2["Decisions, Neon, Antigravity, CISA/NCSC feeds"]
+  Model --> G3["Files API, Decisions, Hydrogen, Neon"]
+```
 
-### Digital twin model (`src/twin/types.ts`, `geometry.ts`, `effects.ts`)
+## Folders
 
-- **Canvas and scale:** `Twin.plant.canvas` is `1600 x 1000` SVG user units (`10 units = 1 m`), with an outer building rectangle separating indoors from outdoors.
-- **Areas (`AreaId`):** 13 areas across three kinds:
-  - Process (5): `water_treatment`, `syrup_room`, `blending`, `filler3`, `packaging`.
-  - Support (4): `utilities`, `control_room`, `corporate_office`, `crew_office`.
-  - Context overlays / exterior (4): `parking_lot`, `visitor_corridor`, `nh3_hazard` (inside `utilities`), `washdown` (inside `filler3`).
-  - Each area carries `AreaAttrs` (`publicAccess`, `outdoor`, `restricted`, `washdown`, `hazard`, `foodContact`) and `typicalLevels: PurdueLevel[]`.
-- **Dual-presence assets (`Asset`):** Every asset has both `physical` (`area`, `x`, `y`, `rotation`, `kind` from 29 `EQUIPMENT_KINDS`, `connections` across 9 `Medium` types) and `network` (`level` in `0 | 1 | 2 | 3 | 3.5 | 4 | 5`, `area` zone name, `conduit`), plus optional `cyber`, `process`, `specs`, `criticality` (`1..5`), `safetyCritical`, and `protections` (independent physical/hardwired safeguards).
-- **Seed plant (`src/twin/seed.ts`):** 92 assets, 13 areas, 6 `EntryPoint` origins (`internet`, `parking_rf`, `visitor`, `vendor_remote`, `supply_chain`, `insider`), 75 connections, and 10 conduits, including 3 deliberate weaknesses (`C-F3-PACK` unenforced L2 bridge, `GW-PK` unmanaged cellular modem bypassing the DMZ, and `HMI-F3` exposed USB port at the visitor observation window). Baseline Inspector score: **46.09 / 100 (elevated)**.
-- **Pure mutations (`src/twin/effects.ts`):** `applyEffects(twin, effects)` immutably applies 9 `MitigationEffect` operations: `move_asset`, `disable_radio`, `patch_cyber`, `remove_connection`, `remove_asset`, `enforce_conduit`, `set_area_attr`, `add_protection`, and `note`.
-
-### Pipeline contracts (`src/pipeline/types.ts`)
-
-- **Inputs:** `CaptureInput` is a discriminated union of `photo` (1–3 base64 images), `link` (`url` + optional `note`), or `text` (`description`). `AnalyzeRequest` sends `{ input, twin, dropPoint? }` to `POST /api/analyze`; `ReassessRequest` sends `{ profile, twin, assetId, placement }` to `POST /api/reassess`.
-- **Model schemas (snake_case):** `GateResult` (Decisions API answers + `proceed` boolean), `DeviceProfile` (Scout output across 15 `DEVICE_CATEGORIES`, 6 `RADIOS`, ports, specs, `evidence[]`, `unknowns[]`), `Assessment` (Architect output: `placement`, `physical_placement`, `never_place[]`, `risks[]`, `attack_paths[]`, `compliance[]`, `mitigations[]`), and `SelfCheckResult` (Inspector findings, paths, `disagreements[]`, `revised`).
-- **Event stream (`PipelineEvent`):** 19 typed events across 7 stages (`link`, `gate`, `perception`, `reasoning`, `selfcheck`, `revision`, `summary`): `run.started`, `link.started`, `link.fetched`, `gate.started`, `gate.done`, `perception.started`, `perception.done`, `reasoning.started`, `reasoning.thought`, `reasoning.done`, `selfcheck.started`, `selfcheck.path`, `selfcheck.done`, `revision.started`, `revision.done`, `summary.started`, `summary.done`, `run.completed`, `run.error`.
-
-### Stores and event bus
-
-| Store / bus | File | Responsibility |
+| Path | What it does | Kind |
 | --- | --- | --- |
-| `useTwinStore` | `src/twin/store.ts` | Holds `twin`, live `risk` (recomputed via `evaluateTwin` on every mutation), `baselineScore`, linked `selectedId` / `hoveredId` / `highlightIds`, active `view` (`floor` / `purdue` / `split`), and `mitigations` queue. `patchTwinQuiet` updates high-frequency telemetry without re-running rules. `decideMitigation` is the sole path that applies or rejects proposals. |
-| `useRunStore` | `src/pipeline/runStore.ts` | Reduces incoming `PipelineEvent` frames into `status`, `stage`, `events`, `gate`, `profile`, `assessment`, `selfCheck`, `summary`, `placedAssetId`, and `captureThumbnail`, then emits every event on `pipelineBus`. |
-| `pipelineBus` | `src/pipeline/bus.ts` | Synchronous pub/sub bridge from `useRunStore.ingest` to `src/crew/director.ts` and `src/voice/SpeakButton.tsx`. |
-| `useDropStore` | `src/twin/dropPoint.ts` | Arms floor pin selection and holds `DropPoint` (defaults to `DEFAULT_DROP` at `(700, 640)` in `filler3`). |
-| Feature stores | `src/crew/`, `src/sim/`, `src/watch/`, `src/voice/` | `useCrewStore`, `useFeedStore`, `useSimStore`, `useWatchStore`, and `useChiefPath`. |
+| `src/twin` | Types, zustand store (re-runs rules on every change), geometry, `applyEffects`, seed plant | deterministic; plant simulated |
+| `src/equipment` | `29` parametric SVG equipment kinds, `/gallery` | drawing |
+| `src/floor` | 1600 × 1000 floor, pipes, attack paths, drag to reassess | UI |
+| `src/purdue` | Purdue L0 to L5 + L3.5 DMZ map, conduits | UI |
+| `src/layers` | Material / Both / Data lens, data-flow drawing, Purdue Levels view | UI |
+| `src/rules` | Rules engine, attack-path search, risk score, placement ranking | deterministic |
+| `src/data` | ATT&CK for ICS v20.1 (`104` techniques), compliance catalogue (`58` clauses) | reference data |
+| `src/gemini` | Transport (`v1beta`, retries), schemas, gate, perception, assessment, briefing | model calls |
+| `src/pipeline` | Event contracts, run store, SSE client, server orchestration, self-check | orchestration |
+| `src/link` | SSRF-guarded product page fetch and extraction | deterministic |
+| `src/capture`, `src/handoff` | Camera, upload, link, text, pin; same-LAN phone QR handoff | UI |
+| `src/crew` | Four crew members driven by pipeline events; `idle patrol` between runs | UI |
+| `src/panel` | Results panel, placement answer, mitigation queue, asset inspector | UI |
+| `src/transcript` | Prompts, raw responses, tokens, timing; JSON / Markdown export | UI |
+| `src/sim` | Process model, `6` tabletop scenarios, counterfactuals | simulated, deterministic |
+| `src/watch` | Feeds, inventory match, Decisions triage, Neon reassessment, Antigravity run | model + deterministic |
+| `src/modeler` | Files to proposed ghost assets, human apply | model |
+| `src/fit` | Fit preview images | model (image) |
+| `src/voice` | TTS briefing; push-to-talk Live voice with `5` tools | model (audio) |
+| `src/health` | `10` service probes, `Gemini n/10` chip | live probes |
+| `src/econ` | Economic loss model and loss figures | deterministic, assumed costs |
+| `src/view3d` | Optional 3D view of the same twin; hand-written WebGL2, no 3D library; `2D` / `3D` switch | deterministic drawing |
+| `src/escalation` | Threshold policy, alert card, phone pairing over LAN streams, call script, phone approve / acknowledge | deterministic + TTS |
+| `src/theme` | Dark / light theme switch | UI |
+| `src/proof` | `/proof` evaluation report | reads `eval/report` |
+| `eval/` | Paired evaluation harness, `71`-item dataset | model + scoring |
+| `scripts/` | `smoke-pipeline`, `bench-pipeline`, `daily-watch`, `health`, `smoke-modeler` | CLI |
 
-## Data flows
+Pages: `/`, `/gallery`, `/proof`, `/lens`, `/crew-review`, `/capture` (phone), `/3d` (3D review).
+API routes: `analyze`, `reassess`, `fit`, `handoff/*`, `health`, `model/ingest`, `voice/speak`, `voice/session`, `watch/run`, `watch/managed`, `watch/feeds`, plus the escalation pairing and phone routes (`src/escalation/MOUNTING.md`). Security review of every route: `docs/SECURITY.md`.
 
-### Capture, analysis pipeline, twin, and views
+## Models (`src/gemini/models.ts`)
 
-```mermaid
-flowchart LR
-  Phone["Phone /capture (LAN QR)"] -->|"POST /api/handoff/:code"| Handoff["Handoff mailbox + SSE"]
-  Handoff --> Capture["CaptureCard (photo / link / text)"]
-  Drop["DropPin (useDropStore)"] --> Capture
-  Capture -->|"POST /api/analyze (SSE)"| Link["Optional link fetch (src/link)"]
-  Link --> Gate["Decisions Gate (gemini-decision-1)"]
-  Gate -->|"proceed"| Scout["Scout (gemini-4-hydrogen)"]
-  Scout --> Architect["Architect (gemini-4-carbon)"]
-  Drag["Floor / Purdue drag"] -->|"POST /api/reassess (SSE)"| Architect
-  Architect --> Ground["groundAssessment (ID & ATT&CK filter)"]
-  Ground --> Inspector["Inspector (src/rules/engine.ts)"]
-  Inspector -->|"disagreements & interactionId"| Revise["One Carbon revision (previous_interaction_id)"]
-  Revise --> ReCheck["Repeat Inspector check"]
-  Inspector -->|"no disagreements"| Chief["Chief briefing (gemini-4-neon)"]
-  ReCheck --> Chief
-  Chief --> SSE["Browser SSE client (src/pipeline/client.ts)"]
-  SSE --> RunStore["useRunStore + pipelineBus"]
-  SSE -->|"place asset & queue mitigations"| TwinStore["useTwinStore (auto evaluateTwin)"]
-  RunStore --> Crew["CrewLayer + ActivityFeed"]
-  RunStore --> Panel["SidePanel + FitPreview + SpeakButton"]
-  TwinStore --> Floor["PlantFloor"]
-  TwinStore --> Purdue["PurdueMap"]
-  TwinStore --> Panel
-  Panel -->|"Approve / Reject"| TwinStore
-```
+| Role key | Model id | Job | Used in |
+| --- | --- | --- | --- |
+| `decisions` | `gemini-decision-1` | Capture gate (`6` questions), Watch triage (`3` per pair), modeller gate (`3`), eval judge | `src/gemini/capture.ts`, `src/watch/triage.ts`, `src/modeler/gemini.ts`, `eval/judge.ts` |
+| `perception` | `gemini-4-hydrogen` | Scout; modeller extraction; eval baseline | `src/gemini/capture.ts`, `src/modeler/gemini.ts`, `eval/baseline.ts` |
+| `reasoning` | `gemini-4-carbon` | Architect: placement, risks, mitigations, one revision; passive objects | `src/gemini/assess.ts`, `src/gemini/passiveAssessment.ts` |
+| `chief` | `gemini-4-neon` | Chief briefing; Watch reassessment; modeller | `src/gemini/briefing.ts`, `src/watch/reassess.ts`, `src/modeler/gemini.ts` |
+| `live` | `gemini-3.8-live` | Push-to-talk voice | `src/voice/liveWire.ts`, `api/voice/session` |
+| `tts` | `gemini-3.8-flash-tts` | Reads the briefing aloud; speaks the escalation call script on the paired phone | `api/voice/speak`, `src/escalation/phoneAudio.mjs` |
+| `image` | `gemini-nano-banana-2.1` | Fit preview | `api/fit` |
+| `managedAgent` | `antigravity-preview-09-2026` | Hosted Threat Watch comparison | `src/watch/runManaged.ts` |
+| `deepResearch` | `deep-research-preview-04-2026` | Declared, not used | none |
 
-### Daily Threat Watch
+Thinking: Hydrogen, Carbon and Neon all run at `low`. Carbon can be overridden with `PW_REASONING_THINKING`. Reason: Carbon at `high` exceeded 120 s per capture and `medium` took about 117 s (`src/gemini/models.ts`).
 
-```mermaid
-flowchart LR
-  WatchUI["WatchPanel (1x/UTC day or manual)"] -->|"POST /api/watch/run (SSE)"| Feeds["Concurrent fetch (8 s timeout, 30 m cache)"]
-  CLI["scripts/daily-watch.ts"] --> Feeds
-  Feeds --- KEV["CISA KEV JSON"]
-  Feeds --- ICS["CISA ICS RSS"]
-  Feeds --- NCSC["UK NCSC RSS"]
-  Feeds -->|"14-day window"| Match["Inventory matcher (cap 24 pairs)"]
-  Match --> Triage["Decisions triage (gemini-decision-1, 3 Qs/pair)"]
-  Triage -->|"supported & uncertain"| Neon["Neon synthesis (gemini-4-neon)"]
-  Neon --> GroundW["Zod + citation binding + rules delta"]
-  GroundW -->|"proposeMitigations"| TwinW["useTwinStore (human approval)"]
-  WatchUI -->|"Compare button: POST /api/watch/managed"| Agent["Antigravity Managed Agent (v1beta)"]
-  Agent -->|"watch-report.json"| GroundW
-```
+## Capture pipeline and event stream
 
-### Living process and tabletop simulation
+`POST /api/analyze` streams typed `PipelineEvent`s over SSE (`src/pipeline/types.ts`, `src/pipeline/server/run.ts`):
 
-```mermaid
-flowchart LR
-  Tick["Visible-tab process clock (src/sim/process)"] -->|"mass/energy balance"| Quiet["useTwinStore.patchTwinQuiet"]
-  Quiet --> FloorSim["PlantFloor telemetry & alarms"]
-  Launcher["SimControls launcher"] --> Engine["Scenario engine (src/sim/engine.ts)"]
-  TwinSnap["Current Twin + Inspector graph"] --> Engine
-  Engine -->|"stage resolution & safeguard check"| Replay["SimStore timeline (pause, 1x/4x, reset)"]
-  Replay --> Overlay["SimLayer floor effects"]
-  Engine -->|"counterfactual test on twin copy"| Queue["Propose only effective mitigations"]
-  Queue -->|"Approve in MitigationQueue"| TwinUp["useTwinStore.decideMitigation"]
-  TwinUp -->|"Rerun"| Engine
-```
+1. `link.*`: optional product page fetch. [deterministic]
+2. `gate.*`: Decisions gate. On a `4 s` timeout the run continues, labelled. [model]
+3. `perception.*`: Scout returns a `DeviceProfile`. [model]
+4. `selfcheck.*`, phase `as-dropped`: rules engine at the pinned spot. [deterministic]
+5. `reasoning.*`: Architect gets a compact twin and returns an `Assessment`. Grounding drops unknown asset and ATT&CK ids. [model]
+6. `selfcheck.*`, phase `recommendation`. [deterministic]
+7. `revision.*`: only on a blocked or invalid recommendation or a large score gap. One Carbon call with `previous_interaction_id`, then a `post-revision` check. Still blocked: the answer is a hold. [model]
+8. `summary.*`: Chief writes 2 to 3 lines from the checked facts. [model]
+9. `transcript.entry` per attempt; then `run.completed` or `run.error`.
 
-## Inspector rules engine (`src/rules/`)
+Deadlines: link 18 s, gate 20 s, Scout 45 s, Carbon 120 s, revision 60 s, Chief 30 s (`docs/log/pipeline-speed.md`).
+`POST /api/reassess` reruns the check and Architect for a moved device.
 
-`evaluateTwin`, `evaluatePlacement`, `rankPlacements`, and `explainRule` run identically in the browser and on the server. Every emitted technique resolves against `src/data/attack-ics.ts` (v20.1), and rule citations resolve through `src/rules/compliance.ts` against `src/data/compliance.ts`.
+`src/pipeline/client.ts` feeds `useRunStore.ingest`, which republishes on `pipelineBus`. Consumers:
 
-| Rule | Kind | Condition | Control references (code / log) | ATT&CK for ICS |
-| --- | --- | --- | --- | --- |
-| `RF-01` | cyber | Wi-Fi, Bluetooth, cellular, Zigbee, or LoRa at Purdue 0–3 within an RF entry radius or 30 m of a public or outdoor area | IEC 62443-3-3 SR 1.6, SR 2.2; NIST SP 800-82r3 §6.2.9 | `T0860` |
-| `ZONE-01` | cyber | Cloud or remote access at Purdue 0–3 without an evidenced, enforced route to a Level 3.5 zone | IEC 62443-3-3 SR 5.1, SR 5.2; NIST SP 800-82r3 §5.2.3, §6.2.10 | `T0822` (remote), `T0883` (cloud/internet) |
-| `ZONE-02` | cyber | Flat or unenforced connectivity across zones of different consequence or OT/IT trust | IEC 62443-3-3 SR 5.1, SR 5.2; NIST SP 800-82r3 §5.2.3 | `T0886` |
-| `ZONE-03` | cyber | Asset Purdue level falls outside the declared area's `typicalLevels` | IEC 62443-3-2 Section 4 (ZCR); NIST SP 800-82r3 §5.2.3 (log also cites IEC 62443-3-3 SR 5.1) | — |
-| `CRED-01` | cyber | Known default credentials on an asset with modeled network connectivity | IEC 62443-3-3 SR 1.5; NIST SP 800-82r3 §6.2.1 (log cites §6.2.1.4.5) | `T1694.001` |
-| `USB-01` | cyber | Removable media or exposed media interface in OT; escalated near public access | IEC 62443-3-3 SR 2.3; NIST SP 800-82r3 §6.2.7 (log also cites NIST SP 1334) | `T0847` |
-| `PHYS-01` | physical | Documented exposed port inside or within 5.5 m (5 m + 0.5 m tolerance) of a public-access area | NIST SP 800-82r3 §5.2.2; NIST CSF 2.0 PR.AA (log also cites NIST SP 800-53 Rev. 5 PE-3) | `T0864` |
-| `TRANS-01` | cyber | Unmanaged laptop or phone with modeled network connectivity at Purdue 0–2 | IEC 62443-3-3 SR 2.3; NIST SP 800-82r3 §6.2.1 | `T0864` |
-| `CAM-01` | cyber | Camera within 10 m of an HMI or keypad in the same room, or using a cloud service in OT | IEC 62443-3-3 SR 4.1; NIST SP 800-82r3 §5.2.2 (log cites §6.2.3) | `T0882` |
-| `HAZ-01` | compliance | Potential ignition source in an `NH3` hazard area without recognizable gas-area marking (Class I Div/Zone, ATEX/IECEx, Ex) | NFPA 70 Art. 500 & 505; IEC 60079-14; ANSI/IIAR 2 Ch. 6; OSHA 29 CFR 1910.119(d) (log also cites 1910.307) | — |
-| `WASH-01` | compliance | Missing IP69K/high-pressure washdown or 316L hygienic material evidence in a washdown zone, or explicitly non-food-grade equipment within 5 m of open product | FDA 21 CFR 117.40(a); EHEDG Doc. 8 & 13; 3-A Sanitary Standards; IEC 60529; ISO 20653 | — |
-| `SAFE-01` | physical | At least one modeled attack path reaches a safety-critical asset (severity 5) | IEC 61511-1 (SIS Separation & Security); IEC 62443-3-3 SR 5.1 (log also cites NIST SP 800-82r3 §2.3.7) | `T0880` |
-| `MGMT-01` | cyber | Cyber profile explicitly marks an OT device as unmanaged (`managed: false`) | IEC 62443-2-1 Asset Owner Program; NIST CSF 2.0 ID.AM (log cites NIST SP 800-82r3 §§6.1.1 & 6.2.11) | — |
+| Consumer | Uses |
+| --- | --- |
+| `src/crew` (`director.ts`, `crewStore.ts`) | Who walks where; activity feed |
+| `src/panel` (`SidePanel`, `PlacementAnswer`) | Device card, placement answer, risks, paths, mitigations |
+| `src/transcript` | `transcript.entry` events |
+| `src/floor/AttackPathLayer.tsx` | Paths from `selfcheck.path` |
+| `src/fit`, `src/econ/mountsCapture.tsx` | Placement for previews and the loss comparison |
+| `src/voice` | Auto-speak of the briefing; voice context |
+| `src/health/lastUse.ts` | Last real use per service |
+| `useTwinStore` | Places the asset; queues mitigations (applied only on `Approve`) |
 
-### Reachability graph and risk index
+## Rules engine and attack-path search [deterministic]
 
-- **Graph:** Bidirectional active network links, same-zone attachment when cables are omitted, conditional RF association for exposed Wi-Fi, and unenforced conduits. An explicit disabled link overrides inferred connectivity; enforced conduits block lateral traversal because conduit allowlists are free text.
-- **Traversal:** Bounded BFS up to 6 hops from the 6 entry points to criticality 4–5 or safety-critical targets. Plant reports retain the strongest route per `(entry, mechanism, target)` plus one representative route per added entry landing.
-- **Score formula:** `E = sum(max severity^2 per rule+asset, excluding SAFE-01) + sum(max severity * likelihood per entry+mechanism+target)`. Plant score is `round(100 * E / (600 + E), 2)` with bands at `0` (low), `20` (guarded), `40` (elevated), `60` (high), and `80` (critical). Area scores apply the same formula locally.
+`src/rules/engine.ts`, same code in browser and server. `16` registered rules (`src/rules/registry.ts`) plus `PLACE-01` = `17` rule ids:
+`RF-01`, `ZONE-01`, `ZONE-02`, `ZONE-03`, `CRED-01`, `FOOD-02`, `FOOD-03`, `USB-01`, `PHYS-01`, `TRANS-01`, `CAM-01`, `HAZ-01`, `HAZ-02`, `WASH-01`, `SAFE-01`, `MGMT-01`, `PLACE-01`. Conditions and references: `docs/log/rules-engine.md`.
 
-## Tabletop scenarios (`src/sim/scenarios/`)
+- Graph: entry points and assets; enforced firewalls stop lateral moves (`src/rules/graph.ts`).
+- Search: breadth-first, up to `6` steps, to criticality 4 to 5 or safety-critical targets (`src/rules/paths.ts`). Every technique id resolves in `src/data/attack-ics.ts`.
+- Score: `E` = sum of max `severity²` per rule and asset + max `severity × likelihood` per path. Plant score = `round(100 × E / (600 + E), 2)`. Seed: `46.09` (elevated).
+- Speed: `0.175 ms` warmed median on the `92`-asset seed.
+- `rankPlacements` / `bestPlacement`: blocker-free areas first.
 
-The engine resolves stages from live inventory, Inspector graph evidence, and `Asset.protections` flags, halting at the first safeguard that holds. The stock seed plant contains all five UI scenarios; modifying the twin (or approving proposed mitigations) changes whether and when containment occurs.
+## Three lenses (`src/layers`)
 
-| ID | UI label | Exposed in `SimControls` | Modeled threat and consequence | Safeguards credited |
-| --- | --- | --- | --- | --- |
-| `cip` | CIP Crossover | Yes | Modeled control exposure + connected CIP branch during active filling -> caustic conductivity excursion, held product, filling stop. | Controller isolation, positive CIP branch segregation (`cip-branch-isolation`), or existing `ZSC-311` hardwired closed permissive. |
-| `ammonia` | NH3 Release | Yes | Release challenge in `nh3_hazard` zone (`C-1`) -> NIOSH 300 ppm IDLH reference indicator; checks detector availability and zone equipment suitability. | Independent local detection (`independent-gas-detection`), local ventilation (`emergency-ventilation`), or available local response without network exposure. |
-| `ransomware` | Site Ransomware | Yes | Endpoint availability loss propagating across cells reachable in the Inspector graph -> loss of supervision or cell stop. | Managed maintenance admission, enforced DMZ boundaries, and inter-cell segmentation. |
-| `wireless` | Rogue Wireless | Yes | Public `parking_rf` reach to an OT radio, then to `HMI-F3` and `PLC-F3` -> out-of-band filling rate while filling is active. | No in-range OT radio, separation from Filler 3 cell/controller, or idle filling. |
-| `chiller` | Chiller Trip | Yes | Duty cooling (`C-1`) interruption -> checks standby (`C-2`) availability; warm product excursion and filling stop. | Available standby refrigeration with modeled connections and local control (`independent-standby-cooling`). |
-| `carbonation` | CO2 Upset | No (`ALL_SCENARIOS` only) | Supervision/control challenge to `PLC-BL` while carbonation train (`CC-301`, `HX-401`, `FIL-3`) runs -> over-pressure (`PT-301`, `T0836`), relief demand, foaming (`QT-301`), batch hold. | Blend cell segmentation (`C-OPS-BLEND`), inactive carbonation train, or `independent-pressure-protection` on `CC-301`. |
+| Lens | Key | Shows |
+| --- | --- | --- |
+| Material | `1` | Process floor, pipes by medium |
+| Both | `2` | Pipes, network and the connectors between them; simulation launchers |
+| Data | `3` | Network and software flows, cyber findings, Watch evidence; `Levels` shows Purdue levels |
 
-## Evaluation design (`eval/`)
+Selection and hover are shared across views through `useTwinStore`.
 
-- **Dataset (`eval/dataset/`):** 71 validated items (`npx tsx eval/validate.ts`):
-  - **54 Wikimedia Commons photos:** 46 positive devices across 14 categories + 8 negative non-devices (mug, potted plant, chair, landscape, defocused photo, handwritten letter, cardboard box, traffic cone), stratified into 27 `clean`, 16 `messy`, and 11 `edge`.
-  - **9 project-authored text captures:** 3 `clean`, 4 `messy`, 2 `edge`.
-  - **8 live product URLs:** 2 tanks, 2 field instruments, 2 network cameras, 2 industrial gateways (scored as their own `link` group).
-- **Paired comparison:** For each selected item, `eval/run.ts` alternates execution order across up to 3 concurrent workers between:
-  - **`baseline` (`eval/baseline.ts`):** Single structured `gemini-4-hydrogen` call given the same capture and compact seed twin.
-  - **`system` (`eval/system.ts`):** Full production `runAnalyze` pipeline (link fetch, Decisions gate, Scout, Architect, Inspector self-check + optional Carbon revision, Chief).
-- **Independent judging and rule check:**
-  - Free-text `device_type` accuracy is scored by an anonymized `gemini-decision-1` call (`eval/judge.ts`) comparing both sides against ground truth.
-  - Both sides' recommendations are checked post-hoc with `evaluatePlacement` to measure `ruleConsistency`.
-- **Metrics and statistics (`eval/metrics.ts`, `statistics.ts`):** 22 metrics total, with 5 headlines (`gateAccuracy`, `physicalKindAccuracy`, `physicalAreaAccuracy`, `ruleConsistency`, `riskRecall`), plus false accept/reject rates, category accuracy, Decisions device-type match, radio precision/recall/F1, port F1, default credentials, cloud flag, Purdue-level accuracy, never-place violation rate, ATT&CK citation validity and hallucination, placement coverage, capacity/size match, and execution failure rate. Reports Wilson 95% confidence intervals (Jaccard-to-F1 transformed for set F1) and paired bootstrap intervals across difficulty splits.
-- **Caching and publication:** Cache keys hash input bytes, relevant source files, and `SEED_TWIN`, supporting `--limit N` (deterministic stratified round-robin), `--only baseline|system`, and `--resume`. Completed runs atomically write `eval/report/REPORT.md` and `eval/report/latest.json`, which `/proof` (`src/app/proof/page.tsx`) reads at request time along with up to 6 diagnosed failure cases.
+## Simulation (`src/sim`) [simulated, deterministic]
+
+- Process model (`src/sim/process`): mass and energy balance ticks while the tab is visible.
+- `6` tabletop scenarios: `CIP Crossover`, `Ammonia Release`, `Chiller Trip`, `CO₂ Upset`, `Site Ransomware`, `Rogue Wireless`. A replay stops at the first safeguard that holds, resolved from the current twin and rules-engine evidence.
+- Proposed mitigations go to a queue. Nothing changes until a human approves. The rerun is compared with the original (counterfactual).
+
+## Threat Watch (`src/watch`)
+
+1. Feeds: CISA KEV, CISA ICS, UK NCSC; concurrent, 8 s each, 30-minute cache, last 14 days. openFDA food enforcement: up to `14` beverage recall records from the last `180` days, 8 s deadline, 10-minute cache. [live data]
+2. Relevance against the simulated inventory: product identity, version evidence, sector and OT terms, KEV, CVSS, age. Only rows with a plant asset appear; the rest sit behind one disclosure. Recalls map to plant consequences (foreign material to inspection and filler, labeling to the labeler, microbial to filler and CIP, chemical to CIP make-up) and carry a loss figure from `src/econ`. [deterministic] (`docs/log/watch-relevance.md`)
+3. Decisions triage, `3` questions per advisory and asset pair. [model]
+4. Neon proposes changes; the rules engine measures each proposal's score change. [model + deterministic]
+5. Human `Approve` / `Reject`.
+
+Runs on first open each UTC day, on `Run now`, or via `scripts/daily-watch.ts`. Managed-agent comparison: `/api/watch/managed` runs `antigravity-preview-09-2026` on the same feeds. Measured: local `16.60 s`, hosted `72.05 s`, hosted report `partial` (`docs/log/threat-watch.md`).
+
+## Twin modeller (`src/modeler`) [model]
+
+Input: CSV/TXT, up to 6 photos, one PDF, or one video (about 60 s). Video goes through the Files API (`src/modeler/filesApi.ts`). Decisions gates, Hydrogen extracts, Neon is the third stage (`src/modeler/gemini.ts`). Output: ghost assets; nothing changes until the engineer applies them. Measured: CSV `17.704 s`, 3 photos `15.536 s`, 35 s MP4 `23.981 s`, 1-page PDF `13.184 s` (`docs/log/modeler.md`).
+
+## Transcript (`src/transcript`)
+
+Press `T`. One entry per Gemini attempt (retries included) and per rules-engine check: prompt, raw response, tokens, timing. Images and credentials redacted; text capped at 40,000 characters. Export JSON or Markdown.
+
+## Health probes (`src/health`)
+
+`10` services: Decisions, Scout, Architect, Chief, TTS, Live, Fit preview, Files API, Managed agents, Threat feeds. `/api/health` serves the last snapshot and revalidates after 60 s; the chip polls every 30 s. Image probe at most every 15 min, managed probe every 30 min. Last recorded: `10 / 10` healthy at 18:06 UTC (`docs/log/gemini-health.md`).
+
+## Economic loss model (`src/econ`) [deterministic, assumed costs]
+
+Open FAIR structure: loss event frequency × loss magnitude.
+
+- Frequency: threat event frequency from the rules-engine entry route (lower per lateral hop and enforced conduit) × vulnerability prior (KEV, CVSS, credentials, unmanaged, compliance, generic), lowered by protections and approved mitigations.
+- Magnitude: downtime + repair + product + response + liability, each a PERT (λ = 4) three-point estimate. Outage, product and response share one severity quantile in 70% of draws.
+- `10,000` fixed-seed draws, seeded from the scenario id: same input, same number.
+- Per event: mean single-event loss. LEF = TEF × Vuln (exact PERT means). ALE = LEF × mean loss.
+- Plant: max ALE per asset and consequence class, summed. Seed: `$110k / yr` over `43` detections (`$280k / yr` before the audit).
+- Worked examples: `PLC-F3` safety finding `$94k` per event, `$8.6k / yr`; `HMI-F3` USB finding `$29k`, `$2.5k / yr` (`src/econ/README.md`).
+- UI: loss figure = asset drawing, one number, `Show more` for the itemized rows. Mounted in the asset inspector, placement answer, compliance chips, attack paths, simulation result, Watch rows; the escalation policy reads the same per-event mean.
+- Published: the OSHA reference `$165,514`, context only, not a model input. All other inputs assumed (simulated plant). Audit: `docs/log/loss-model.md`.
+
+## 3D view (`src/view3d`) [deterministic drawing]
+
+- Reads the same stores as the 2D floor: twin, rules-engine risk, selection, run store, crew.
+- Hand-written WebGL2: one GLSL ES 3.00 program, instanced primitives, offscreen pick pass. No 3D library.
+- Positions, rotations, pipes, flows, attack arcs and alarm rings come from twin data; every height is illustrative.
+- Any failure flips back to 2D with a one-line notice. Review route `/3d`. `45` unit tests (`docs/log/view3d.md`).
+
+## Escalation call (`src/escalation`)
+
+- Policy: one record per sustained cause above threshold for 500 ms: a rules-engine finding, a plant-risk episode, or a completed simulation outcome. Defaults: `$100,000` per event, risk `60`, or `8` points over baseline. [deterministic]
+- Desktop and paired phone exchange call events over short-lived LAN streams; pairing by QR, link valid 45 minutes.
+- `Answer` sends the deterministic script verbatim to `api/voice/speak` (`gemini-3.8-flash-tts`). [model, audio only]
+- `Approve action` rechecks the offered move or mitigation on the desktop and applies it through the twin store. `Acknowledge` records receipt.
+- The phone's own dialer can place a real cellular call (`tel:` link); the desktop records the tap. No carrier integration.
+- Docs: `docs/CALL_DEMO.md`, `docs/log/escalation-call.md`.
+
+## Evaluation harness (`eval/`)
+
+- Dataset: `71` items: `27` clean photos, `16` messy, `3` edge, `8` non-device photos, `8` links, `9` text. `54` photos from Wikimedia Commons (`eval/dataset/SOURCES.md`).
+- Baseline: one `gemini-4-hydrogen` call with a prose plant description; same deadline and retries as Scout (`eval/baseline.ts`).
+- System: the full pipeline (`eval/system.ts`). Judge: `gemini-decision-1` on anonymized answers (`eval/judge.ts`).
+- Statistics: Wilson 95% intervals; exact McNemar on paired area labels.
+- Output: `eval/report/REPORT.md`, `SUMMARY.md`, `FAILURES.md`, `latest.json`; archives in `eval/report/run-*`. `/proof` reads `latest.json`.
+- Run history: `docs/BUILD_LOG.md`, `docs/log/eval-run.md`.
+
+## Real, deterministic, simulated
+
+| Real (live calls, live data) | Deterministic code | Simulated, labelled |
+| --- | --- | --- |
+| Gemini, Decisions, Live, TTS, image, Files, Antigravity; CISA, NCSC and openFDA feeds; product pages | Rules engine, attack paths, risk score, loss model, inventory match and recall mapping, grounding, 3D view, escalation policy | Plant, inventory, telemetry, tabletop replays, cost inputs, crew `idle patrol` |

@@ -134,9 +134,13 @@ Metrics: device identification, correct Purdue level, correct plant area, key ri
 | Plant area correct | 87.7% | 89.5% (n=57, not significant) |
 | Purdue level correct | 96.3% | 94.4% |
 | Device vs non-device | 100% | 100% |
+| Radio recall | **100% (12/12)** | 33.3% (4/12) |
+| Cloud flag correct | **88.5% (23/26)** | 23.1% (6/26) |
+| Device category correct | **87.0%** | 81.5% (n=54) |
+| Device type named correctly | **66.7%** | 61.1% (n=54) |
 | Median time per capture | **13.3 s** | 24.6 s |
 
-- **What that means:** a single Gemini 4 call is a strong baseline. The pipeline matches it on identification and placement, never recommended a forbidden area, finds more of the labelled risks, and adds what one call cannot: a deterministic check of every answer, attack paths in this plant, a risk score, a dollar estimate and a live twin. None of the differences is statistically significant on 71 items, and it is one development set that we iterated on (no held-out set yet). Run 3 lost to the baseline on equipment kind and risk recall; run 4 is the fix.
+- **What that means:** a single Gemini 4 call is a strong baseline. The pipeline never recommended a forbidden area, finds more of the labelled risks overall, and matches it on equipment kind and plant area. The single call is clearly better at listing radios and flagging cloud connectivity in the device profile, and slightly better at naming the device; that is our next fix. What the pipeline adds that one call cannot: a deterministic check of every answer, attack paths in this plant, a risk score, a dollar estimate and a live twin. Apart from radios and cloud flags, no difference is statistically significant on 71 items, and it is one development set that we iterated on (no held-out set yet).
 - **Where to look:** open **`/proof`** in the running app: every run, the baseline next to the system, the failures with their images, and what we changed after seeing them. Full report in `eval/report/`.
 - **Reliability:** on 63 captures at six in parallel, 61 completed, 2 were correctly rejected (a defocused photo and a landscape), and none failed operationally (median 29 s).
 

@@ -1,0 +1,375 @@
+{
+  "label": "baseline",
+  "url": "http://localhost:4119/",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "browser": "Chrome 158.0.8127.36 (headless, SwiftShader)",
+  "startedAt": "2026-11-21T19:52:14.904Z",
+  "totalSeconds": 85.2,
+  "method": "HeapProfiler.collectGarbage x2, then Performance.getMetrics (JSHeapUsedSize, Nodes, JSEventListeners)",
+  "warmUp": "3D opened and closed once",
+  "samples": [
+    {
+      "step": "load",
+      "status": "ok",
+      "heapUsedMB": 33.53,
+      "heapTotalMB": 34.66,
+      "domNodes": 7017,
+      "jsEventListeners": 800,
+      "documents": 1,
+      "backingStoreMB": 12.38,
+      "canvases": 0,
+      "storageChars": 23609,
+      "atSeconds": 7.8,
+      "stepSeconds": 7.6
+    },
+    {
+      "step": "idle 10 s",
+      "status": "ok",
+      "heapUsedMB": 33.8,
+      "heapTotalMB": 34.66,
+      "domNodes": 7026,
+      "jsEventListeners": 801,
+      "documents": 1,
+      "backingStoreMB": 11.56,
+      "canvases": 0,
+      "storageChars": 23609,
+      "atSeconds": 18.1,
+      "stepSeconds": 10
+    },
+    {
+      "step": "lens keys 1/2/3 x10",
+      "status": "ok",
+      "heapUsedMB": 33.19,
+      "heapTotalMB": 34.16,
+      "domNodes": 7040,
+      "jsEventListeners": 802,
+      "documents": 1,
+      "backingStoreMB": 11.56,
+      "canvases": 0,
+      "storageChars": 23643,
+      "atSeconds": 25.8,
+      "stepSeconds": 7.5,
+      "detail": {
+        "presses": 30,
+        "lensChanges": 29,
+        "endLens": "material"
+      }
+    },
+    {
+      "step": "select 30 floor assets",
+      "status": "ok",
+      "heapUsedMB": 32.17,
+      "heapTotalMB": 33.41,
+      "domNodes": 7536,
+      "jsEventListeners": 804,
+      "documents": 1,
+      "backingStoreMB": 11.56,
+      "canvases": 0,
+      "storageChars": 23643,
+      "atSeconds": 33.1,
+      "stepSeconds": 7.1,
+      "detail": {
+        "available": 92,
+        "attempted": 30,
+        "forceClicked": 20,
+        "viaKeyboard": 10,
+        "failed": 0,
+        "selected": 30,
+        "lastSelected": "SW-IT"
+      }
+    },
+    {
+      "step": "transcript T / Escape x10",
+      "status": "ok",
+      "heapUsedMB": 32.31,
+      "heapTotalMB": 33.66,
+      "domNodes": 7535,
+      "jsEventListeners": 804,
+      "documents": 1,
+      "backingStoreMB": 11.56,
+      "canvases": 0,
+      "storageChars": 23643,
+      "atSeconds": 36.5,
+      "stepSeconds": 3.1,
+      "detail": {
+        "opened": 10
+      }
+    },
+    {
+      "step": "Show more x2",
+      "status": "ok",
+      "heapUsedMB": 34.37,
+      "heapTotalMB": 35.66,
+      "domNodes": 8811,
+      "jsEventListeners": 952,
+      "documents": 1,
+      "backingStoreMB": 11.57,
+      "canvases": 0,
+      "storageChars": 23643,
+      "atSeconds": 38.5,
+      "stepSeconds": 1.8,
+      "detail": {
+        "controls": 1,
+        "expanded": 2,
+        "collapsed": 2,
+        "failed": 0,
+        "leftOpen": 0,
+        "selectedForLossFigure": "HMI-F3"
+      }
+    },
+    {
+      "step": "2D | 3D switch x5",
+      "status": "ok",
+      "heapUsedMB": 36.04,
+      "heapTotalMB": 37.41,
+      "domNodes": 7687,
+      "jsEventListeners": 805,
+      "documents": 1,
+      "backingStoreMB": 11.57,
+      "canvases": 0,
+      "storageChars": 23643,
+      "atSeconds": 47.2,
+      "stepSeconds": 8.5,
+      "detail": {
+        "switches": 5,
+        "rendered3d": 5,
+        "maxCanvases": 1
+      }
+    },
+    {
+      "step": "simulate 2 scenarios + reset",
+      "status": "ok",
+      "heapUsedMB": 36.99,
+      "heapTotalMB": 38.16,
+      "domNodes": 7851,
+      "jsEventListeners": 821,
+      "documents": 1,
+      "backingStoreMB": 11.57,
+      "canvases": 0,
+      "storageChars": 23643,
+      "atSeconds": 58.2,
+      "stepSeconds": 10.7,
+      "detail": {
+        "speed": "4x",
+        "runs": [
+          {
+            "scenario": "CIP Crossover",
+            "finished": true
+          },
+          {
+            "scenario": "Ammonia Release",
+            "finished": true
+          }
+        ]
+      }
+    },
+    {
+      "step": "idle 20 s",
+      "status": "ok",
+      "heapUsedMB": 37.4,
+      "heapTotalMB": 38.41,
+      "domNodes": 7874,
+      "jsEventListeners": 823,
+      "documents": 1,
+      "backingStoreMB": 11.57,
+      "canvases": 0,
+      "storageChars": 23645,
+      "atSeconds": 78.4,
+      "stepSeconds": 20
+    }
+  ],
+  "growth": {
+    "from": "idle 10 s",
+    "to": "idle 20 s",
+    "heapUsedMB": 3.6,
+    "domNodes": 848,
+    "jsEventListeners": 22
+  },
+  "skipped": [],
+  "valid": true,
+  "noise": {
+    "hotReloadHeld": true,
+    "heldDevServerMessages": 27,
+    "pageLoadsAtSeconds": [
+      1.4
+    ],
+    "buildErrors": 0,
+    "devServerMessages": {
+      "isrManifest": 5,
+      "turbopack-connected": 1,
+      "binary": 2,
+      "sync": 1,
+      "built": 29
+    },
+    "problemCount": 0,
+    "problems": []
+  },
+  "retainedAllocationsSinceIdle": {
+    "sampledLiveKB": 15724,
+    "top": [
+      {
+        "kb": 1579,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  AssetSymbol <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 1007,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- NetworkDrawing <- renderWithHooks"
+      },
+      {
+        "kb": 994,
+        "site": "exports.createElement @ de_modules_next_dist_compiled_1amofcmz--cdp._.js:1825  <-  map <- renderWithHooks <- updateForwardRef"
+      },
+      {
+        "kb": 618,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- PipeLayer <- renderWithHooks"
+      },
+      {
+        "kb": 415,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- ActivityFeed <- renderWithHooks"
+      },
+      {
+        "kb": 415,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- OtherItems <- renderWithHooks"
+      },
+      {
+        "kb": 354,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  ZoneLabel <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 330,
+        "site": "(anonymous) @ src_floor_1fcpig9wokz4_._.js:253  <-  map <- AssetLayer <- renderWithHooks"
+      },
+      {
+        "kb": 322,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  Avatar <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 306,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  VesselShell <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 297,
+        "site": "(V8 API) @ :0  <-  (root)"
+      },
+      {
+        "kb": 272,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- ConnectorLayer <- renderWithHooks"
+      },
+      {
+        "kb": 235,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  Pump <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 221,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  Hmi <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 219,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- AttackPathLayer <- renderWithHooks"
+      },
+      {
+        "kb": 216,
+        "site": "(anonymous) @ src_crew_1v-adl1jqbjxc._.js:1060  <-  map <- CrewLayer <- renderWithHooks"
+      },
+      {
+        "kb": 188,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  AgitatedTank <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 177,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  CrewCard <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 177,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- NetworkSwitch <- renderWithHooks"
+      },
+      {
+        "kb": 162,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  SignalRow <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 162,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- NodeAnnotations <- renderWithHooks"
+      },
+      {
+        "kb": 152,
+        "site": "jsxDEVImpl @ _1cjy5v944oa-i._.js:161  <-  exports.jsxDEV <- AssetSymbol <- renderWithHooks"
+      },
+      {
+        "kb": 143,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  LossFigure <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 137,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  Firewall <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 129,
+        "site": "jsxDEVImpl @ _1cjy5v944oa-i._.js:161  <-  exports.jsxDEV <- map <- NetworkDrawing"
+      },
+      {
+        "kb": 119,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  VerticalTank <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 119,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- Pump <- renderWithHooks"
+      },
+      {
+        "kb": 117,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- ZoneLayer <- renderWithHooks"
+      },
+      {
+        "kb": 110,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- EntryPoints <- renderWithHooks"
+      },
+      {
+        "kb": 103,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  NetworkSwitch <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 103,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  AssetInspector <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 102,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  PlcCabinet <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 96,
+        "site": "jsxDEVImpl @ _1cjy5v944oa-i._.js:161  <-  exports.jsxDEV <- map <- NetworkSwitch"
+      },
+      {
+        "kb": 96,
+        "site": "updateProperties @ js_react-dom-client_development_0mp0cp_t-ezj9.js:11032  <-  commitUpdate <- commitMutationEffectsOnFiber <- recursivelyTraverseMutationEffects"
+      },
+      {
+        "kb": 85,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  AxialFan <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 84,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  AppShell <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 81,
+        "site": "jsxDEVImpl @ _1cjy5v944oa-i._.js:161  <-  map <- AssetLayer <- renderWithHooks"
+      },
+      {
+        "kb": 80,
+        "site": "AssetSymbol @ src_floor_1fcpig9wokz4_._.js:54  <-  renderWithHooks <- updateFunctionComponent <- updateSimpleMemoComponent"
+      },
+      {
+        "kb": 76,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  UvReactor <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 68,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- HeatExchanger <- renderWithHooks"
+      }
+    ]
+  }
+}

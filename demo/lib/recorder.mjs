@@ -16,7 +16,7 @@ export async function startScreencast(page, dir) {
     writeFileSync(file, Buffer.from(frame.data, "base64"));
     pending = cdp.send("Page.screencastFrameAck", { sessionId: frame.sessionId }).catch(() => {});
   });
-  await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: 1920, maxHeight: 1080, everyNthFrame: 1 });
+  await cdp.send("Page.startScreencast", { format: "jpeg", quality: 88, maxWidth: 1920, maxHeight: 1080, everyNthFrame: 1 });
   const startedAt = Date.now() / 1000;
   return {
     async stop() {

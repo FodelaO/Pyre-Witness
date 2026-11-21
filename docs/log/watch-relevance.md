@@ -29,3 +29,11 @@ The public check runs on mount, every ten minutes and on **Run now**. The new ma
 Cyber evidence comes from publisher feeds and the simulated inventory, with CVSS when present and version matches limited to explicit evidence. openFDA updates its public enforcement dataset weekly. [openFDA Food Enforcement](https://open.fda.gov/apis/food/enforcement/)
 
 Interactive and screenshot verification is pending. macOS denied Chrome Mach-port registration for the headless launch. The native Chrome control timed out and the Chrome browser host was unavailable. `/private/tmp/pyre-watch-relevance-browser.mjs` is the prepared single-browser check for both requested viewports.
+
+## Demo build follow-up
+
+Local reviews share a five-minute server cache scoped to the assessed twin. Concurrent cold tabs share one review. A manual run bypasses the freshness window and falls back to the last matching report with a limit note when the budget is full.
+
+The latest public feed check drives both indicators. The status ages to Stale after 15 minutes and shows Feed offline when every source in the last check failed. Loss figures carry a per-event unit.
+
+The live endpoint returned the same HTTP 200 cached report and check timestamp over JSON and SSE. Typecheck passed, and the Watch suite finished with 46 passed and three skipped. Rendering data from the running app verified the Live and Stale labels and all seven loss units.

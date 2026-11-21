@@ -1,0 +1,71 @@
+PLANT RISK
+Inspect
+47
+/100
+Elevated
++1
+vs baseline
+Session trend
+Loss exposure $110k est. / yr
+Model the twin
+Device profile
+Smartphone
+
+Apple
+
+Evidence 3
+Could not determine
+Exact model and storage capacity · Supported and enabled wireless radios · Cloud connectivity and power specifications
+Where it goes
+Rules engine cleared
+Corporate office
+Keep on dry office desk away from production floor.
+Physical constraints
+L4
+Enterprise · Internet to enterprise edge
+Network rationale
+Move there
+−$31k est. · if moved
+PH-901 · Apple
+Show more
+Never here
+Filler 3
+L0
+Unverified washdown IP rating, non-hygienic materials, and unmanaged Purdue 0 risk.
+Risks
+2
+Unrated consumer phone in hygienic washdown cell
+Unmanaged networked device in Purdue 0 cell
+Compliance references · 2
+Attack paths
+As-dropped rules check · 0 paths
+Recommendation rules check · 0 paths
+Mitigations
+Awaiting approval · 2
+Relocate smartphone to corporate office
+PH-901
+Move PH-901 out of Filler 3 washdown zone to corporate_office.
+−1
+risk pts projected
+Approve
+Reject
+Enroll smartphone in asset management
+PH-901
+Place PH-901 under inventory and patch management before network use.
+0
+risk pts projected
+Approve
+Reject
+Fit preview
+Recommended
+
+Corporate office
+
+Generate preview
+
+AI-generated visualisation
+
+Analysis details
+Threat watch
+Complete
+Crew activity

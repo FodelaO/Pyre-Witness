@@ -1,0 +1,210 @@
+{
+  "run": "r1",
+  "size": "1920x1080",
+  "base": "http://localhost:4119",
+  "photo": "eval/dataset/images/photo-009.jpg",
+  "captured": true,
+  "at": "2026-11-21T18:50:40.902Z",
+  "appMs": 151356,
+  "steps": [
+    {
+      "id": "01",
+      "name": "open-app",
+      "ok": true,
+      "ms": 50665,
+      "risk": "46",
+      "note": "chip: Gemini services, 0 of 10 healthy",
+      "shot": "demo/rehearsal/shots/r1-01-open-app.png"
+    },
+    {
+      "id": "02",
+      "name": "pin-location",
+      "ok": true,
+      "ms": 1740,
+      "risk": "46",
+      "note": "Pin location",
+      "shot": "demo/rehearsal/shots/r1-02-pin-location.png"
+    },
+    {
+      "id": "03",
+      "name": "phone-qr",
+      "ok": true,
+      "ms": 2793,
+      "risk": "46",
+      "note": "http://172.16.249.18:4119/capture?s=<code>",
+      "shot": "demo/rehearsal/shots/r1-03-phone-qr.png"
+    },
+    {
+      "id": "04",
+      "name": "phone-sends-photo",
+      "ok": true,
+      "ms": 11032,
+      "risk": "46",
+      "note": "photo arrived on the laptop",
+      "shot": "demo/rehearsal/shots/r1-04-phone-sends-photo.png"
+    },
+    {
+      "id": "05",
+      "name": "analyze-and-wait",
+      "ok": true,
+      "ms": 25822,
+      "risk": "47",
+      "note": "done in 24.4s; plant risk first moved at 13.7s",
+      "shot": "demo/rehearsal/shots/r1-05-analyze-and-wait.png"
+    },
+    {
+      "id": "06",
+      "name": "answer-rail",
+      "ok": true,
+      "ms": 33,
+      "risk": "47",
+      "note": "where:yes never:yes paths:yes hold:NO move-button:1",
+      "shot": "demo/rehearsal/shots/r1-06-answer-rail.png"
+    },
+    {
+      "id": "07",
+      "name": "loss-show-more",
+      "ok": true,
+      "ms": 1303,
+      "risk": "47",
+      "note": "−$31k est. · if moved PH-901 · Apple Show less Assets involved · 17 $2.5M PH-901 · Apple $900 installed · origin As dropped · Damage / repair · $900 installed × 8% damage ≈ $72 −$72 As dropped · Throughput reduced · 18 h × $5.3k/h × 15% ≈ $",
+      "shot": "demo/rehearsal/shots/r1-07-loss-show-more.png"
+    },
+    {
+      "id": "08",
+      "name": "move-there",
+      "ok": true,
+      "ms": 943,
+      "risk": "46",
+      "note": "risk 47 -> 46",
+      "shot": "demo/rehearsal/shots/r1-08-move-there.png"
+    },
+    {
+      "id": "09",
+      "name": "lens-data",
+      "ok": true,
+      "ms": 1633,
+      "risk": "46",
+      "note": "Data",
+      "shot": "demo/rehearsal/shots/r1-09-lens-data.png"
+    },
+    {
+      "id": "10",
+      "name": "lens-both",
+      "ok": true,
+      "ms": 1756,
+      "risk": "46",
+      "note": "Both",
+      "shot": "demo/rehearsal/shots/r1-10-lens-both.png"
+    },
+    {
+      "id": "11",
+      "name": "select-plc-f3",
+      "ok": true,
+      "ms": 1664,
+      "risk": "46",
+      "note": "selected",
+      "shot": "demo/rehearsal/shots/r1-11-select-plc-f3.png"
+    },
+    {
+      "id": "12",
+      "name": "simulate-cip-crossover",
+      "ok": true,
+      "ms": 5552,
+      "risk": "46",
+      "note": "Contained in 00:12 · ZSC-311 hardwired permissive",
+      "shot": "demo/rehearsal/shots/r1-12-simulate-cip-crossover.png"
+    },
+    {
+      "id": "13",
+      "name": "approve-mitigation",
+      "ok": true,
+      "ms": 1747,
+      "risk": "46",
+      "note": "Approve Enroll smartphone in asset management",
+      "shot": "demo/rehearsal/shots/r1-13-approve-mitigation.png"
+    },
+    {
+      "id": "14",
+      "name": "rerun-simulation",
+      "ok": true,
+      "ms": 4025,
+      "risk": "46",
+      "note": "Contained in 00:12 · ZSC-311 hardwired permissive",
+      "shot": "demo/rehearsal/shots/r1-14-rerun-simulation.png"
+    },
+    {
+      "id": "15",
+      "name": "threat-watch",
+      "ok": true,
+      "ms": 2045,
+      "risk": "46",
+      "note": "Threat watch · Complete; approvals waiting: 3",
+      "shot": "demo/rehearsal/shots/r1-15-threat-watch.png"
+    },
+    {
+      "id": "16",
+      "name": "transcript",
+      "ok": true,
+      "ms": 1204,
+      "risk": "46",
+      "note": "steps listed; prompt:NO raw:yes tokens:yes :: Run transcript 4 runs · 48 steps shown Download transcript RUN All runs Simulation · cip · 13:49:40 Simulation · cip · 13:49:27 Capture · Object photo · 13:48:3",
+      "shot": "demo/rehearsal/shots/r1-16-transcript.png"
+    },
+    {
+      "id": "17",
+      "name": "transcript-close",
+      "ok": true,
+      "ms": 822,
+      "risk": "46",
+      "note": "",
+      "shot": "demo/rehearsal/shots/r1-17-transcript-close.png"
+    },
+    {
+      "id": "18",
+      "name": "health-chip",
+      "ok": true,
+      "ms": 1408,
+      "risk": "46",
+      "note": "Gemini services, 10 of 10 healthy",
+      "shot": "demo/rehearsal/shots/r1-18-health-chip.png"
+    },
+    {
+      "id": "19",
+      "name": "health-chip-close",
+      "ok": true,
+      "ms": 427,
+      "risk": "46",
+      "note": "",
+      "shot": "demo/rehearsal/shots/r1-19-health-chip-close.png"
+    },
+    {
+      "id": "20",
+      "name": "proof-page",
+      "ok": true,
+      "ms": 29156,
+      "risk": "?",
+      "note": "91.9%:yes 19.4%:yes :: Pyre Witness Plant floor Proof it works Run 3 n=71 / 71 recorded pairs Nov 21, 2026, 6:24 PM UTC Fresh Hydrogen baseline · 4 workers How doe",
+      "shot": "demo/rehearsal/shots/r1-20-proof-page.png"
+    },
+    {
+      "id": "21",
+      "name": "proof-scroll",
+      "ok": true,
+      "ms": 1014,
+      "risk": "?",
+      "note": "",
+      "shot": "demo/rehearsal/shots/r1-21-proof-scroll.png"
+    },
+    {
+      "id": "22",
+      "name": "back-to-plant",
+      "ok": true,
+      "ms": 4572,
+      "risk": "46",
+      "note": "captured device still in results: true",
+      "shot": "demo/rehearsal/shots/r1-22-back-to-plant.png"
+    }
+  ],
+  "problems": []
+}

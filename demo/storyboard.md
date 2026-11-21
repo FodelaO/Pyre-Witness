@@ -1,5 +1,9 @@
 # Pyre Witness demo storyboard (60 s maximum)
 
+> **Final cut (2026-11-21, 58.17 s, recorded from the final build on port 4120):** the shot list, with
+> timestamps and which parts are real time and which are sped up, is in `docs/log/demo-video.md`. The
+> cut order is in `demo/shots/index.mjs`. The sections below are the earlier v0 plan and are kept for history.
+
 This storyboard is the source of truth for the cut. Shot modules live in `demo/shots/*.mjs`, and their order is set in `demo/shots/index.mjs`. Every shot is a real interaction with the running app at http://localhost:4119. Shots marked PENDING are recorded only once the feature they need works for real.
 
 ## Cut v0 (recorded 2026-11-21, 37.6 s)
