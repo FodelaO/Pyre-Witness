@@ -1,16 +1,30 @@
-/* Compact counterfactual cards for the asset inspector. */
-.options { display: grid; gap: 8px; padding-block: 10px; border-block-start: 1px solid var(--pw-line); }
-.heading, .identity, .metrics, .clauses { display: flex; align-items: center; gap: 8px; }
-.heading { justify-content: space-between; }
-.heading h3, .identity h4, .card p { margin: 0; }
-.heading h3, .identity h4 { font-size: 13px; color: var(--pw-text); }
-.options small { font-size: 10px; color: var(--pw-text-dim); }
-.options summary { cursor: pointer; font-size: 11px; color: var(--pw-text); }
-.card { display: grid; gap: 5px; padding: 8px; margin-block: 4px; background: var(--pw-panel-2); border: 1px solid var(--pw-line); border-radius: 6px; }
-.card[data-recommended] { border-color: color-mix(in srgb, var(--pw-ok) 40%, var(--pw-line)); }
-.identity svg { flex: 0 0 auto; }
-.identity button { margin-inline-start: auto; flex: 0 0 auto; }
-.card p { font-size: 11px; color: var(--pw-text-dim); }
-.metrics, .clauses { flex-wrap: wrap; gap: 4px 8px; font-size: 10px; }
-.metrics strong[data-positive="true"], .options .recommended { color: var(--pw-ok); }
-.clauses span { border: 1px solid var(--pw-line); border-radius: 3px; padding: 1px 4px; color: var(--pw-text-dim); }
+/* Compact recommendation rows for the asset inspector. */
+.options {
+  display: grid;
+  gap: 4px;
+  padding-block: 8px;
+  border-block-start: 1px solid var(--pw-line);
+}
+
+.heading {
+  margin: 0;
+  color: var(--pw-text-dim);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.name { overflow: hidden; text-overflow: ellipsis; }
+.value { color: var(--pw-ok); font-variant-numeric: tabular-nums; }
+.gaps { color: var(--pw-text-dim); }
+.row .use { min-height: 24px; padding: 2px 6px; font-size: 11px; }

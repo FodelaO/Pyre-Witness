@@ -2,7 +2,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { clauseById } from "@/data/compliance";
 import { LossGlyph } from "@/econ/LossGlyph";
 import { useEconomicTwin } from "@/econ/useEconomicTwin";
 import { useRunStore } from "@/pipeline/runStore";
@@ -49,29 +48,30 @@ function useCarbon(request: string | null) {
   return result?.request === request ? result : undefined;
 }
 
-function Option({ item, recommended, apply }: { item: EvaluatedCandidate; recommended?: boolean; apply: () => void }) {
+function Option({ item, apply }: { item: EvaluatedCandidate; apply: () => void }) {
   const { candidate, net, complianceReduction, removedClauses, riskDelta } = item;
-  const source = candidate.source === "carbon" ? "Proposed by Carbon" : "Rules-engine variant";
+  if (net === null || candidate.cost === null) return null;
+  const fromCarbon = candidate.source === "carbon";
+  const [low, mode, high] = candidate.cost;
+  const annual = `${signed(net, usd.format)}/yr`;
+  const gaps = `${signed(-complianceReduction)} ${complianceReduction === 1 ? "gap" : "gaps"}`;
+  const details = [
+    candidate.name,
+    candidate.rationale,
+    `Source: ${fromCarbon ? "Carbon" : "rules engine"}`,
+    `Simulated est. net ${annual} (rules engine + loss model)`,
+    `Risk ${signed(riskDelta, points.format)}`,
+    `${gaps} in compliance`,
+    `One-time cost est. ${usd.format(mode)} (${usd.format(low)} low, ${usd.format(high)} high)${fromCarbon ? "" : ", modeled labor only"}`,
+    `Removed clause IDs: ${removedClauses.join(", ") || "none"}`,
+  ].join(" · ");
   return (
-    <article className={styles.card} data-recommended={recommended || undefined}>
-      <div className={styles.identity}>
-        <LossGlyph kind={candidate.kind} size={36} />
-        <div>{recommended && <small className={styles.recommended}>Recommended</small>}<h4>{candidate.name}</h4></div>
-        <button type="button" className="pw-panel-button" onClick={apply}>Use this</button>
-      </div>
-      <p>{candidate.rationale}</p>
-      <div className={styles.metrics}>
-        <strong data-positive={net !== null && net > 0}>{net === null ? "Cost unestimated" : `${signed(net, usd.format)}/yr est. net`}</strong>
-        <span>Risk {signed(riskDelta, points.format)}</span>
-        <span>{signed(-complianceReduction)} compliance gaps</span>
-      </div>
-      {removedClauses.length > 0 && <div className={styles.clauses} aria-label="Removed compliance clauses">
-        {removedClauses.map((id) => <span key={id} title={id}>{clauseById(id)?.clause ?? id}</span>)}
-      </div>}
-      <small>{source} · numbers: rules engine + loss model</small>
-      {candidate.cost && <small title={`${usd.format(candidate.cost[0])} low · ${usd.format(candidate.cost[2])} high`}>
-        {signed(candidate.cost[1], usd.format)} one-time · {candidate.source === "carbon" ? "Carbon cost estimate" : "modeled labor only"}
-      </small>}
+    <article className={styles.row} title={details} aria-label={details}>
+      <LossGlyph kind={candidate.kind} size={22} />
+      <span className={styles.name}>{candidate.name}</span>
+      <strong className={styles.value}>{annual}</strong>
+      <span className={styles.gaps}>{gaps}</span>
+      <button type="button" className={`pw-panel-button ${styles.use}`} aria-label={`Use ${candidate.name}`} onClick={apply}>Use</button>
     </article>
   );
 }
@@ -105,13 +105,13 @@ function ComparedOptions({ asset: selectedAsset, assessment, profile }: { asset:
     changes: changes.map(({ id, description }) => ({ id, description })),
   }) : null;
   const carbon = useCarbon(request);
-  const ranked = useMemo(() => evaluateAlternatives(twin, asset.id, [
-    ...rules,
-    ...mapCarbonCandidates(carbon?.proposals ?? [], changes),
-  ]), [twin, asset.id, rules, carbon, changes]);
-  const recommended = ranked[0]?.qualifies ? ranked[0] : undefined;
-  const others = recommended ? ranked.slice(1) : ranked;
-  const [applied, setApplied] = useState<string>();
+  const options = useMemo(() => {
+    if (request && !carbon) return [];
+    const proposals = carbon && !carbon.unavailable ? mapCarbonCandidates(carbon.proposals, changes) : [];
+    return evaluateAlternatives(twin, asset.id, [...rules, ...proposals])
+      .filter(({ qualifies }) => qualifies)
+      .slice(0, 2);
+  }, [twin, asset.id, rules, request, carbon, changes]);
 
   function apply(item: EvaluatedCandidate) {
     const store = useTwinStore.getState();
@@ -124,22 +124,16 @@ function ComparedOptions({ asset: selectedAsset, assessment, profile }: { asset:
       ...next,
       assets: next.assets.map((entry) => entry === updated ? { ...entry, placement: unsafe ? "unsafe" : "recommended" } : entry),
     });
-    setApplied(item.candidate.name);
   }
 
+  if (!options.length) return null;
+  const label = options.length === 1 ? "Better option" : "Better options";
   return (
-    <section className={styles.options} aria-label="Better options">
-      <div className={styles.heading}><h3>Better options</h3><small>Simulated estimates</small></div>
-      {applied && <small role="status">Applied {applied}</small>}
-      {request && !carbon && <small role="status">Carbon is looking for better options…</small>}
-      {carbon?.unavailable && <small>Carbon unavailable · rules-engine options shown</small>}
-      {recommended
-        ? <Option item={recommended} recommended apply={() => apply(recommended)} />
-        : <small>No option meets both criteria.</small>}
-      {others.length > 0 && <details>
-        <summary>See all · {ranked.length}</summary>
-        {others.map((item, index) => <Option key={`${item.candidate.source}-${item.candidate.name}-${index}`} item={item} apply={() => apply(item)} />)}
-      </details>}
+    <section className={styles.options} aria-label={label}>
+      <h3 className={`pw-mono ${styles.heading}`}>{label}</h3>
+      {options.map((item, index) => (
+        <Option key={`${item.candidate.source}-${item.candidate.name}-${index}`} item={item} apply={() => apply(item)} />
+      ))}
     </section>
   );
 }
