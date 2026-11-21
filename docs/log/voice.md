@@ -1,0 +1,31 @@
+# Chief voice
+
+`SpeakButton` plays a briefing, cancels a pending request or stops playback, and presents a retry on error. Auto-speak remembers the setting in `localStorage` and subscribes to `summary.done` while the shell is mounted. A browser gesture unlocks audio on each page load. Starting Live voice stops the briefing. A new auto-speak event waits until the Live turn and its playback finish.
+
+`TalkToChief` holds the microphone with a pointer or Space. Enter works on the focused control, and Escape stops the session. The microphone is released on pointer or key release, and the socket, audio graph and listeners are cleaned up on unmount. The meter uses the microphone's RMS level. The caption uses the provider's input and output transcriptions.
+
+## Provider requests
+
+- `POST /api/voice/speak` accepts `{ "text": "…" }` with 1–1,200 characters after trimming. The server calls `interactions.create` on `v1beta` with `MODEL_IDS.tts`, `input: [{ type: "user_input", content: [{ type: "text", text, annotations: [{ type: "speech_metadata", style }] }] }]`, `response_format: { type: "audio", mime_type: "audio/wav", sample_rate: 24000 }`, `generation_config: { speech_config: [{ voice: "Charon" }] }`, `stream: false`, and `store: false`. It reads `output_audio.data` as Base64. Unary WAV passes through and raw PCM gets a mono 16-bit WAV header. A SHA-256 key indexes an 8 MiB, process-local WAV cache. The provider deadline is 30 seconds. [Gemini speech generation](https://aistudio.google.com/docs/speech-generation.md)
+- `POST /api/voice/session` sends `POST /v1beta/auth_tokens` with `{ uses: 1, newSessionExpireTime, expireTime, bidiGenerateContentSetup }`. The start window is 60 seconds and the token expires after eight minutes. The server locks the model, instruction, five tool declarations, audio modality, Charon voice, both transcriptions, manual activity detection, and initial-history mode. It returns `{ token, expiresAt }` with `Cache-Control: no-store`. Both POSTs use the server key in `x-goog-api-key`. [Gemini ephemeral tokens](https://aistudio.google.com/docs/live-api/ephemeral-tokens.md) · [Live WebSocket reference](https://aistudio.google.com/api-reference/live.md)
+- The browser opens `v1beta` `GenerativeService.BidiGenerateContentConstrained` using the one-use `access_token` and sends `{ setup: { model } }`. After `setupComplete` it sends `{ clientContent: { turns: [{ role: "user", parts: [{ text: "PLANT_SNAPSHOT\n…" }] }], turnComplete: true } }` to seed history. Later snapshots use `turnComplete: false`. Each utterance sends `realtimeInput.activityStart`, mono `realtimeInput.audio` as Base64 little-endian PCM16 with `audio/pcm;rate=<device rate>`, then `realtimeInput.activityEnd`. Gemini resamples microphone audio and returns PCM16 at 24 kHz. Pressing again or receiving `serverContent.interrupted` clears queued playback. Local tool results are sent as `toolResponse.functionResponses` with the original function name and call ID. [Live capabilities](https://aistudio.google.com/docs/live-api/capabilities.md) · [Live tool use](https://aistudio.google.com/docs/live-api/tools.md) · [Live WebSocket reference](https://aistudio.google.com/api-reference/live.md)
+
+## Evidence and actions
+
+The latest snapshot covers plant areas, zones, up to 72 key assets, current risk score and band, eight top findings and eight simulated exposure paths. It includes the latest profile, Architect recommendation and the rules-engine placement check with its scope. It omits credential notes, images, network addresses, and path step details. Context updates are sent when idle and at microphone turn boundaries. The Live instruction asks for one or two evidence-backed sentences and acknowledgement of missing evidence.
+
+The function dispatcher validates IDs and arguments against the stores. Selection, view, and path focus affect what the engineer sees. `move_device_to_recommended` is limited to the newly captured asset from the same completed capture and re-checks the destination on the current twin before calling `moveToRecommended`. The existing results panel handles mitigation decisions and other changes. The microphone stops after a 30-second hold, the response deadline is 40 seconds, and an idle connection closes after 90 seconds.
+
+## Integration request
+
+Mount `TalkToChief` directly inside the shell's positioned `main`. Replace the briefing placeholder with `SpeakButton` and pass `text={summary}`.
+
+The twin store links selection by asset ID. The voice control shows the exact selected simulated path and selects its linked asset. To emphasize the exact route on the diagrams, the floor and Purdue owners can subscribe to `useChiefPath((state) => state.pathId)` from `@/voice/chiefActions`. If that ID matches an entry in `risk.paths`, render and emphasize that path in the visible overlay. Otherwise use the existing asset-based emphasis. The shared risk report should retain its full path list. The sandbox blocked `.agents/requests/voice.md` and the coordination bridge could not write its audit log, so the request is recorded here.
+
+## Verification
+
+- `npm run typecheck`, scoped ESLint, and all eight voice tests passed. The full suite passed once with 205 tests and three skips. The latest full run had 204 passes, three skips, and one failure in the existing rules-engine timing test at 17.24 ms p95 against a 15 ms budget.
+- An intercepted transport check verified both `v1beta` request bodies and header-only server authentication before the network call.
+- Both localhost POSTs returned JSON `503` for the absent `GEMINI_API_KEY`. Authenticated TTS, token minting, and dialogue remain unverified. No provider audio was fabricated.
+- In the installed Chrome, isolated mounts showed the missing-key briefing and held-talk errors. A reload preserved the auto-speak preference and a test `summary.done` event exercised its request path. Pointer hold and Space opened the microphone permission flow. An in-browser synthetic PCM source exercised the audio worklet and verified track release. The temporary preview was removed.
+- Safari remains unverified. Computer Use was not approved for Safari, and the Playwright WebKit process aborted before rendering.
