@@ -6,6 +6,7 @@ import { estimateLoss } from "@/econ/model";
 import { scenarioFromPath } from "@/econ/scenarios";
 import { SEED_TWIN } from "@/twin/seed";
 import { useTwinStore } from "@/twin/store";
+import { AlertLadder } from "./AlertLadder";
 import { useFlagStore } from "./flagStore";
 import { monitorEscalations } from "./monitor";
 import { DEFAULT_THRESHOLDS, ESCALATION_DEBOUNCE_MS, thresholdCrossed } from "./policy";
@@ -87,4 +88,35 @@ it("starts without a phone and raises and resolves all three labeled tiers toget
   } finally {
     stop();
   }
+});
+
+it("clears the test chips and flags and restores the pre-test risk without the monitor", () => {
+  const riskBefore = useTwinStore.getState().risk.score;
+  const stop = monitorEscalations();
+  try {
+    expect(runTestAlert()).toBe(true);
+    vi.advanceTimersByTime(ESCALATION_DEBOUNCE_MS);
+  } finally {
+    stop();
+  }
+
+  const openId = useEscalationStore.getState().records.find(({ trigger }) => trigger.assetId === TEST_ASSET_ID)?.id;
+  const renderLadder = (testRunning: boolean) => renderToStaticMarkup(createElement(AlertLadder, {
+    records: useEscalationStore.getState().records,
+    openId, testRunning, phoneConnected: false, onOpen: vi.fn(), onRing: vi.fn(), respond: vi.fn(),
+  }));
+  const rehearsal = renderLadder(true);
+  for (const label of ["Flag · PT-401", "Message · HMI-F3", "Call · TEST-901", "Deciding…"]) {
+    expect(rehearsal).toContain(label);
+  }
+  expect(useFlagStore.getState().flags).toContainEqual(expect.objectContaining({ assetId: "PT-401" }));
+
+  clearTestAlert();
+
+  const chips = renderLadder(false);
+  expect(chips).not.toMatch(/Flag · PT-401|Message · HMI-F3|Call · TEST-901|TEST SCENARIO/);
+  expect(useEscalationStore.getState().records.filter(({ trigger, resolvedAt }) => trigger.test && !resolvedAt)).toEqual([]);
+  expect(useFlagStore.getState().flags.map(({ assetId }) => assetId)).not.toContain("PT-401");
+  expect(useTwinStore.getState().twin.assets.some(({ id }) => id === TEST_ASSET_ID)).toBe(false);
+  expect(useTwinStore.getState().risk.score).toBe(riskBefore);
 });

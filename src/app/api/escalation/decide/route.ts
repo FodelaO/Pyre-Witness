@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     const clients = geminiClients();
     const result = await clients.decisions.create(
       { model: MODEL_IDS.decisions, input: JSON.stringify(input.data), questions },
-      { signal: AbortSignal.any([request.signal, AbortSignal.timeout(4500)]), retries: noSdkRetries },
+      { signal: AbortSignal.any([request.signal, AbortSignal.timeout(14_000)]), retries: noSdkRetries },
     );
     const answer = decisionAnswer.parse(result.answers?.action);
     return Response.json({ model: MODEL_IDS.decisions, ...answer });

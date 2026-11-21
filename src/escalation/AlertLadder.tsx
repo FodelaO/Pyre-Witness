@@ -1,10 +1,11 @@
 /** Summarizes alert tiers in the crew dock and opens the active tier's details. */
 "use client";
 
-import { MessageSquare, PhoneCall } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { Check, CornerUpLeft, MessageSquare, Phone, PhoneCall, PhoneIncoming } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { formatUsd } from "@/econ/format";
 import { ACTIONS, type AlertAction, type HumanResponse } from "./decision";
+import { ensureDecision } from "./requestDecision";
 import { useSlackStatuses } from "./slackClient";
 import { TEST_SCENARIO_LABEL } from "./testScenario";
 import type { AlertLevel, EscalationRecord } from "./types";
@@ -19,6 +20,10 @@ function DecisionControls({ record, respond }: {
   const submitted = useRef(false);
   const { decision, humanResponse } = record;
 
+  useEffect(() => {
+    if (record.decision === undefined && !record.humanResponse) void ensureDecision(record);
+  }, [record]);
+
   async function submit(response: HumanResponse) {
     submitted.current = true;
     setSending(true);
@@ -26,7 +31,7 @@ function DecisionControls({ record, respond }: {
   }
 
   return <div className="pw-es-ladder-decision">
-    <span>{decision === undefined ? "Requesting decision…" : decision
+    <span role="status">{decision === undefined ? "Deciding…" : decision
       ? `Decision · ${decision.model}: ${decision.choice} (${Math.round(decision.confidence * 100)}%)`
       : "Decision unavailable"}</span>
     {humanResponse ? <strong tabIndex={-1} ref={(receipt) => {
@@ -65,42 +70,44 @@ export function AlertLadder({ records, call, phoneConnected, openId, onOpen, onR
 }) {
   const detailId = useId();
   const live = records.filter((record) => record.level && !record.resolvedAt && !record.dismissedAt);
-  const test = testRunning || live.some(({ trigger }) => trigger.test);
-  const latest = (level: AlertLevel) => live.findLast((entry) => entry.level === level && !!entry.trigger.test === test);
+  const latest = (level: AlertLevel) => live.findLast((entry) => entry.level === level && !!entry.trigger.test === testRunning);
   const flag = latest(1);
   const message = latest(2);
-  const high = call?.level === 3 && !call.resolvedAt && !call.dismissedAt && !!call.trigger.test === test ? call : latest(3);
+  const high = call?.level === 3 && !call.resolvedAt && !call.dismissedAt && !!call.trigger.test === testRunning ? call : latest(3);
   const slack = useSlackStatuses((state) => message ? state[message.id] : undefined);
   const messageStatus = message?.messageStatus === "sent" || slack === "sent" ? "Message sent"
     : message?.messageStatus === "pending" || slack === "pending" ? "Sending…"
       : message?.messageStatus === "failed" || (slack === "failed" && phoneConnected) ? "Message failed"
         : "Waiting for phone";
-  const callStatus = high?.humanResponse ? "Responded" : high?.answered ? "Answered" : high?.ringing ? "Ringing"
-    : high?.decision === undefined ? "Preparing decision…" : phoneConnected ? "Ready" : "Waiting for phone";
+  const callStatus = high?.humanResponse?.kind === "override" ? "Overridden"
+    : high?.humanResponse?.kind === "approve" || high?.approved ? "Approved"
+      : high?.answered ? "Answered" : high?.ringing ? "Ringing" : phoneConnected ? "Ready" : "Waiting for phone";
+  const CallGlyph = { Approved: Check, Overridden: CornerUpLeft, Answered: PhoneIncoming, Ringing: PhoneCall,
+    Ready: Phone, "Waiting for phone": Phone }[callStatus];
 
   const tiers = [
     { name: "Flag", record: flag, status: "Flagged", icon: <b className="pw-es-ladder-flag" aria-hidden>!</b> },
     { name: "Message", record: message, status: slack && slack !== "pending" ? `${messageStatus} · Slack ${slack}` : messageStatus,
-      icon: <MessageSquare size={13} aria-hidden /> },
-    { name: "Call", record: high, status: callStatus, icon: <PhoneCall size={13} aria-hidden /> },
+      icon: <MessageSquare size={13} aria-hidden />, glyph: messageStatus === "Message sent" ? Check : null },
+    { name: "Call", record: high, status: callStatus, icon: <CallGlyph size={13} aria-hidden /> },
   ];
   const selected = tiers.find(({ record }) => record && record.id === openId);
   const record = selected?.record;
 
   return <section className="pw-es-ladder" aria-label="Alert ladder">
     <div className="pw-es-ladder-row">
-      {tiers.map(({ name, record, status, icon }) => {
+      {tiers.map(({ name, record, status, icon, glyph: StatusGlyph }) => {
         const asset = record?.trigger.assetId ?? "Line 3";
         const open = !!record && record.id === openId;
         const label = record ? `${name} · ${asset} · ${status}` : `${name} · Idle`;
         return <button key={name} type="button" className="pw-es-tier" data-level={record?.level}
           aria-label={label} title={label} aria-disabled={!record} aria-expanded={record ? open : undefined}
           aria-controls={open ? detailId : undefined} onClick={() => { if (record) onOpen(open ? null : record.id); }}>
-          {icon}{record && <span>{asset}</span>}
+          {icon}{record && <span>{asset}</span>}{record && StatusGlyph && <StatusGlyph size={9} aria-hidden />}
         </button>;
       })}
     </div>
-    {test ? <strong className="pw-es-simulation">{TEST_SCENARIO_LABEL}</strong>
+    {testRunning ? <strong className="pw-es-simulation">{TEST_SCENARIO_LABEL}</strong>
       : tiers.some(({ record }) => record?.trigger.kind === "simulation") && <strong className="pw-es-simulation">SIMULATION</strong>}
     {record && selected && <section id={detailId} className="pw-es-popover pw-es-ladder-detail" aria-label={`${selected.name} details`}>
       <strong>{selected.name} · {record.trigger.assetId ?? "Line 3"}</strong>

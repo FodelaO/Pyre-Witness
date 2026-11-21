@@ -2,6 +2,8 @@
 import { assetById, areaById, clampToArea } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import type { Asset } from "@/twin/types";
+import { syncFlags } from "./flagStore";
+import { useEscalationStore } from "./store";
 
 export const TEST_ASSET_ID = "TEST-901";
 export const TEST_SCENARIO_LABEL = "TEST SCENARIO";
@@ -43,4 +45,12 @@ export function runTestAlert(): boolean {
 export function clearTestAlert() {
   const { twin, removeAsset } = useTwinStore.getState();
   if (assetById(twin, TEST_ASSET_ID)) removeAsset(TEST_ASSET_ID);
+
+  const { records } = useEscalationStore.getState();
+  if (records.some(({ trigger, resolvedAt }) => trigger.test && resolvedAt === undefined)) {
+    const resolvedAt = Date.now();
+    useEscalationStore.setState({ records: records.map((record) =>
+      record.trigger.test && record.resolvedAt === undefined ? { ...record, resolvedAt } : record) });
+  }
+  syncFlags(useEscalationStore.getState().records);
 }

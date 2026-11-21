@@ -15,7 +15,7 @@ export function ensureDecision(record: EscalationRecord): Promise<AlertDecision 
   const request = fetch("/api/escalation/decide", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(5500),
+    signal: AbortSignal.timeout(15_000),
     body: JSON.stringify({
       asset: trigger.assetId?.slice(0, 64) ?? "Line 3",
       finding: trigger.title.slice(0, 240),
