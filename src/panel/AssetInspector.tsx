@@ -2,6 +2,7 @@
 "use client";
 
 import { Activity, Cloud, Crosshair, HardDrive, LockKeyhole, MapPin, Radio, Shield, ShieldAlert, Unplug } from "lucide-react";
+import { BetterOptions } from "@/alternatives/BetterOptions";
 import { LossGlyph } from "@/econ/LossGlyph";
 import { FindingLoss } from "@/econ/mountsFindings";
 import { formatTelemetry, telemetryNumber, withTelemetryUnit } from "@/floor/telemetryFormat";
@@ -105,6 +106,7 @@ export function AssetInspector({ mode }: { mode: LensMode }) {
         <div className="pw-inspector-drawing"><LossGlyph kind={asset.physical.kind} size={96} /></div>
         <div className="pw-panel-asset-identity"><h3>{asset.name}</h3><p>{kindLabel(asset.physical.kind)}</p></div>
       </div>
+      {asset.origin === "added" && <BetterOptions asset={asset} />}
       <Disclosure key={asset.id} className="pw-rail-more" label="See more">
         <dl className="pw-panel-facts">
           {showMaterial && <><dt>Floor</dt><dd>{area ? (

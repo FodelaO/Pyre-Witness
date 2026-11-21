@@ -1,0 +1,16 @@
+/* Compact counterfactual cards for the asset inspector. */
+.options { display: grid; gap: 8px; padding-block: 10px; border-block-start: 1px solid var(--pw-line); }
+.heading, .identity, .metrics, .clauses { display: flex; align-items: center; gap: 8px; }
+.heading { justify-content: space-between; }
+.heading h3, .identity h4, .card p { margin: 0; }
+.heading h3, .identity h4 { font-size: 13px; color: var(--pw-text); }
+.options small { font-size: 10px; color: var(--pw-text-dim); }
+.options summary { cursor: pointer; font-size: 11px; color: var(--pw-text); }
+.card { display: grid; gap: 5px; padding: 8px; margin-block: 4px; background: var(--pw-panel-2); border: 1px solid var(--pw-line); border-radius: 6px; }
+.card[data-recommended] { border-color: color-mix(in srgb, var(--pw-ok) 40%, var(--pw-line)); }
+.identity svg { flex: 0 0 auto; }
+.identity button { margin-inline-start: auto; flex: 0 0 auto; }
+.card p { font-size: 11px; color: var(--pw-text-dim); }
+.metrics, .clauses { flex-wrap: wrap; gap: 4px 8px; font-size: 10px; }
+.metrics strong[data-positive="true"], .options .recommended { color: var(--pw-ok); }
+.clauses span { border: 1px solid var(--pw-line); border-radius: 3px; padding: 1px 4px; color: var(--pw-text-dim); }
