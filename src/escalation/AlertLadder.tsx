@@ -7,6 +7,7 @@ import { formatUsd } from "@/econ/format";
 import { ACTIONS, type AlertAction, type HumanResponse } from "./decision";
 import { ensureDecision } from "./requestDecision";
 import { useSlackStatuses } from "./slackClient";
+import { canRingEscalation } from "./store";
 import { TEST_SCENARIO_LABEL } from "./testScenario";
 import type { AlertLevel, EscalationRecord } from "./types";
 
@@ -73,7 +74,9 @@ export function AlertLadder({ records, call, phoneConnected, openId, onOpen, onR
   const latest = (level: AlertLevel) => live.findLast((entry) => entry.level === level && !!entry.trigger.test === testRunning);
   const flag = latest(1);
   const message = latest(2);
-  const high = call?.level === 3 && !call.resolvedAt && !call.dismissedAt && !!call.trigger.test === testRunning ? call : latest(3);
+  const latestCall = latest(3);
+  const high = call?.level === 3 && !call.resolvedAt && !call.dismissedAt ? call : latestCall;
+  const queuedTest = latestCall?.trigger.test && latestCall.id !== high?.id && canRingEscalation(latestCall);
   const slack = useSlackStatuses((state) => message ? state[message.id] : undefined);
   const messageStatus = message?.messageStatus === "sent" || slack === "sent" ? "Message sent"
     : message?.messageStatus === "pending" || slack === "pending" ? "Sending…"
@@ -81,7 +84,7 @@ export function AlertLadder({ records, call, phoneConnected, openId, onOpen, onR
         : "Waiting for phone";
   const callStatus = high?.humanResponse?.kind === "override" ? "Overridden"
     : high?.humanResponse?.kind === "approve" || high?.approved ? "Approved"
-      : high?.answered ? "Answered" : high?.ringing ? "Ringing" : phoneConnected ? "Ready" : "Waiting for phone";
+      : high?.answered ? "Answered" : !phoneConnected ? "Waiting for phone" : high?.ringing ? "Ringing" : "Ready";
   const CallGlyph = { Approved: Check, Overridden: CornerUpLeft, Answered: PhoneIncoming, Ringing: PhoneCall,
     Ready: Phone, "Waiting for phone": Phone }[callStatus];
 
@@ -107,7 +110,7 @@ export function AlertLadder({ records, call, phoneConnected, openId, onOpen, onR
         </button>;
       })}
     </div>
-    {testRunning ? <strong className="pw-es-simulation">{TEST_SCENARIO_LABEL}</strong>
+    {testRunning ? <strong className="pw-es-simulation">{TEST_SCENARIO_LABEL}{queuedTest && ` · ${latestCall.trigger.assetId} queued`}</strong>
       : tiers.some(({ record }) => record?.trigger.kind === "simulation") && <strong className="pw-es-simulation">SIMULATION</strong>}
     {record && selected && <section id={detailId} className="pw-es-popover pw-es-ladder-detail" aria-label={`${selected.name} details`}>
       <strong>{selected.name} · {record.trigger.assetId ?? "Line 3"}</strong>

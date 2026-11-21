@@ -12,7 +12,7 @@ import { areaById, assetById } from "@/twin/geometry";
 import { useTwinStore, type TwinState } from "@/twin/store";
 import type { Asset, RiskReport, Twin } from "@/twin/types";
 import { placedDeviceLoss } from "./placedDeviceLoss";
-import { TEST_ASSET_ID } from "./testScenario";
+import { gatewayRehearsal } from "./testScenario";
 import { testScenarioCause } from "./testScenarioEvidence";
 import type { EscalationCause } from "./types";
 
@@ -133,7 +133,8 @@ export function readCauses(preferredAsset: string | null): EscalationCause[] {
       loss, score: state.risk.score, baseline: state.baselineScore,
     }] : [];
   }) : [];
-  const everyFinding = findingCauses(state).filter(({ assetId }) => assetId !== TEST_ASSET_ID);
+  const rehearsalId = state.twin.assets.find(gatewayRehearsal)?.id;
+  const everyFinding = findingCauses(state).filter(({ assetId }) => assetId !== rehearsalId);
   const findings = everyFinding.filter(({ assetId }) => assetId !== pricedId);
   const own = capture?.assetId === preferredAsset ? capture : everyFinding.find((finding) => finding.assetId === preferredAsset);
   const top = own ? (own !== capture && own.assetId === pricedId ? { ...own, loss: null } : own) : findings[0];

@@ -8,10 +8,11 @@ import { applyEffects } from "@/twin/effects";
 import { areaById, assetById } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import type { Asset, Mitigation, MitigationEffect, Twin } from "@/twin/types";
+import { gatewayRehearsal, TEST_ASSET_ID } from "./testScenario";
 import type { EscalationCause } from "./types";
 
 export type ApprovalPlan =
-  | { kind: "mitigation"; item: Mitigation; queued: boolean }
+  | { kind: "mitigation"; item: Mitigation; queued: boolean; rehearsal?: symbol }
   | { kind: "move"; title: string; destination: Asset };
 
 export function approvalTitle(plan: ApprovalPlan): string {
@@ -32,7 +33,6 @@ function proposal(assetId: string, title: string, effects: MitigationEffect[], k
 }
 
 function improves(twin: Twin, cause: EscalationCause): boolean {
-  if (cause.test) return !assetById(twin, cause.assetId ?? "");
   const risk = evaluateTwin(twin);
   if (cause.kind === "risk") return risk.score < cause.score;
   // A captured device priced on an attack path has no single rule to clear; only its removal is certain.
@@ -47,7 +47,7 @@ function doesMitigate(twin: Twin, cause: EscalationCause, item: Mitigation): boo
 export function planApproval(cause: EscalationCause): ApprovalPlan | null {
   const { twin, mitigations } = useTwinStore.getState();
   const sim = useSimStore.getState();
-  if (cause.kind === "simulation") {
+  if (!cause.test && cause.kind === "simulation") {
     const item = mitigations.find((candidate) => candidate.status === "proposed"
       && "simulationScenario" in candidate && candidate.simulationScenario === sim.run?.id
       && candidate.effects.some(({ type }) => type !== "note"));
@@ -58,8 +58,14 @@ export function planApproval(cause: EscalationCause): ApprovalPlan | null {
   const asset = assetId && assetById(twin, assetId);
   if (!assetId || !asset) return null;
   if (cause.test) {
-    const item = proposal(assetId, "Remove the test gateway from the twin", [{ type: "remove_asset", assetId }], "physical");
-    return { kind: "mitigation", item, queued: false };
+    const rehearsal = gatewayRehearsal(asset);
+    if (rehearsal) {
+      const item = proposal(assetId, "Remove the test gateway from the twin", [{ type: "remove_asset", assetId }], "physical");
+      return { kind: "mitigation", item, queued: false, rehearsal };
+    }
+    const title = assetId === "HMI-F3" ? "Review HMI-F3 operator access"
+      : assetId === "PT-401" ? "Review PT-401 pressure readings" : null;
+    return title ? { kind: "mitigation", item: proposal(assetId, title, [{ type: "note", text: title }], "procedural"), queued: false } : null;
   }
   const known: Mitigation[] = [];
   const { assessment, placedAssetId, profile, selfCheck } = useRunStore.getState();
@@ -96,8 +102,9 @@ export function planApproval(cause: EscalationCause): ApprovalPlan | null {
 }
 
 export function confirmApproval(plan: ApprovalPlan, cause: EscalationCause): ApprovalPlan | null {
-  if (plan.kind === "move") {
+  if (plan.kind === "move" || cause.test) {
     const next = planApproval(cause);
+    if (plan.kind === "mitigation" && plan.rehearsal && (next?.kind !== "mitigation" || next.rehearsal !== plan.rehearsal)) return null;
     return next && approvalSignature(plan) === approvalSignature(next) ? next : null;
   }
   const { twin, mitigations } = useTwinStore.getState();
@@ -112,6 +119,7 @@ export function confirmApproval(plan: ApprovalPlan, cause: EscalationCause): App
 
 export function applyApproval(plan: ApprovalPlan): boolean {
   const store = useTwinStore.getState();
+  if (plan.kind === "mitigation" && plan.rehearsal && gatewayRehearsal(assetById(store.twin, TEST_ASSET_ID)) !== plan.rehearsal) return false;
   if (plan.kind === "move") {
     const { destination } = plan;
     if (!assetById(store.twin, destination.id)) return false;

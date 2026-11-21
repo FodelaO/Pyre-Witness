@@ -1,5 +1,6 @@
 /** Covers exact threshold boundaries, transient detections and episode re-arming. */
 import { describe, expect, it } from "vitest";
+import { readCauses } from "./evidence";
 import { advancePolicy, alertLevel, DEFAULT_THRESHOLDS as thresholds, initialPolicy, thresholdCrossed } from "./policy";
 import type { EscalationCause } from "./types";
 
@@ -10,6 +11,19 @@ const device: EscalationCause = {
 };
 
 describe("escalation policy", () => {
+  it("rings once for the PLC finding", () => {
+    const limits = { loss: 45_000, risk: 60 };
+    const causes = readCauses(null);
+    const plant = causes.find(({ kind }) => kind === "risk")!;
+    expect(plant.loss).toBe(94_000);
+    const first = advancePolicy(initialPolicy, causes, limits, 0, alertLevel);
+    const { raised } = advancePolicy(first.state, causes, limits, 500, alertLevel);
+    expect(raised.filter((cause) => alertLevel(cause, limits) === 3).map(({ key }) => key))
+      .toEqual(["finding:PLC-F3:SAFE-01"]);
+    expect([0, 1, 8, 20].map((delta) => alertLevel({ ...plant, score: plant.baseline + delta }, limits)))
+      .toEqual([0, 1, 2, 3]);
+  });
+
   it("checks monetary loss per detection and includes the exact threshold", () => {
     expect(thresholdCrossed(device, thresholds)).toBe(true);
     expect(thresholdCrossed({ ...device, loss: 99_999 }, thresholds)).toBe(false);

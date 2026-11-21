@@ -7,6 +7,7 @@ import { scenarioFromPath } from "@/econ/scenarios";
 import { SEED_TWIN } from "@/twin/seed";
 import { useTwinStore } from "@/twin/store";
 import { AlertLadder } from "./AlertLadder";
+import { readCauses } from "./evidence";
 import { useFlagStore } from "./flagStore";
 import { monitorEscalations } from "./monitor";
 import { DEFAULT_THRESHOLDS, ESCALATION_DEBOUNCE_MS, thresholdCrossed } from "./policy";
@@ -27,6 +28,29 @@ afterEach(() => {
   useTwinStore.getState().setTwin(SEED_TWIN);
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+it("preserves inventory that occupies the rehearsal tag", () => {
+  const store = useTwinStore.getState();
+  const inventory = { ...store.twin.assets.find(({ id }) => id === "HMI-F3")!,
+    id: TEST_ASSET_ID, name: "Calibration station HMI" };
+  store.addAsset(inventory);
+  const before = useTwinStore.getState();
+  expect.soft(runTestAlert()).toBe(false);
+  expect.soft(useTwinStore.getState().selectedId).toBe(before.selectedId);
+  expect.soft(readCauses(null).some((cause) => cause.kind === "finding" && cause.assetId === TEST_ASSET_ID && !cause.test)).toBe(true);
+  clearTestAlert();
+  expect.soft(useTwinStore.getState().twin.assets).toContain(inventory);
+  expect.soft(useTwinStore.getState().risk.score).toBe(before.risk.score);
+
+  store.removeAsset(TEST_ASSET_ID);
+  expect(runTestAlert()).toBe(true);
+  const gateway = useTwinStore.getState().twin.assets.find(({ id }) => id === TEST_ASSET_ID)!;
+  const importedCopy = structuredClone(gateway);
+  store.addAsset(importedCopy);
+  expect.soft(testScenarioCause(useTwinStore.getState())).toBeNull();
+  clearTestAlert();
+  expect(useTwinStore.getState().twin.assets).toContain(importedCopy);
 });
 
 it("starts without a phone and raises and resolves all three labeled tiers together", () => {

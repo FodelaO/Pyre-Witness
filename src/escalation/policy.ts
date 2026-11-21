@@ -21,13 +21,15 @@ export function thresholdCrossed(cause: EscalationCause, thresholds: Thresholds)
 /** The existing configured threshold sends a message. Higher exposure triggers the call. */
 export function alertLevel(cause: EscalationCause, thresholds: Thresholds): AlertLevel | 0 {
   if (cause.testLevel) return cause.testLevel;
-  const risk = cause.kind === "risk";
+  if (cause.kind === "risk") {
+    if (cause.score >= Math.min(100, thresholds.risk + 20) || cause.score - cause.baseline >= 20) return 3;
+    if (thresholdCrossed(cause, thresholds)) return 2;
+    return cause.assetId && cause.score > cause.baseline ? 1 : 0;
+  }
   const loss = cause.loss ?? 0;
-  if (loss >= 2 * thresholds.loss || (risk && (
-    cause.score >= Math.min(100, thresholds.risk + 20) || cause.score - cause.baseline >= 20
-  ))) return 3;
-  if (thresholdCrossed(cause, thresholds) || loss >= thresholds.loss) return 2;
-  return cause.assetId && (loss > 0 || (risk && cause.score > cause.baseline)) ? 1 : 0;
+  if (loss >= 2 * thresholds.loss) return 3;
+  if (loss >= thresholds.loss) return 2;
+  return cause.assetId && loss > 0 ? 1 : 0;
 }
 
 export function advancePolicy(
