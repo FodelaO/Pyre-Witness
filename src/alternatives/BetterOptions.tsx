@@ -4,13 +4,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { LossGlyph } from "@/econ/LossGlyph";
 import { useEconomicTwin } from "@/econ/useEconomicTwin";
-import { useRunStore } from "@/pipeline/runStore";
 import { evaluatePlacement } from "@/rules/engine";
 import { applyEffects } from "@/twin/effects";
 import { useTwinStore } from "@/twin/store";
 import type { Asset } from "@/twin/types";
 import { buildCandidates, mapCarbonCandidates } from "./candidates";
-import { captureContext } from "./captureContext";
+import { useCaptureContext, type CaptureContext } from "./captureContext";
 import { evaluateAlternatives, findingClauseIds, type EvaluatedCandidate } from "./evaluate";
 import { alternativesRequestSchema, carbonResponseSchema, type CarbonCandidate } from "./schema";
 import styles from "./BetterOptions.module.css";
@@ -78,17 +77,11 @@ function Option({ item, apply }: { item: EvaluatedCandidate; apply: () => void }
 }
 
 export function BetterOptions({ asset }: { asset: Asset }) {
-  const activeAssessment = useRunStore((state) => state.placedAssetId === asset.id ? state.assessment : null);
-  const context = captureContext(asset.id);
-  const assessment = activeAssessment ?? context?.assessment;
-  return assessment && context?.profile
-    ? <ComparedOptions key={asset.id} asset={asset} assessment={assessment} profile={context.profile} />
-    : null;
+  const context = useCaptureContext(asset.id);
+  return context ? <ComparedOptions key={asset.id} asset={asset} {...context} /> : null;
 }
 
-type Context = NonNullable<ReturnType<typeof captureContext>>;
-
-function ComparedOptions({ asset: selectedAsset, assessment, profile }: { asset: Asset } & Context) {
+function ComparedOptions({ asset: selectedAsset, assessment, profile }: { asset: Asset } & CaptureContext) {
   const twin = useEconomicTwin();
   const risk = useTwinStore((state) => state.risk);
   const asset = twin.assets.find(({ id }) => id === selectedAsset.id) ?? selectedAsset;

@@ -268,10 +268,10 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (input && canSubmit) void startCapture(input);
+    if (input && canSubmit) void startCapture(input, Boolean(error));
   }
 
-  async function startCapture(capture: CaptureInput) {
+  async function startCapture(capture: CaptureInput, retry = false) {
     if (submittingRun.current || useRunStore.getState().status === "running") return;
     const attempt = Symbol();
     submittingRun.current = attempt;
@@ -285,7 +285,7 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
       if (next.selectedId !== previous.selectedId) selectionChanged = true;
     });
     try {
-      await analyze(capture, useDropStore.getState().point ?? DEFAULT_DROP);
+      await analyze(capture, useDropStore.getState().point ?? DEFAULT_DROP, retry);
       if (submittingRun.current !== attempt || selectionChanged) return;
       const { status, runId, events, placedAssetId } = useRunStore.getState();
       if (status !== "done" || runId === previousRunId || !placedAssetId
@@ -414,7 +414,11 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
           </PhotoPane>
         )}
         {tab === "upload" && (
-          <SamplePhotos onCapture={(photo) => void startCapture({ kind: "photo", images: [photo] })} />
+          <SamplePhotos onCapture={(photo) => {
+            if (submittingRun.current || useRunStore.getState().status === "running") return;
+            setPhoneNote("");
+            void startCapture(draft.selectSample(photo));
+          }} />
         )}
         {tab === "link" && (
           <label className="pw-capture-field">

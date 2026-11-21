@@ -35,8 +35,13 @@ interface QueuedReassess {
 }
 
 const captured = new Map<string, CapturedDevice>();
+let interrupted: { input: CaptureInput; assetId: string } | null = null;
 let active: ActiveRun | null = null;
 let queued: QueuedReassess | null = null;
+
+useTwinStore.subscribe(({ twin }, previous) => {
+  if (interrupted && twin.assets !== previous.twin.assets && !assetById(twin, interrupted.assetId)) interrupted = null;
+});
 
 class ConnectionFailure extends Error {}
 
@@ -84,7 +89,12 @@ function ingest(run: ActiveRun, event: StreamEvent, request: AnalyzeRequest | Re
     useRunStore.setState({ runId: event.runId, events: [] });
   }
   run.runId = event.runId;
-  if (event.type === "run.error") run.failure = event.message;
+  if (event.type === "run.error") {
+    run.failure = event.message;
+    if ("input" in request && run.assetId && assetById(useTwinStore.getState().twin, run.assetId)) {
+      interrupted = { input: request.input, assetId: run.assetId };
+    }
+  }
   const runState = useRunStore.getState();
   const currentCheck = event.type === "selfcheck.done"
     && (event.phase === undefined ? !runState.assessment : event.phase === "as-dropped");
@@ -238,9 +248,21 @@ function startRun(kind: ActiveRun["kind"], request: AnalyzeRequest | ReassessReq
   });
 }
 
-/** Run the full analysis against the twin at the moment the engineer submits the capture. */
-export async function analyze(input: CaptureInput, dropPoint?: DropPoint | null): Promise<void> {
+function sameDraft(a: CaptureInput, b: CaptureInput): boolean {
+  if (a.kind === "text" && b.kind === "text") return a.description === b.description;
+  if (a.kind === "link" && b.kind === "link") return a.url === b.url && a.note === b.note;
+  return a.kind === "photo" && b.kind === "photo" && a.note === b.note && a.images.length === b.images.length
+    && a.images.every((image, index) =>
+      image.mimeType === b.images[index].mimeType && image.dataBase64 === b.images[index].dataBase64);
+}
+
+/** Retry discards only the matching draft's failed placement before the server takes its snapshot. */
+export async function analyze(input: CaptureInput, dropPoint?: DropPoint | null, retry = input === interrupted?.input): Promise<void> {
   cancelQueued();
+  if (retry && interrupted && sameDraft(input, interrupted.input)) {
+    useTwinStore.getState().removeAsset(interrupted.assetId);
+  }
+  interrupted = null;
   await startRun("analyze", { input, twin: useTwinStore.getState().twin, dropPoint });
 }
 

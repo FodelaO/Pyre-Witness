@@ -76,5 +76,12 @@ export function usePhotoDraft() {
 
   const clearError = () => setError("");
 
-  return { photos, preparing, error, prepare, addPrepared, clear, remove, clearError };
+  function selectSample(photo: CaptureImage) {
+    const images = [photo];
+    clear();
+    append(images);
+    return { kind: "photo" as const, images };
+  }
+
+  return { photos, preparing, error, prepare, addPrepared, selectSample, clear, remove, clearError };
 }
