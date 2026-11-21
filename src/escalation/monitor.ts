@@ -54,7 +54,9 @@ export function monitorEscalations(): () => void {
       if (current.mode !== previous.mode || current.run !== previous.run) check();
     }),
     useRunStore.subscribe((current, previous) => {
-      if (current.placedAssetId !== previous.placedAssetId) check();
+      // The captured device is priced when its run settles, the moment the panel prints its figure.
+      if (current.placedAssetId !== previous.placedAssetId || current.status !== previous.status
+        || (current.status !== "running" && current.assessment !== previous.assessment)) check();
     }),
     useEscalationStore.subscribe((current, previous) => {
       if (current.thresholds !== previous.thresholds) check();

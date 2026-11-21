@@ -1,7 +1,6 @@
 /** Coordinates the standalone handset controls with the local call relay. */
-import { callCommand, listenToCall, randomHex } from "./connection.mjs";
+import { callCommand, fetchDialTarget, listenToCall, randomHex } from "./connection.mjs";
 import { PhoneAudio } from "./phoneAudio.mjs";
-import { maskedNumber, parseContact, readContact, saveContact } from "./roster.mjs";
 
 const page = document.querySelector(".pw-call");
 if (page?.dataset.code) attachPhone(page);
@@ -21,8 +20,12 @@ function attachPhone(page) {
   const element = (id) => document.getElementById(id);
   const show = (id, visible) => { element(id).hidden = !visible; };
   const text = (id, value) => { element(id).textContent = value || ""; };
+  const dial = element("dial");
   let snapshot;
-  let contact = readContact();
+  let targetVersion;
+  let targetRequest = 0;
+  let dialStarted = false;
+  let expiry;
   let enabled = false;
   let connectionError = "";
   let operationError = "";
@@ -35,9 +38,43 @@ function attachPhone(page) {
     if (call?.acknowledgedAt) return "Acknowledged";
     if (call?.resolvedAt) return "Alert cleared";
     if (call?.answeredAt) return "Chief briefing";
+    if (call && (call.dialedAt || dialStarted)) return "Dialer opened";
     if (call) return "Incoming call";
     if (snapshot) return "Ready for calls";
     return connectionError ? "Call link unavailable" : "Connecting phone";
+  }
+
+  function clearDialTarget() {
+    targetRequest++;
+    targetVersion = undefined;
+    dial.removeAttribute("href");
+    text("dial-label", "");
+  }
+
+  function syncDialTarget() {
+    const call = snapshot?.call;
+    const version = call?.destinationVersion;
+    if (!version || dialStarted || connectionError || Date.now() >= snapshot.expiresAt) {
+      clearDialTarget();
+      return;
+    }
+    if (targetVersion === version) return;
+    clearDialTarget();
+    targetVersion = version;
+    const request = targetRequest;
+    void fetchDialTarget(connection, call.alert.id, version).then((target) => {
+      if (request !== targetRequest || Date.now() >= snapshot?.expiresAt) return;
+      if (!/^tel:\+[1-9]\d{7,14}$/.test(target.href) || typeof target.label !== "string") throw new Error("Invalid destination");
+      dial.setAttribute("href", target.href);
+      text("dial-label", target.label);
+      operationError = "";
+      render();
+    }).catch(() => {
+      if (request !== targetRequest) return;
+      clearDialTarget();
+      operationError = "Could not load the call destination. Check the phone link.";
+      render();
+    });
   }
 
   function render() {
@@ -45,7 +82,9 @@ function attachPhone(page) {
     const alert = call?.alert;
     const answered = !!call?.answeredAt;
     const terminalAt = call?.approvedAt ?? call?.acknowledgedAt ?? call?.resolvedAt;
-    const ringing = !!call && !answered && !terminalAt;
+    const awaitingAnswer = !!call && !answered && !terminalAt;
+    const ringing = awaitingAnswer && !call.dialedAt && !dialStarted && !connectionError;
+    const canDial = !terminalAt && !call?.dialedAt && !dialStarted && dial.hasAttribute("href");
     const waiting = !!(call?.approvalRequestedAt && !call.approvalUnavailableAt && !terminalAt);
     const approvable = !!(alert?.canApprove && !call.approvalUnavailableAt);
     const loss = alert?.lossText ?? (alert?.loss == null ? "" : `$${alert.loss.toLocaleString("en-US")}`);
@@ -56,7 +95,7 @@ function attachPhone(page) {
     for (const symbol of element("signal").querySelectorAll("[data-icon]")) {
       symbol.toggleAttribute("hidden", symbol.dataset.icon !== icon);
     }
-    text("caller", alert?.kind === "simulation" ? "SIMULATION · CHIEF" : "CHIEF · LINE 3");
+    text("caller", alert?.test ? "TEST SCENARIO · CHIEF" : alert?.kind === "simulation" ? "SIMULATION · CHIEF" : "CHIEF · LINE 3");
     text("headline", callStatus(call));
     show("where", !!alert);
     text("tag", alert?.tag ?? "Plant twin");
@@ -82,8 +121,11 @@ function attachPhone(page) {
     show("enable", !!snapshot && !call);
     element("enable").disabled = enabled;
     element("enable").querySelector("span").textContent = enabled ? "Ringer enabled" : "Enable ringer";
-    show("incoming", ringing);
-    show("enable-incoming", !enabled);
+    show("dial", canDial);
+    show("incoming", awaitingAnswer);
+    show("enable-incoming", !enabled && ringing);
+    element("answer").classList.toggle("pw-call-primary", !canDial);
+    element("answer").classList.toggle("pw-call-secondary", canDial);
     element("answer").disabled = pending === "answer";
     if (enabled && ringing && !pending) audio.ring();
     else audio.stopRing();
@@ -106,15 +148,6 @@ function attachPhone(page) {
       : voice === "finished" ? `Replay${durationText}` : voice === "error" ? "Retry audio" : "Play audio";
     text("play", playLabel);
 
-    show("cellular", !!contact);
-    if (contact) {
-      const mask = maskedNumber(contact.number);
-      element("dial").href = `tel:${contact.number}`;
-      text("dial-name", `Call ${contact.name}`);
-      text("dial-mask", mask);
-      text("contact-mask", mask);
-      element("contact-number").placeholder = mask;
-    }
   }
 
   async function send(type, id) {
@@ -180,27 +213,25 @@ function attachPhone(page) {
     render();
   }
 
-  element("contact-name").value = contact?.name ?? "";
-  element("contact-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const number = element("contact-number");
-    const next = parseContact(element("contact-name").value, number.value || contact?.number || "");
-    show("contact-error", !next);
-    if (!next) { text("contact-error", "Enter a name and a valid phone number."); return; }
-    contact = next;
-    saveContact(next);
-    number.value = "";
-    element("contact").open = false;
-    render();
-  });
   element("enable").addEventListener("click", enableRinger);
   element("enable-incoming").addEventListener("click", enableRinger);
   element("answer").addEventListener("click", answer);
   element("approve").addEventListener("click", () => void respond("approve"));
   element("acknowledge").addEventListener("click", () => void respond("acknowledge"));
-  element("dial").addEventListener("click", () => {
+  dial.addEventListener("click", (event) => {
     const alert = snapshot?.call?.alert;
-    if (alert) void send("dial", alert.id);
+    if (!alert || dialStarted || !dial.hasAttribute("href") || Date.now() >= snapshot.expiresAt) {
+      event.preventDefault();
+      return;
+    }
+    dialStarted = true;
+    audio.stopRing();
+    void send("dial", alert.id).then((sent) => {
+      if (snapshot?.call?.alert.id !== alert.id) return;
+      if (sent) clearDialTarget();
+      else dialStarted = false;
+      render();
+    });
   });
   element("play").addEventListener("click", () => {
     const alert = snapshot?.call?.alert;
@@ -216,6 +247,8 @@ function attachPhone(page) {
   const stop = listenToCall(connection, (frame) => {
     if (frame.call?.alert.id !== snapshot?.call?.alert.id) {
       audio.stopSpeech();
+      clearDialTarget();
+      dialStarted = false;
       voice = "idle";
       duration = undefined;
       operationError = "";
@@ -223,14 +256,25 @@ function attachPhone(page) {
     }
     connectionError = "";
     snapshot = frame;
+    expiry ??= setTimeout(() => {
+      snapshot = undefined;
+      connectionError = "Call link expired. Open a fresh QR.";
+      clearDialTarget();
+      render();
+    }, Math.max(0, frame.expiresAt - Date.now()));
+    syncDialTarget();
     render();
   }, (message) => {
     connectionError = message;
+    clearDialTarget();
     render();
   });
   window.addEventListener("pagehide", (event) => {
-    if (!event.persisted) { stop(); audio.close(); }
+    clearDialTarget();
+    if (!event.persisted) { stop(); clearTimeout(expiry); audio.close(); }
     else audio.stopRing();
   });
-  window.addEventListener("pageshow", (event) => { if (event.persisted) render(); });
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) { syncDialTarget(); render(); }
+  });
 }

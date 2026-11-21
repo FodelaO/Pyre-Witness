@@ -1,5 +1,6 @@
 /** Short-lived LAN pairing relay. The desktop owns all decisions that change the twin. */
-import { PAIRING_TTL, type CallCommand, type PairingSnapshot, type PhoneCall } from "./protocol";
+import { maskPhoneNumber } from "./phoneNumber";
+import { PAIRING_TTL, type CallCommand, type DialDestination, type DialTarget, type PairingSnapshot, type PhoneCall } from "./protocol";
 
 type Role = "desktop" | "phone";
 type Subscriber = { role: Role; send: (snapshot: PairingSnapshot) => void; close: () => void };
@@ -9,6 +10,9 @@ interface Session {
   expiresAt: number;
   call: PhoneCall | null;
   subscribers: Set<Subscriber>;
+  expiry?: ReturnType<typeof setTimeout>;
+  destination?: DialDestination;
+  destinationSequence?: number;
 }
 
 const limit = 32;
@@ -28,12 +32,21 @@ function broadcast(session: Session) {
   for (const subscriber of session.subscribers) subscriber.send(frame);
 }
 
+function clearDestination(session: Session) {
+  delete session.destination;
+  if (session.call) delete session.call.destinationVersion;
+}
+
+function expire(code: string, session: Session) {
+  if (sessions.get(code) !== session) return;
+  sessions.delete(code);
+  clearTimeout(session.expiry);
+  clearDestination(session);
+  for (const subscriber of session.subscribers) subscriber.close();
+}
+
 function prune(now = Date.now()) {
-  for (const [code, session] of sessions) {
-    if (session.expiresAt > now) continue;
-    sessions.delete(code);
-    for (const subscriber of session.subscribers) subscriber.close();
-  }
+  for (const [code, session] of sessions) if (session.expiresAt <= now) expire(code, session);
 }
 
 export function register(code: string, owner: string): Session | undefined {
@@ -43,6 +56,8 @@ export function register(code: string, owner: string): Session | undefined {
   if (sessions.size >= limit) return undefined;
   const session: Session = { owner, phone: null, expiresAt: Date.now() + PAIRING_TTL, call: null, subscribers: new Set() };
   sessions.set(code, session);
+  session.expiry = setTimeout(() => expire(code, session), PAIRING_TTL);
+  session.expiry.unref?.();
   return session;
 }
 
@@ -64,13 +79,44 @@ export function subscribe(session: Session, subscriber: Subscriber) {
   };
 }
 
-export function receive(session: Session, role: Role, command: Exclude<CallCommand, { type: "pair" }>): boolean {
+function ended(call: PhoneCall) {
+  return call.approvedAt !== undefined || call.acknowledgedAt !== undefined || call.resolvedAt !== undefined;
+}
+
+function updateDestination(session: Session, destination: DialDestination | undefined): boolean {
+  if (session.destination?.number === destination?.number && session.destination?.name === destination?.name) return false;
+  clearDestination(session);
+  if (destination && session.call) {
+    session.destination = destination;
+    session.destinationSequence = (session.destinationSequence ?? 0) + 1;
+    session.call.destinationVersion = session.destinationSequence;
+  }
+  return true;
+}
+
+export function readDialTarget(session: Session, role: Role, id: string, version: number): DialTarget | null {
+  const { call, destination } = session;
+  if (role !== "phone" || !call || !destination || call.alert.id !== id || call.destinationVersion !== version
+    || call.dialedAt !== undefined || ended(call) || Date.now() >= session.expiresAt) return null;
+  const digits = destination.number.slice(1);
+  const name = destination.name && !destination.name.replace(/\D/g, "").includes(digits) ? destination.name : "on-call";
+  const mask = maskPhoneNumber(destination.number).replace("··· ···", "···");
+  return { href: "tel:" + destination.number, label: "Call " + name + " · " + mask };
+}
+
+export function receive(session: Session, role: Role, command: Exclude<CallCommand, { type: "pair" | "dial-target" }>): boolean {
+  if (Date.now() >= session.expiresAt) return false;
   const now = Date.now();
   if (command.type === "ring") {
     if (role !== "desktop") return false;
-    if (session.call?.alert.id === command.alert.id) return true;
-    if (session.call && !session.call.acknowledgedAt && !session.call.approvedAt && !session.call.resolvedAt) return false;
+    if (session.call?.alert.id === command.alert.id) {
+      if (!ended(session.call) && session.call.dialedAt === undefined && updateDestination(session, command.destination)) broadcast(session);
+      return true;
+    }
+    if (session.call && !ended(session.call)) return false;
+    clearDestination(session);
     session.call = { alert: command.alert, ringingAt: now };
+    updateDestination(session, command.destination);
     broadcast(session);
     return true;
   }
@@ -101,14 +147,16 @@ export function receive(session: Session, role: Role, command: Exclude<CallComma
       call.resolvedAt ??= now;
       break;
     case "dial":
-      if (role !== "phone" || !call.answeredAt) return false;
+      if (role !== "phone" || ended(call) || (!call.answeredAt && !session.destination && call.dialedAt === undefined)) return false;
       call.dialedAt ??= now;
+      clearDestination(session);
       break;
     case "audio-generated":
       if (role !== "phone" || !call.answeredAt) return false;
       call.audioGeneratedAt ??= now;
       break;
   }
+  if (ended(call)) clearDestination(session);
   broadcast(session);
   return true;
 }

@@ -75,7 +75,7 @@ svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-l
 .pw-call-assumed, .pw-call-muted, .pw-call-action { font-size: 11px; line-height: 1.35; }
 .pw-call-assumed:empty { display: none; }
 .pw-call-time { margin-top: 4px; font: 10px var(--call-mono); }
-.pw-call-incoming-actions, .pw-call-response, .pw-call-cell { display: grid; gap: 6px; }
+.pw-call-incoming-actions, .pw-call-response { display: grid; gap: 6px; }
 .pw-call-incoming-actions .pw-call-quiet { justify-self: center; }
 .pw-call-button {
   display: flex; justify-content: center; align-items: center; width: 100%; min-height: 49px; gap: 8px; padding: 8px 9px;
@@ -90,13 +90,14 @@ svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-l
 .pw-call[data-ringing="true"] .pw-call-primary { background: var(--pw-attention); color: var(--pw-bg); }
 .pw-call[data-ringing="true"] .pw-call-primary > svg { color: inherit; }
 .pw-call-secondary { background: var(--pw-panel-2); color: var(--pw-text); }
+.pw-call-dial { min-height: 62px; font-size: 16px; }
 .pw-call-button:disabled { opacity: .62; cursor: default; }
 .pw-call-quiet {
   display: inline-flex; justify-content: center; align-items: center; gap: 4px; min-height: 31px; padding: 3px 5px;
   color: var(--pw-text-dim); cursor: pointer; font-size: 11px;
 }
 .pw-call :focus-visible { outline: 2px solid var(--call-signal); outline-offset: 2px; }
-.pw-call-briefing, .pw-call-contact, .pw-call-notice {
+.pw-call-briefing, .pw-call-notice {
   padding: 9px 10px; border: 1px solid var(--pw-line-strong); border-radius: 7px; background: var(--pw-panel);
 }
 .pw-call-briefing { display: grid; gap: 7px; }
@@ -106,16 +107,7 @@ svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-l
   color: var(--pw-text); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere;
 }
 .pw-call-action { color: var(--pw-text-dim); text-align: center; }
-.pw-call-cell .pw-call-button span { margin-left: auto; color: var(--pw-text-dim); font: 10px var(--call-mono); white-space: nowrap; }
-.pw-call-notice, .pw-call-contact small { color: var(--pw-attention); font-size: 12px; }
-.pw-call-contact summary { display: flex; align-items: center; justify-content: space-between; min-height: 27px; gap: 8px; font-size: 12px; cursor: pointer; }
-.pw-call-contact summary span:last-child { color: var(--pw-text-dim); }
-.pw-call-contact summary::-webkit-details-marker { display: none; }
-.pw-call-contact form, .pw-call-contact label { display: grid; gap: 5px; }
-.pw-call-contact form { gap: 8px; margin-top: 7px; }
-.pw-call-contact label { color: var(--pw-text-dim); font-size: 11px; }
-.pw-call-contact input { min-height: 41px; padding: 0 8px; border: 1px solid var(--pw-line-strong); border-radius: 5px; background: var(--pw-bg); color: var(--pw-text); font-size: 16px; }
-.pw-call-contact #contact-mask { font-family: var(--call-mono); }
+.pw-call-notice { color: var(--pw-attention); font-size: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .pw-call[data-ringing="true"] .pw-call-signal { animation: none; }
 }

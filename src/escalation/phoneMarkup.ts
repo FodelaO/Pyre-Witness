@@ -46,8 +46,9 @@ export function phoneMarkup(code: string) {
     <div class="pw-call-notice" id="connection-error" role="status" hidden></div>
     <div class="pw-call-notice" id="operation-error" role="status" hidden></div>
     <button class="pw-call-button pw-call-primary" id="enable" type="button" hidden>${icon("bell", 20)} <span>Enable ringer</span></button>
+    <a class="pw-call-button pw-call-primary pw-call-dial" id="dial" hidden>${icon("phone", 21)}<span id="dial-label"></span></a>
     <div class="pw-call-incoming-actions" id="incoming" hidden>
-      <button class="pw-call-button pw-call-primary" id="answer" type="button">${icon("phone", 21)} Answer</button>
+      <button class="pw-call-button pw-call-secondary" id="answer" type="button">${icon("headphones", 20)} Answer</button>
       <button class="pw-call-quiet" id="enable-incoming" type="button">${icon("bell", 16)} Enable ringer</button>
     </div>
     <section class="pw-call-briefing" id="briefing" aria-label="Chief briefing and response" hidden>
@@ -64,20 +65,7 @@ export function phoneMarkup(code: string) {
         <div class="pw-call-notice" id="approval-error" role="status" hidden>The proposed action changed on the desktop.</div>
         <button class="pw-call-button pw-call-secondary" id="acknowledge" type="button">${icon("check", 20)} Acknowledge</button>
       </div>
-      <div class="pw-call-cell" id="cellular" hidden>
-        <a class="pw-call-button pw-call-secondary" id="dial">${icon("phone", 17)} <strong id="dial-name"></strong><span id="dial-mask"></span></a>
-        <div class="pw-call-muted">Call placed from the paired phone · no carrier integration</div>
-      </div>
     </section>
-    <details class="pw-call-contact" id="contact"${code ? "" : " hidden"}>
-      <summary><span>On-call contact</span><span id="contact-mask">Set up</span></summary>
-      <form id="contact-form" autocomplete="off">
-        <label>Name<input id="contact-name" required maxlength="36"></label>
-        <label>Phone number<input id="contact-number" type="password" inputmode="tel" maxlength="28" placeholder="+1 …" autocomplete="off"></label>
-        <small id="contact-error" role="alert" hidden></small>
-        <button type="submit" class="pw-call-button pw-call-secondary">Save on this phone</button>
-      </form>
-    </details>
     <noscript><div class="pw-call-notice">Enable JavaScript to connect the call.</div></noscript>
   </div>
 </main>

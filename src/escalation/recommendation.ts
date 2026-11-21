@@ -32,8 +32,11 @@ function proposal(assetId: string, title: string, effects: MitigationEffect[], k
 }
 
 function improves(twin: Twin, cause: EscalationCause): boolean {
+  if (cause.test) return !assetById(twin, cause.assetId ?? "");
   const risk = evaluateTwin(twin);
   if (cause.kind === "risk") return risk.score < cause.score;
+  // A captured device priced on an attack path has no single rule to clear; only its removal is certain.
+  if (cause.lossIfMoved !== undefined && !cause.ruleId) return !assetById(twin, cause.assetId ?? "");
   return !risk.findings.some((finding) => finding.assetId === cause.assetId && finding.ruleId === cause.ruleId);
 }
 
@@ -54,13 +57,18 @@ export function planApproval(cause: EscalationCause): ApprovalPlan | null {
   const assetId = cause.assetId;
   const asset = assetId && assetById(twin, assetId);
   if (!assetId || !asset) return null;
+  if (cause.test) {
+    const item = proposal(assetId, "Remove the test gateway from the twin", [{ type: "remove_asset", assetId }], "physical");
+    return { kind: "mitigation", item, queued: false };
+  }
   const known: Mitigation[] = [];
   const { assessment, placedAssetId, profile, selfCheck } = useRunStore.getState();
   if (asset.origin === "added" && placedAssetId === assetId && assessment && selfCheck?.passed) {
     const next = atRecommendedPlacement(twin, asset, assessment, profile?.object_class);
     const location = next && areaById(twin, next.physical.area);
     if (next && location && !evaluatePlacement(twin, next).findings.some(({ severity }) => severity >= 4)
-      && improves({ ...twin, assets: twin.assets.map((entry) => entry.id === assetId ? next : entry) }, cause)) {
+      && (cause.lossIfMoved !== undefined ? cause.lossIfMoved < (cause.loss ?? 0)
+        : improves({ ...twin, assets: twin.assets.map((entry) => entry.id === assetId ? next : entry) }, cause))) {
       return { kind: "move", title: `Move device to ${location.name}`, destination: { ...next, placement: "recommended" } };
     }
   }

@@ -1,7 +1,9 @@
 /** Prices individual live detections and completed tabletop outcomes from the shared economics. */
+import { displayedEventLoss } from "@/econ/displayLedger";
 import { estimateLoss } from "@/econ/model";
 import { startingConfiguration } from "@/econ/mountsSimulationSnapshot";
 import { scenarioFromFinding, scenarioFromSimulation } from "@/econ/scenarios";
+import { useRunStore, type RunState } from "@/pipeline/runStore";
 import { runScenario } from "@/sim/engine";
 import { useSimStore } from "@/sim/simStore";
 import type { SimRun } from "@/sim/types";
@@ -9,9 +11,13 @@ import { applyEffects } from "@/twin/effects";
 import { areaById, assetById } from "@/twin/geometry";
 import { useTwinStore, type TwinState } from "@/twin/store";
 import type { Asset, RiskReport, Twin } from "@/twin/types";
+import { placedDeviceLoss } from "./placedDeviceLoss";
+import { TEST_ASSET_ID } from "./testScenario";
+import { testScenarioCause } from "./testScenarioEvidence";
 import type { EscalationCause } from "./types";
 
 const findingsByReport = new WeakMap<RiskReport, EscalationCause[]>();
+let pricedCapture: { risk: RiskReport; events: RunState["events"]; assessment: RunState["assessment"]; cause: EscalationCause | null } | undefined;
 const outcomes = new WeakMap<SimRun, {
   mitigations: TwinState["mitigations"];
   risk: RiskReport;
@@ -43,13 +49,37 @@ function findingCauses({ twin, risk, baselineScore }: TwinState): EscalationCaus
       title: finding.title,
       ruleId: finding.ruleId,
       ...identity(twin, asset),
-      loss: estimate.lossIfManifests,
+      // The figure the asset inspector prints beside this finding.
+      loss: displayedEventLoss(estimate),
       score: risk.score,
       baseline: baselineScore,
     }];
   });
   findingsByReport.set(risk, causes);
   return causes;
+}
+
+/** The captured device carries one figure: the results panel's per-event loss for where it sits. */
+function captureCause(state: TwinState, run: RunState): EscalationCause | null {
+  if (run.status === "running" || !run.placedAssetId) return null;
+  if (pricedCapture && pricedCapture.risk === state.risk && pricedCapture.events === run.events
+    && pricedCapture.assessment === run.assessment) return pricedCapture.cause;
+
+  const priced = placedDeviceLoss(state.twin, run);
+  const trigger = priced?.estimate?.trigger;
+  const cause: EscalationCause | null = priced ? {
+    key: `capture:${priced.asset.id}`,
+    kind: "finding",
+    title: trigger?.label ?? "Captured device placement",
+    ...(trigger?.kind === "rule" ? { ruleId: trigger.id } : {}),
+    ...identity(state.twin, priced.asset),
+    loss: priced.loss,
+    lossIfMoved: priced.lossIfMoved ?? priced.loss,
+    score: state.risk.score,
+    baseline: state.baselineScore,
+  } : null;
+  pricedCapture = { risk: state.risk, events: run.events, assessment: run.assessment, cause };
+  return cause;
 }
 
 function simulationCause(run: SimRun, state: TwinState): EscalationCause | null {
@@ -76,7 +106,7 @@ function simulationCause(run: SimRun, state: TwinState): EscalationCause | null 
     kind: "simulation",
     title: scenario.trigger.label,
     ...identity(projected, asset),
-    loss: estimateLoss(projected, scenario).lossIfManifests,
+    loss: displayedEventLoss(estimateLoss(projected, scenario)),
     score: state.risk.score,
     baseline: state.baselineScore,
   } : null;
@@ -87,8 +117,15 @@ function simulationCause(run: SimRun, state: TwinState): EscalationCause | null 
 
 export function readCauses(preferredAsset: string | null): EscalationCause[] {
   const state = useTwinStore.getState();
-  const findings = findingCauses(state);
-  const top = findings.find((finding) => finding.assetId === preferredAsset) ?? findings[0];
+  const run = useRunStore.getState();
+  const capture = captureCause(state, run);
+  // Finding-level figures stay out for the captured device: none while its run prices it, then the panel's.
+  const pricedId = capture?.assetId ?? (run.status === "running" ? run.placedAssetId : null);
+  const test = testScenarioCause(state);
+  const everyFinding = findingCauses(state).filter(({ assetId }) => assetId !== TEST_ASSET_ID);
+  const findings = everyFinding.filter(({ assetId }) => assetId !== pricedId);
+  const own = capture?.assetId === preferredAsset ? capture : everyFinding.find((finding) => finding.assetId === preferredAsset);
+  const top = own ? (own !== capture && own.assetId === pricedId ? { ...own, loss: null } : own) : findings[0];
   const risk: EscalationCause = {
     key: "plant-risk",
     kind: "risk",
@@ -105,5 +142,5 @@ export function readCauses(preferredAsset: string | null): EscalationCause[] {
   const simulation = sim.mode === "finished" && sim.run ? simulationCause(sim.run, state) : null;
   const ranked = findings.toSorted((a, b) =>
     Number(b.assetId === preferredAsset) - Number(a.assetId === preferredAsset) || (b.loss ?? 0) - (a.loss ?? 0));
-  return [...(simulation ? [simulation] : []), ...ranked, risk];
+  return [...(test ? [test] : []), ...(simulation ? [simulation] : []), ...(capture ? [capture] : []), ...ranked, risk];
 }

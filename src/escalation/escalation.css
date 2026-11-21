@@ -96,3 +96,9 @@
 @media (width < 560px) {
   .pw-es { bottom: 156px; max-height: calc(100dvh - 413px); }
 }
+/* Beside the left crew rail the card and its popovers open to the right of the chip, never over the crew dock. */
+@media (width >= 1100px) {
+  .pw-es { grid-template-columns: 184px 289px; align-items: start; width: max-content; }
+  .pw-es > * { grid-column: 2; }
+  .pw-es > .pw-es-chip { grid-column: 1; grid-row: 1; }
+}

@@ -1,16 +1,21 @@
 /** Fixed desktop alert instrument with threshold settings, phone pairing and call receipts. */
 "use client";
 
-import { Bell, Check, ChevronDown, PhoneCall, QrCode, Settings2, X } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { Bell, Check, ChevronDown, FlaskConical, Phone, PhoneCall, QrCode, Settings2, X } from "lucide-react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { formatUsd } from "@/econ/format";
 import { Equipment, FOOTPRINT } from "@/equipment";
 import { monitorEscalations } from "./monitor";
+import { PhoneContactDialog } from "./PhoneContactDialog";
 import { BASELINE_INCREASE, validThresholds } from "./policy";
 import { useEscalationStore } from "./store";
+import { TelephoneCard } from "./TelephoneCard";
+import { TEST_SCENARIO_LABEL } from "./testScenario";
 import type { EscalationRecord, Thresholds } from "./types";
 import { useCallPairing } from "./useCallPairing";
+import { useEscalationPhone } from "./useEscalationPhone";
 import "./escalation.css";
+import "./telephony.css";
 
 const RESPONDER_KEY = "pw:escalation-responder-label";
 
@@ -87,19 +92,23 @@ function PairingCard({ pairing, connected, canRenew, onRenew }: {
   </div>;
 }
 
-function AlertCard({ record, busy, phoneConnected, onRing, onDismiss }: {
-  record: EscalationRecord; busy: boolean; phoneConnected: boolean; onRing: () => void; onDismiss: () => void;
+function AlertCard({ record, busy, phoneConnected, telephone, onRing, onDismiss }: {
+  record: EscalationRecord; busy: boolean; phoneConnected: boolean; telephone: ReactNode;
+  onRing: () => void; onDismiss: () => void;
 }) {
   const { trigger, approved, acknowledged, answered, ringing, dialed, resolvedAt } = record;
   const done = approved ?? acknowledged;
   const status = approved ? "Approved" : acknowledged ? "Acknowledged"
-    : resolvedAt ? "Resolved" : answered ? "Answered" : ringing ? (phoneConnected ? "Ringing" : "Waiting for paired phone") : "Threshold crossed";
-  const when = done?.at ?? resolvedAt ?? answered?.at ?? ringing?.at ?? record.raisedAt;
+    : resolvedAt ? "Resolved" : answered ? "Answered" : dialed ? "Dialer opened"
+      : ringing ? (phoneConnected ? "Ringing" : "Waiting for paired phone") : "Threshold crossed";
+  const when = done?.at ?? resolvedAt ?? answered?.at ?? dialed?.at ?? ringing?.at ?? record.raisedAt;
 
   return <section className="pw-es-alert" aria-label="Escalation alert" data-approved={!!approved}>
     <div className="pw-es-alert-head" role="status">
       {done || resolvedAt ? <Check size={14} aria-hidden /> : <Bell size={14} aria-hidden />}
-      <strong>{status}</strong>{trigger.kind === "simulation" && <span className="pw-es-simulation">SIMULATION</span>}
+      <strong>{status}</strong>
+      {trigger.test ? <span className="pw-es-simulation">{TEST_SCENARIO_LABEL}</span>
+        : trigger.kind === "simulation" && <span className="pw-es-simulation">SIMULATION</span>}
       <Time at={when} />
       {(done || resolvedAt) && <button type="button" className="pw-es-icon" aria-label="Dismiss escalation card" onClick={onDismiss}><X size={15} /></button>}
     </div>
@@ -108,7 +117,7 @@ function AlertCard({ record, busy, phoneConnected, onRing, onDismiss }: {
       <div className="pw-es-evidence-copy">
         <div className="pw-es-value">
           {trigger.kind === "risk" ? <><strong>{Number(trigger.score.toFixed(1))}</strong><span>plant risk</span></>
-            : trigger.loss !== null && <><strong>{formatUsd(trigger.loss)}</strong><span>est.</span></>}
+            : trigger.loss !== null && <><strong>{formatUsd(trigger.loss)}</strong><span>est.{trigger.kind === "finding" && " · per event"}</span></>}
         </div>
         <div className="pw-es-location"><strong>{trigger.assetId ?? "Line 3"}</strong>{trigger.room && <span> at {trigger.room}</span>}</div>
       </div>
@@ -119,11 +128,14 @@ function AlertCard({ record, busy, phoneConnected, onRing, onDismiss }: {
     </div>}
     {done && <div className="pw-es-receipt">{done.actor} · <Time at={done.at} />{approved && <> · {record.action}</>}</div>}
     {dialed && <div className="pw-es-receipt" role="status"><PhoneCall size={13} aria-hidden />
-      <span>Calling on-call...</span> <Time at={dialed.at} />
+      <span>Calling on-call from the paired phone</span> <Time at={dialed.at} />
     </div>}
-    {!ringing && !resolvedAt && <button type="button" className="pw-es-button pw-es-call-button" disabled={busy} onClick={onRing}>
-      <PhoneCall size={16} aria-hidden /> {busy ? "Opening phone link…" : "Call on-call"}
+    {!resolvedAt && !done && !dialed && (!phoneConnected || !ringing) &&
+      <button type="button" className="pw-es-button pw-es-call-button" disabled={busy} onClick={onRing}>
+      {phoneConnected ? <PhoneCall size={16} aria-hidden /> : <QrCode size={16} aria-hidden />}
+      {busy ? "Opening phone link…" : phoneConnected ? "Ring paired phone" : "Pair a phone to call you"}
     </button>}
+    {telephone}
     <details className="pw-es-script">
       <summary>Read call script <ChevronDown size={13} aria-hidden /></summary>
       <div>{record.script}</div>
@@ -137,7 +149,8 @@ export default function EscalationCall() {
   const [label, setLabel] = useState("");
   const records = useEscalationStore((state) => state.records);
   const thresholds = useEscalationStore((state) => state.thresholds);
-  const { pairing, snapshot, busy, error, preparePairing, ring } = useCallPairing(label);
+  const phone = useEscalationPhone(records);
+  const { pairing, snapshot, busy, error, preparePairing, ring } = useCallPairing(label, phone.contact);
 
   useEffect(monitorEscalations, []);
   useEffect(() => {
@@ -147,7 +160,9 @@ export default function EscalationCall() {
   const liveId = snapshot?.call?.alert.id;
   const called = records.find((record) => record.id === liveId && !record.dismissedAt);
   const pending = records.filter((record) => !record.resolvedAt && !record.dismissedAt);
-  const record = called ?? pending.toSorted((a, b) => b.raisedAt - a.raisedAt)[0];
+  const record = pending.findLast(({ trigger }) => trigger.test) ?? called
+    ?? pending.toSorted((a, b) => b.raisedAt - a.raisedAt)[0]
+    ?? records.findLast((entry) => entry.trigger.test && !!entry.resolvedAt && !entry.dismissedAt);
   const phoneConnected = snapshot?.phoneConnected ?? false;
 
   function saveLabel(value: string) {
@@ -172,12 +187,26 @@ export default function EscalationCall() {
         useEscalationStore.getState().setThresholds(value);
         setSettings(false);
       }} label={label} onLabel={saveLabel} />
+      <div className="pw-es-phone-settings">
+        <button className="pw-es-text-button" type="button" onClick={phone.openPhone}>
+          <Phone size={14} aria-hidden /> {phone.contact ? "Edit phone" : "Add your phone"}
+        </button>
+        {phone.maskedNumber && <span className="pw-es-phone-mask">{phone.maskedNumber}</span>}
+      </div>
+      <button className="pw-es-text-button pw-es-test-action" type="button" onClick={() => {
+        if (phone.toggleTest()) setSettings(false);
+      }}><FlaskConical size={15} aria-hidden /> {phone.testRunning ? "Clear test" : "Run test alert"}</button>
       <button className="pw-es-text-button" type="button" disabled={busy} onClick={() => {
         setSettings(false); setPairingOpen(true); void preparePairing();
       }}><QrCode size={15} aria-hidden /> {phoneConnected ? "Show paired phone" : "Pair phone"}</button>
     </section>}
-    {record && <AlertCard record={record} busy={busy} phoneConnected={phoneConnected} onRing={() => {
-      setSettings(false); setPairingOpen(true); void ring(record);
+    {record && <AlertCard record={record} busy={busy} phoneConnected={phoneConnected}
+      telephone={<TelephoneCard mode={phone.mode} maskedNumber={phone.maskedNumber} receipt={record.telephoneCalls?.at(-1)}
+        resolved={!!record.resolvedAt} onCall={() => phone.callNow(record.id)}
+        onDevice={() => phone.callFromDevice(record.id)} />} onRing={() => {
+      setSettings(false);
+      if (phoneConnected) void ring(record);
+      else { setPairingOpen(true); void preparePairing(); }
     }} onDismiss={() => {
       useEscalationStore.getState().update(record.id, { dismissedAt: Date.now() }); setPairingOpen(false);
     }} />}
@@ -188,6 +217,8 @@ export default function EscalationCall() {
         onRenew={() => void preparePairing(true)} />
         : busy && <div className="pw-es-note">Opening phone link…</div>}
     </section>}
-    {error && <div className="pw-es-error" role="status">{error}</div>}
+    {(error || phone.testError) && <div className="pw-es-error" role="status">{error || phone.testError}</div>}
+    {phone.dialog && <PhoneContactDialog contact={phone.contact} onSave={phone.savePhone}
+      onRemove={() => phone.savePhone(null)} onDismiss={phone.closePhone} />}
   </div>;
 }

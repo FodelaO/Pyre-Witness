@@ -6,8 +6,9 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { callCommand, listenToCall, randomHex, type CallConnection } from "./connection.mjs";
 import { readCauses } from "./evidence";
 import { recommendedBriefing } from "./monitor";
+import { readPhoneContact, type PhoneContact } from "./phoneContact";
 import { thresholdCrossed } from "./policy";
-import type { PairingSnapshot, PublicAlert } from "./protocol";
+import type { DialDestination, PairingSnapshot, PublicAlert } from "./protocol";
 import { applyApproval, confirmApproval, type ApprovalPlan } from "./recommendation";
 import { useEscalationStore } from "./store";
 import type { EscalationMoment, EscalationRecord } from "./types";
@@ -21,14 +22,14 @@ interface Pairing {
 function publicAlert(record: EscalationRecord): PublicAlert {
   const { trigger } = record;
   return {
-    id: record.id, kind: trigger.kind, tag: trigger.assetId?.slice(0, 64) ?? null,
+    id: record.id, kind: trigger.kind, test: trigger.test, tag: trigger.assetId?.slice(0, 64) ?? null,
     room: trigger.room?.slice(0, 72) ?? null, title: trigger.title.slice(0, 120), loss: trigger.loss,
     lossText: trigger.loss === null ? undefined : formatUsd(trigger.loss),
     action: record.action.slice(0, 100), script: record.script, canApprove: record.canApprove,
   };
 }
 
-export function useCallPairing(responderLabel: string) {
+export function useCallPairing(responderLabel: string, contact: PhoneContact | null) {
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [snapshot, setSnapshot] = useState<PairingSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,8 +39,11 @@ export function useCallPairing(responderLabel: string) {
   const plans = useRef(new Map<string, ApprovalPlan>());
   const decisions = useRef(new Map<string, "approval-applied" | "approval-unavailable">());
   const sentDecisions = useRef(new Set<string>());
+  const automaticRing = useRef("");
+  const published = useRef<{ code: string; id: string; destination?: DialDestination } | null>(null);
   const activeId = snapshot?.call?.alert.id;
-  const activeRecord = useEscalationStore((state) => state.records.find((record) => record.id === activeId));
+  const records = useEscalationStore((state) => state.records);
+  const activeRecord = records.find((record) => record.id === activeId);
 
   async function openPairing(reset = false): Promise<Pairing> {
     if (opening.current) return opening.current;
@@ -68,6 +72,19 @@ export function useCallPairing(responderLabel: string) {
     finally { setBusy(false); }
   }
 
+  async function publishRing(connection: CallConnection, alert: PublicAlert) {
+    const saved = readPhoneContact();
+    const destination = saved ? { number: saved.number, name: saved.name || undefined } : undefined;
+    const sent = { code: connection.code, id: alert.id, destination };
+    published.current = sent;
+    try {
+      await callCommand(connection, { type: "ring", alert, destination });
+    } catch (error) {
+      if (published.current === sent) published.current = null;
+      throw error;
+    }
+  }
+
   async function ring(record: EscalationRecord) {
     setError("");
     setBusy(true);
@@ -83,13 +100,40 @@ export function useCallPairing(responderLabel: string) {
       if (plan) plans.current.set(record.id, plan);
       const changed = { trigger: cause, action, script, canApprove: plan !== null };
       update(record.id, changed);
-      await callCommand(next.connection, { type: "ring", alert: publicAlert({ ...record, ...changed }) });
+      await publishRing(next.connection, publicAlert({ ...record, ...changed }));
     } catch {
       setError("Could not ring the paired phone.");
     } finally {
       setBusy(false);
     }
   }
+
+  const publishPending = useEffectEvent(() => {
+    if (!pairing || !snapshot?.phoneConnected || busy) return;
+    const call = snapshot.call;
+    if (call && !call.resolvedAt && !call.acknowledgedAt && !call.approvedAt) {
+      const sent = published.current;
+      if (call.dialedAt || activeRecord?.resolvedAt) { published.current = null; return; }
+      if (sent?.code === pairing.connection.code && sent.id === call.alert.id
+        && sent.destination?.number === contact?.number && sent.destination?.name === (contact?.name || undefined)) return;
+      if (contact || call.destinationVersion) {
+        void publishRing(pairing.connection, call.alert).catch(() => setError("Could not update the paired phone's destination."));
+      }
+      return;
+    }
+    published.current = null;
+    if (!contact) return;
+    const pending = records.filter((record) => !record.resolvedAt && !record.dismissedAt
+      && !record.dialed && !record.acknowledged && !record.approved);
+    const record = pending.findLast(({ trigger }) => trigger.test) ?? pending.at(-1);
+    if (!record) return;
+    const key = pairing.connection.code + ":" + record.id;
+    if (automaticRing.current === key) return;
+    automaticRing.current = key;
+    void ring(record);
+  });
+
+  useEffect(() => { publishPending(); }, [pairing, snapshot, busy, contact, records]);
 
   const onFrame = useEffectEvent((frame: PairingSnapshot, connection: CallConnection) => {
     setError("");
@@ -133,7 +177,10 @@ export function useCallPairing(responderLabel: string) {
 
   useEffect(() => {
     if (!pairing) return;
-    return listenToCall(pairing.connection, (frame) => onFrame(frame, pairing.connection), setError);
+    return listenToCall(pairing.connection, (frame) => onFrame(frame, pairing.connection), (message) => {
+      setError(message);
+      setSnapshot((current) => current && { ...current, phoneConnected: false });
+    });
   }, [pairing]);
 
   useEffect(() => {

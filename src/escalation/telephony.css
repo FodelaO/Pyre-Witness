@@ -1,0 +1,61 @@
+/* Local contact dialog and compact call controls share the escalation instrument's tokens. */
+.pw-es-phone-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(338px, calc(100vw - 28px));
+  max-height: calc(100dvh - 28px);
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--pw-line-strong);
+  border-radius: 8px;
+  color: var(--pw-text);
+  background: var(--pw-panel);
+  box-shadow: 0 14px 48px #0007;
+}
+.pw-es-phone-dialog::backdrop { background: #070b1080; }
+.pw-es-phone-dialog-head { display: flex; align-items: center; gap: 8px; margin-bottom: 13px; }
+.pw-es-phone-dialog-head > svg { color: var(--pw-attention); }
+.pw-es-phone-dialog-head h2 { font-size: 14px; font-weight: 650; }
+.pw-es-phone-dialog-head > button { margin-left: auto; }
+.pw-es-phone-form :is(label, input) { font-size: 12px; }
+.pw-es-phone-form input { min-height: 34px; padding-inline: 8px; }
+.pw-es-phone-form .pw-es-consent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 4px;
+  color: var(--pw-text);
+}
+.pw-es-phone-form .pw-es-consent input { width: 15px; min-height: 15px; margin: 0; padding: 0; accent-color: var(--pw-info); }
+.pw-es-phone-error { color: var(--pw-attention); font-size: 11px; }
+.pw-es-phone-dialog-actions { display: flex; gap: 10px; align-items: center; margin-top: 3px; }
+.pw-es-phone-dialog-actions button[type="submit"] { margin-left: auto; }
+.pw-es-telephone {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid var(--pw-line);
+  padding-top: 7px;
+  margin-top: 8px;
+}
+.pw-es-tel-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 3px 6px;
+  color: var(--pw-text);
+  font-size: 11px;
+}
+.pw-es-tel-actions { display: flex; flex-wrap: wrap; gap: 5px 14px; }
+.pw-es-phone-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 8px;
+  border-top: 1px solid var(--pw-line);
+  margin-top: 8px;
+  padding-top: 5px;
+}
+.pw-es-phone-mask { margin-left: auto; color: var(--pw-text-dim); font: 10px var(--es-mono); }
+.pw-es-test-action { color: var(--pw-attention); }

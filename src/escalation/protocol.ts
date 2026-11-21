@@ -1,11 +1,22 @@
-/** Wire format for the local desktop and paired phone. Roster details have no wire fields. */
+/** The ring POST carries the only contact field. Snapshots carry a destination version. */
 import { z } from "zod";
+import { normalizePhoneNumber } from "./phoneNumber";
 
 export { CLIENT_KEY, DESK_KEY, PAIR_CODE, PAIRING_TTL, PHONE_KEY, RECONNECT_MS } from "./wire.mjs";
 
 const alertId = z.string().regex(/^e-[a-z0-9]+-[0-9]+$/).max(40);
+const dialDestination = z.strictObject({
+  number: z.string().max(48).transform((number, ctx) => {
+    const normalized = normalizePhoneNumber(number);
+    if (normalized) return normalized;
+    ctx.addIssue({ code: "custom", message: "Invalid call destination." });
+    return z.NEVER;
+  }),
+  name: z.string().trim().max(36).optional(),
+});
 const publicAlert = z.strictObject({
   id: alertId,
+  test: z.literal(true).optional(),
   kind: z.enum(["finding", "risk", "simulation"]),
   tag: z.string().max(64).nullable(),
   room: z.string().max(72).nullable(),
@@ -18,10 +29,16 @@ const publicAlert = z.strictObject({
 });
 
 export type PublicAlert = z.infer<typeof publicAlert>;
+export type DialDestination = z.infer<typeof dialDestination>;
+export interface DialTarget {
+  href: string;
+  label: string;
+}
 
 export const commandSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("pair") }),
-  z.strictObject({ type: z.literal("ring"), alert: publicAlert }),
+  z.strictObject({ type: z.literal("ring"), alert: publicAlert, destination: dialDestination.optional() }),
+  z.strictObject({ type: z.literal("dial-target"), id: alertId, version: z.number().int().positive() }),
   z.strictObject({ type: z.literal("resolve"), id: alertId }),
   z.strictObject({ type: z.literal("answer"), id: alertId }),
   z.strictObject({ type: z.literal("acknowledge"), id: alertId }),
@@ -44,6 +61,7 @@ export interface PhoneCall {
   approvalUnavailableAt?: number;
   resolvedAt?: number;
   dialedAt?: number;
+  destinationVersion?: number;
   audioGeneratedAt?: number;
 }
 

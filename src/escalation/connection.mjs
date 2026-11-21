@@ -14,7 +14,7 @@ function headers(connection) {
 }
 
 /** @param {CallConnection} connection @param {import("./protocol").CallCommand} command */
-export async function callCommand(connection, command) {
+async function postCommand(connection, command) {
   const response = await fetch(`/api/escalation/${connection.code}`, {
     method: "POST",
     headers: { ...headers(connection), "Content-Type": "application/json" },
@@ -22,6 +22,20 @@ export async function callCommand(connection, command) {
     keepalive: true,
   });
   if (!response.ok) throw new Error(response.status === 404 ? "The phone link expired." : "Could not update the call.");
+  return response;
+}
+
+/** @param {CallConnection} connection @param {import("./protocol").CallCommand} command */
+export async function callCommand(connection, command) {
+  await postCommand(connection, command);
+}
+
+/** @param {CallConnection} connection @param {string} id @param {number} version */
+export async function fetchDialTarget(connection, id, version) {
+  const response = await postCommand(connection, { type: "dial-target", id, version });
+  /** @type {import("./protocol").DialTarget} */
+  const target = await response.json();
+  return target;
 }
 
 /**

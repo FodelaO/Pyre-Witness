@@ -2,7 +2,7 @@
 import { BodyError, readBoundedJson } from "@/app/api/health/boundedJson";
 import { crossOriginRejection } from "@/app/api/health/originGuard";
 import { CLIENT_KEY, commandSchema, DESK_KEY, PAIR_CODE, PHONE_KEY, RECONNECT_MS } from "@/escalation/protocol";
-import { authorize, receive, register, subscribe } from "@/escalation/relay";
+import { authorize, readDialTarget, receive, register, subscribe } from "@/escalation/relay";
 
 export const runtime = "nodejs";
 
@@ -36,6 +36,10 @@ export async function POST(request: Request, { params }: Context) {
   }
   const session = authorize(code, client.role, client.key);
   if (!session) return error("This call link expired or is paired to another browser.", 404);
+  if (command.data.type === "dial-target") {
+    const target = readDialTarget(session, client.role, command.data.id, command.data.version);
+    return target ? Response.json(target, { headers: noStore }) : error("The call destination is unavailable.", 404);
+  }
   return receive(session, client.role, command.data)
     ? new Response(null, { status: 204, headers: noStore })
     : error("This call changed. Check its latest status.", 409);

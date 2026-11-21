@@ -1,5 +1,6 @@
 /** Shared escalation evidence and the desktop's local call record. */
 import type { EquipmentKind } from "@/twin/types";
+import type { TelephoneReceipt } from "./telephoneTypes";
 
 export interface Thresholds {
   loss: number;
@@ -10,6 +11,7 @@ export interface EscalationCause {
   key: string;
   kind: "finding" | "risk" | "simulation";
   title: string;
+  test?: true;
   assetId: string | null;
   assetName: string | null;
   assetKind: EquipmentKind | null;
@@ -18,6 +20,8 @@ export interface EscalationCause {
   score: number;
   baseline: number;
   ruleId?: string;
+  /** Captured device only: the panel's per-event figure once it sits at the checked recommendation. */
+  lossIfMoved?: number;
 }
 
 export interface EscalationMoment {
@@ -40,6 +44,7 @@ export interface EscalationRecord {
   acknowledged?: EscalationMoment;
   approved?: EscalationMoment;
   dialed?: EscalationMoment;
+  telephoneCalls?: TelephoneReceipt[];
   resolvedAt?: number;
   dismissedAt?: number;
 }
