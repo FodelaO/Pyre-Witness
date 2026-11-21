@@ -6,5 +6,6 @@ import { streamPipeline } from "@/pipeline/server/sse";
 export const runtime = "nodejs";
 
 export function POST(request: Request): Response {
-  return streamPipeline(request, analyzeRequestSchema, runAnalyze);
+  return streamPipeline(request, analyzeRequestSchema, (body, emit, signal) =>
+    runAnalyze(body, emit, signal, { completeBeforeBriefing: true }));
 }

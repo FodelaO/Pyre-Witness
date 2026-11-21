@@ -1,6 +1,7 @@
 /** Exercises the real pipeline directly and prints event timing without dumping capture data. */
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
+import { withGeminiUsage } from "@/gemini/usage";
 import type { CaptureInput, PipelineEvent } from "@/pipeline/types";
 import { runAnalyze } from "@/pipeline/server/run";
 import { analyzeRequestSchema } from "@/pipeline/server/requests";
@@ -21,12 +22,12 @@ function eventDetail(event: PipelineEvent): string {
         `${id}=${answer.value} (confidence ${answer.confidence.toFixed(2)})`,
       ).join(", ");
     case "perception.done":
-      return event.profile.device_type;
+      return [event.profile.device_type, event.profile.object_class].filter(Boolean).join(" · ");
     case "reasoning.done":
     case "revision.done":
       return `${event.assessment.physical_placement.area}, Purdue ${event.assessment.placement.level}`;
     case "selfcheck.done":
-      return `${event.result.findings.length} findings, ${event.result.paths.length} paths, ${event.result.disagreements.length} disagreements`;
+      return `${event.result.passed ? "passed" : "blocked"}, ${event.result.findings.length} findings, ${event.result.paths.length} paths, ${event.result.disagreements.length} disagreements`;
     case "summary.done":
       return event.text.replace(/\n/g, " | ");
     case "run.error":
@@ -63,15 +64,23 @@ async function main(): Promise<void> {
   };
   process.once("SIGINT", abort);
   let completed = false;
+  let inspectorPhase = "as-dropped";
   const start = performance.now();
   try {
-    await runAnalyze(validated.data, (event) => {
+    await withGeminiUsage((model, usage) => {
+      console.log(`${Math.round(performance.now() - start)}ms tokens | ${model} ${JSON.stringify(usage)}`);
+    }, () => runAnalyze(validated.data, (event) => {
       const time = Math.round(performance.now() - start);
       const latency = "latencyMs" in event ? ` +${event.latencyMs}ms` : "";
       const detail = eventDetail(event);
-      console.log(`${time}ms ${event.type}${latency}${detail ? ` | ${detail}` : ""}`);
+      if (event.type === "reasoning.started") inspectorPhase = "recommendation";
+      if (event.type === "revision.done") inspectorPhase = "post-revision";
+      const phase = event.type.startsWith("selfcheck.")
+        ? ` [${"phase" in event && typeof event.phase === "string" ? event.phase : inspectorPhase}]`
+        : "";
+      console.log(`${time}ms ${event.type}${phase}${latency}${detail ? ` | ${detail}` : ""}`);
       if (event.type === "run.completed") completed = true;
-    }, controller.signal);
+    }, controller.signal));
   } finally {
     process.off("SIGINT", abort);
   }

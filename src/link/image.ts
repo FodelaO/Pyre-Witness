@@ -1,6 +1,6 @@
 /**
  * Downloads the main product image via safeFetch, validating supported MIME types
- * (JPEG, PNG, WebP) and enforcing the 4 MB size cap without resizing.
+ * (JPEG, PNG, WebP) and enforcing an optional smaller size cap without resizing.
  * Server-only module — never import from client components.
  */
 import type { CaptureImage } from "@/pipeline/types";
@@ -13,6 +13,7 @@ const IMAGE_ACCEPT = "image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.5";
 export interface FetchMainImageOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  maxBytes?: number;
   fetchImpl?: SafeFetchOptions["fetchImpl"];
   dnsLookup?: SafeFetchOptions["dnsLookup"];
 }
@@ -58,7 +59,7 @@ function matchesMagicBytes(mime: SupportedImageMime, bytes: Uint8Array): boolean
 
 /**
  * Fetches `imageUrl` through `safeFetch` and returns a base64 `CaptureImage`,
- * or `null` if the image is missing, unsupported, invalid, blocked, or exceeds 4 MB.
+ * or `null` if the image is missing, unsupported, invalid, blocked, or exceeds its byte limit.
  */
 export async function fetchMainImage(
   imageUrl: string | null,
@@ -70,7 +71,7 @@ export async function fetchMainImage(
 
   try {
     const response = await safeFetch(imageUrl, {
-      maxBytes: IMAGE_MAX_BYTES,
+      maxBytes: Math.min(options?.maxBytes ?? IMAGE_MAX_BYTES, IMAGE_MAX_BYTES),
       accept: IMAGE_ACCEPT,
       timeoutMs: options?.timeoutMs,
       signal,

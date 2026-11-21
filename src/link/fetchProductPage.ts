@@ -4,7 +4,8 @@
  * Must stay server-only (never import from client components).
  */
 import type { LinkSnapshot } from "@/pipeline/types";
-import { LinkFetchError } from "./errors";
+import { hasDocumentedProductSpecs } from "./captureBudget";
+import { isLinkConnectionFailure, LinkFetchError } from "./errors";
 import { extractProductInfo } from "./extract";
 import { fetchMainImage } from "./image";
 import { HTML_MAX_BYTES, safeFetch, type SafeFetchOptions } from "./safeFetch";
@@ -12,10 +13,19 @@ import { HTML_MAX_BYTES, safeFetch, type SafeFetchOptions } from "./safeFetch";
 export { LinkFetchError, type LinkFetchErrorCode } from "./errors";
 
 const HTML_ACCEPT = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5";
+const CAPTURE_ATTEMPT_MS = 6_000;
+const CAPTURE_HTML_BYTES = 2 * 1024 * 1024;
+const HTML_PREFERENCES = [
+  { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", acceptLanguage: "en-US,en;q=0.9" },
+  { accept: HTML_ACCEPT, acceptLanguage: "en,en-US;q=0.8" },
+] as const;
+const NO_READABLE_PRODUCT = "This page did not return readable product details; try a photo or paste the specs as text";
 
 export interface FetchProductPageOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Tighter evidence and optional image limits for an interactive capture. */
+  captureBudget?: boolean;
   /** Dependency injection hooks for unit tests. */
   fetchImpl?: SafeFetchOptions["fetchImpl"];
   dnsLookup?: SafeFetchOptions["dnsLookup"];
@@ -41,16 +51,20 @@ function decodeHtml(bytes: Uint8Array, contentType: string): string {
   }
 }
 
-export async function fetchProductPage(
+async function fetchProductPageOnce(
   url: string,
-  options?: FetchProductPageOptions,
+  options: FetchProductPageOptions | undefined,
+  preferences?: (typeof HTML_PREFERENCES)[number],
 ): Promise<LinkSnapshot> {
   const signal = options?.signal;
   signal?.throwIfAborted();
+  const attemptMs = preferences ? Math.min(options?.timeoutMs ?? CAPTURE_ATTEMPT_MS, CAPTURE_ATTEMPT_MS) : undefined;
+  const startedAt = performance.now();
   const response = await safeFetch(url, {
-    maxBytes: HTML_MAX_BYTES,
-    accept: HTML_ACCEPT,
-    timeoutMs: options?.timeoutMs,
+    maxBytes: preferences ? CAPTURE_HTML_BYTES : HTML_MAX_BYTES,
+    accept: preferences?.accept ?? HTML_ACCEPT,
+    acceptLanguage: preferences?.acceptLanguage,
+    timeoutMs: attemptMs ?? options?.timeoutMs,
     signal,
     fetchImpl: options?.fetchImpl,
     dnsLookup: options?.dnsLookup,
@@ -65,15 +79,26 @@ export async function fetchProductPage(
   }
 
   const html = decodeHtml(response.body, response.contentType);
-  const extracted = extractProductInfo(html, response.finalUrl);
+  const extracted = extractProductInfo(html, response.finalUrl, options?.captureBudget);
+  if (preferences && extracted.pageKind === "unreadable") {
+    throw new LinkFetchError("unreadable_product", NO_READABLE_PRODUCT);
+  }
 
-  const image = await fetchMainImage(extracted.imageUrl, {
+  const richSpecs = preferences && hasDocumentedProductSpecs(extracted.title, extracted.specText);
+  const thumbnailTimeout = richSpecs ? 900 : 1_750;
+  const remaining = attemptMs === undefined ? undefined : Math.floor(attemptMs - (performance.now() - startedAt));
+
+  const image = remaining !== undefined && remaining <= 0 ? null : await fetchMainImage(extracted.imageUrl, {
     signal,
-    timeoutMs: options?.timeoutMs,
+    timeoutMs: remaining === undefined ? options?.timeoutMs : Math.min(remaining, thumbnailTimeout),
+    maxBytes: preferences ? (richSpecs ? 384 : 1536) * 1024 : undefined,
     fetchImpl: options?.fetchImpl,
     dnsLookup: options?.dnsLookup,
   });
   signal?.throwIfAborted();
+  if (preferences && extracted.pageKind === "image-only" && !image) {
+    throw new LinkFetchError("unreadable_product", NO_READABLE_PRODUCT);
+  }
 
   return {
     url: response.finalUrl,
@@ -82,4 +107,23 @@ export async function fetchProductPage(
     imageUrl: extracted.imageUrl,
     image,
   };
+}
+
+function retryableCaptureFailure(error: unknown): boolean {
+  if (!(error instanceof LinkFetchError)) return false;
+  const { code, status } = error;
+  return isLinkConnectionFailure(error) || code === "timeout" || code === "not_html"
+    || status === 406 || status === 408 || (status !== undefined && status >= 500 && status < 600);
+}
+
+/** Fetches public product evidence. Capture mode retries only transport or negotiation failures. */
+export async function fetchProductPage(url: string, options?: FetchProductPageOptions): Promise<LinkSnapshot> {
+  if (!options?.captureBudget) return fetchProductPageOnce(url, options);
+  try {
+    return await fetchProductPageOnce(url, options, HTML_PREFERENCES[0]);
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    if (!retryableCaptureFailure(error)) throw error;
+    return fetchProductPageOnce(url, options, HTML_PREFERENCES[1]);
+  }
 }

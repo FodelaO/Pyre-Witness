@@ -1,14 +1,33 @@
 /** Resolves model references against the twin and prepares human-reviewable proposals. */
 import { techniqueById } from "@/data/attack-ics";
 import type { ModelAssessment } from "@/gemini/schemas";
-import { clearPlacementPoint, knownNetworkLocation } from "@/pipeline/assetFromProfile";
+import { clearPlacementPoint, knownNetworkLocation, passiveNetworkAt } from "@/pipeline/assetFromProfile";
 import type { Assessment } from "@/pipeline/types";
-import { evaluateTwin, explainRule } from "@/rules/engine";
+import { evaluateTwin, explainRule, isPlantHome } from "@/rules/engine";
 import { applyEffects } from "@/twin/effects";
 import { areaById, areaCenter, containsPoint } from "@/twin/geometry";
-import type { Asset, MitigationEffect, Technique, Twin } from "@/twin/types";
+import type { Asset, AttackPath, MitigationEffect, Technique, Twin } from "@/twin/types";
 
-function groundEffect(effect: MitigationEffect, twin: Twin, assets: Map<string, Asset>, candidate: Asset): MitigationEffect | null {
+type GroundOptions = {
+  passive?: boolean;
+  reviewedPaths?: AttackPath[];
+  passiveModelClaims?: boolean;
+};
+
+function isCyberEffect(effect: MitigationEffect): boolean {
+  switch (effect.type) {
+    case "disable_radio":
+    case "patch_cyber":
+    case "enforce_conduit":
+      return true;
+    case "remove_connection":
+      return effect.medium === "network";
+    default:
+      return false;
+  }
+}
+
+function groundEffect(effect: MitigationEffect, twin: Twin, assets: Map<string, Asset>, candidate: Asset, passive: boolean): MitigationEffect | null {
   switch (effect.type) {
     case "note":
       return effect;
@@ -25,10 +44,17 @@ function groundEffect(effect: MitigationEffect, twin: Twin, assets: Map<string, 
     case "move_asset": {
       const asset = assets.get(effect.assetId);
       const area = areaById(twin, effect.area);
-      if (!asset || !area || !knownNetworkLocation(twin, effect.networkArea, effect.conduit)) return null;
+      if (!asset || !area || !isPlantHome(area.id)) return null;
+      const passiveMove = passive && asset.id === candidate.id;
+      if (!passiveMove && !knownNetworkLocation(twin, effect.networkArea, effect.conduit)) return null;
       const preferred = effect.x !== undefined && effect.y !== undefined ? { x: effect.x, y: effect.y } : areaCenter(area);
       const point = clearPlacementPoint(twin, asset, area, preferred);
-      return point ? { ...effect, ...point } : null;
+      if (!point) return null;
+      if (passiveMove) {
+        const network = passiveNetworkAt(twin, area.id);
+        return { ...effect, ...point, level: network.level, networkArea: network.area, conduit: null };
+      }
+      return { ...effect, ...point };
     }
     case "enforce_conduit": {
       const asset = assets.get(effect.enforcedBy);
@@ -44,8 +70,15 @@ function groundEffect(effect: MitigationEffect, twin: Twin, assets: Map<string, 
   }
 }
 
-export function groundAssessment(twin: Twin, candidate: Asset, model: ModelAssessment, runId: string) {
+export function groundAssessment(twin: Twin, candidate: Asset, model: ModelAssessment, runId: string, options: GroundOptions = {}) {
   const disagreements = new Set<string>();
+  const { passive = false, reviewedPaths = [], passiveModelClaims = false } = options;
+  const inventedCyber = "Model invented a cyber risk for a passive object.";
+  if (passive && (passiveModelClaims || model.attack_paths.length || reviewedPaths.length || model.placement.conduit
+    || model.risks.some((risk) => risk.kind === "cyber" || risk.technique)
+    || model.physical_placement.connections.some(({ medium }) => medium === "network"))) {
+    disagreements.add(inventedCyber);
+  }
   const assets = new Map(twin.assets.map((asset) => [asset.id, asset]));
   assets.set(candidate.id, candidate);
   const current = { ...twin, assets: [...assets.values()] };
@@ -61,8 +94,9 @@ export function groundAssessment(twin: Twin, candidate: Asset, model: ModelAsses
     return undefined;
   }
 
-  const paths: Assessment["attack_paths"] = [];
-  for (const [index, path] of model.attack_paths.entries()) {
+  const paths: Assessment["attack_paths"] = passive ? [] : [...reviewedPaths];
+  const proposedPaths = passive ? [] : model.attack_paths;
+  for (const [index, path] of proposedPaths.entries()) {
     const pathNumber = index + 1;
     const steps = path.steps.map((step) => ({ ...step, technique: canonical(step.technique) }));
     const ids = [path.entry, path.target, ...steps.flatMap(({ from, to }) => [from, to])];
@@ -90,7 +124,7 @@ export function groundAssessment(twin: Twin, candidate: Asset, model: ModelAsses
   if (placement.near_asset_id && !validAnchor) {
     disagreements.add(`Removed placement anchor ${placement.near_asset_id}. Choose an asset in ${placement.area}.`);
   }
-  const connections = placement.connections.filter(({ to }) => {
+  const connections = passive ? [] : placement.connections.filter(({ to }) => {
     if (assets.has(to) && to !== candidate.id) return true;
     disagreements.add(`Removed connection to invalid asset ${to}.`);
     return false;
@@ -98,8 +132,16 @@ export function groundAssessment(twin: Twin, candidate: Asset, model: ModelAsses
 
   const baseline = model.mitigations.length ? evaluateTwin(current).score : 0;
   const mitigations = model.mitigations.flatMap((proposal, index) => {
+    if (passive && proposal.kind === "software") {
+      disagreements.add(inventedCyber);
+      return [];
+    }
     const effects = proposal.effects.flatMap((effect) => {
-      const grounded = groundEffect(effect, current, assets, candidate);
+      if (passive && isCyberEffect(effect)) {
+        disagreements.add(inventedCyber);
+        return [];
+      }
+      const grounded = groundEffect(effect, current, assets, candidate, passive);
       if (grounded) return [grounded];
       disagreements.add(`Removed inapplicable ${effect.type} effect from mitigation ${index + 1}.`);
       return [];
@@ -117,15 +159,27 @@ export function groundAssessment(twin: Twin, candidate: Asset, model: ModelAsses
     }];
   });
 
+  const isolated = passiveNetworkAt(twin, placement.area);
+  let why = model.placement.why;
+  if (passive && /\b(?:purdue|network(?:ing)?|level\s*[0-5]|vlan|subnet|conduit)\b/i.test(why)) {
+    disagreements.add("Removed a network-level placement rationale for a passive object.");
+    why = `Keep the object in ${isolated.area} and follow the room's physical-safety controls.`;
+  }
   const assessment: Assessment = {
     ...model,
+    placement: passive
+      ? { ...model.placement, level: isolated.level, network_area: isolated.area, conduit: null, why }
+      : !model.placement.conduit && room?.id === model.placement.network_area
+        ? { ...model.placement, network_area: room.name }
+        : model.placement,
     physical_placement: { ...placement, near_asset_id: validAnchor ? near.id : null, connections },
     never_place: model.never_place.map((item) => ({
       ...item, area: item.area && areaById(twin, item.area) ? item.area : null,
+      level: passive ? null : item.level,
     })),
-    risks: model.risks.map((risk, index) => ({
-      ...risk, id: `${runId}:risk:${index + 1}`, technique: canonical(risk.technique) ?? null,
-    })),
+    risks: model.risks.flatMap((risk, index) => passive && risk.kind === "cyber" ? [] : [{
+      ...risk, id: `${runId}:risk:${index + 1}`, technique: passive ? null : canonical(risk.technique) ?? null,
+    }]),
     attack_paths: paths,
     mitigations,
   };

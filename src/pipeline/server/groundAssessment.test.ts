@@ -33,7 +33,6 @@ it("drops unknown or disconnected paths and canonicalizes known technique IDs", 
     attack_paths: [
       path,
       { ...path, target: "missing" },
-      { ...path, steps: [path.steps[0], { ...path.steps[1], from: entry }] },
     ],
     risks: [{
       id: "caller-id", title: "Verify media policy", severity: 2, likelihood: 1, kind: "cyber",
@@ -55,10 +54,14 @@ it("drops unknown or disconnected paths and canonicalizes known technique IDs", 
   expect(disagreements).toEqual(expect.arrayContaining([
     expect.stringContaining("unknown ATT&CK for ICS technique T0000"),
     expect.stringContaining("referencing unknown nodes"),
-    expect.stringContaining("must connect known nodes"),
     expect.stringContaining("Removed placement anchor"),
     expect.stringContaining("Removed connection"),
   ]));
+  const disconnectedPath = { ...path, steps: [path.steps[0], { ...path.steps[1], from: entry }] };
+  const disconnected = modelAssessmentSchema.parse({ ...officeAssessment, attack_paths: [disconnectedPath] });
+  const rejected = groundAssessment(SEED_TWIN, candidate, disconnected, "run");
+  expect(rejected.assessment.attack_paths).toHaveLength(0);
+  expect(rejected.disagreements).toEqual([expect.stringContaining("unknown ATT&CK"), expect.stringContaining("must connect known nodes")]);
 });
 
 it("measures grounded effects independently against the current candidate without changing the twin", () => {
@@ -99,4 +102,55 @@ it("measures grounded effects independently against the current candidate withou
   const protectedTwin = applyEffects(current, assessment.mitigations[1].effects);
   const request = analyzeRequestSchema.parse({ input: { kind: "text", description: "Gauge" }, twin: protectedTwin });
   expect(request.twin.assets.find(({ id }) => id === candidate.id)?.protections).toEqual(["port-lock"]);
+});
+
+it("resolves an isolated placement's room ID to the same room's display name", () => {
+  const model = {
+    ...officeAssessment,
+    placement: { ...officeAssessment.placement, network_area: "corporate_office" },
+  };
+  const { assessment, disagreements } = groundAssessment(SEED_TWIN, candidate, model, "run");
+  expect(assessment.placement.network_area).toBe("Corporate office");
+  expect(disagreements).toEqual([]);
+});
+
+it("strips passive cyber claims and preserves physical guidance and isolation", () => {
+  const mug = assetFromProfile({
+    ...pressureProfile, device_type: "Ceramic mug", object_class: "passive_object", material: "ceramic",
+  }, SEED_TWIN, candidate.id, { x: 700, y: 640, area: "filler3" });
+  const model = modelAssessmentSchema.parse({
+    ...officeAssessment,
+    placement: { ...officeAssessment.placement, network_area: "Enterprise", conduit: "C-ENT-DMZ", why: "Place on Purdue Level 4." },
+    physical_placement: {
+      ...officeAssessment.physical_placement, connections: [{ to: target, medium: "network" }],
+    },
+    risks: [
+      { title: "Network exposure", kind: "cyber", severity: 3, likelihood: 1, description: "Exposure", mitigation: "Isolate", technique: null },
+      { title: "Fragments", kind: "physical", severity: 4, likelihood: 1, description: "Brittle material", mitigation: "Store in office",
+        technique: { id: "T0847", name: "Unrelated technique" } },
+    ],
+    attack_paths: [path],
+    mitigations: [{
+      title: "Keep the mug out of production", kind: "physical", description: "Store the mug in an office", targets: [mug.id],
+      effects: [
+        { type: "disable_radio", assetId: mug.id, radio: "wifi" },
+        { type: "move_asset", assetId: mug.id, area: "crew_office", level: 3, networkArea: "AI crew office", conduit: null },
+        { type: "move_asset", assetId: mug.id, area: "corporate_office", level: 4, networkArea: "Enterprise", conduit: "C-ENT-DMZ" },
+      ],
+    }],
+  });
+  const { assessment, disagreements } = groundAssessment(SEED_TWIN, mug, model, "run", { passive: true });
+  expect(assessment).toMatchObject({
+    placement: { level: 0, network_area: "Corporate office", conduit: null, why: expect.stringContaining("Corporate office") },
+    physical_placement: { connections: [] },
+    attack_paths: [],
+    risks: [{ title: "Fragments", technique: null }],
+    mitigations: [{ effects: [{ type: "move_asset", level: 0, networkArea: "Corporate office", conduit: null }] }],
+  });
+  expect(assessment.placement.why).not.toContain("Purdue");
+  expect(disagreements).toEqual([
+    "Model invented a cyber risk for a passive object.",
+    "Removed inapplicable move_asset effect from mitigation 1.",
+    "Removed a network-level placement rationale for a passive object.",
+  ]);
 });

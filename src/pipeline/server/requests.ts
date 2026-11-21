@@ -4,6 +4,7 @@ import { areaId, deviceProfileSchema, kind, level, medium, radio, severity } fro
 import { containsPoint } from "@/twin/geometry";
 import type { AnalyzeRequest, CaptureImage, ReassessRequest } from "@/pipeline/types";
 import type { Twin } from "@/twin/types";
+import { CaptureImageError, normalizeCaptureImage } from "./captureImages";
 
 const id = z.string().trim().min(1).max(160);
 const number = z.number();
@@ -70,8 +71,16 @@ const twin = z.object({
 
 const note = z.string().trim().max(12_000).optional();
 export const captureImageSchema = z.object({
-  mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "image/gif", "image/bmp", "image/tiff"]),
-  dataBase64: z.string().min(4).max(5_600_000).regex(/^[A-Za-z0-9+/]+={0,2}$/).refine((data) => data.length % 4 !== 1),
+  mimeType: z.string(),
+  dataBase64: z.string(),
+}).transform((image, ctx) => {
+  try {
+    return normalizeCaptureImage(image);
+  } catch (error) {
+    if (!(error instanceof CaptureImageError)) throw error;
+    ctx.addIssue({ code: "custom", path: ["dataBase64"], message: error.message });
+    return z.NEVER;
+  }
 }) satisfies z.ZodType<CaptureImage>;
 
 const productUrl = z.url({ protocol: /^https?$/ }).max(4096).refine((value) => {

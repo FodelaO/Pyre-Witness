@@ -4,6 +4,7 @@
  * definition lists / feature bullets, and resolves the main product image URL.
  */
 import { parse, type HTMLElement } from "node-html-parser";
+import { compactProductSpecs } from "./captureBudget";
 
 export const MAX_SPEC_TEXT_CHARS = 6_000;
 
@@ -12,6 +13,7 @@ export interface ExtractedProduct {
   description: string;
   specText: string;
   imageUrl: string | null;
+  pageKind: "product" | "image-only" | "unreadable";
 }
 
 interface JsonLdProduct {
@@ -29,6 +31,10 @@ const SPEC_HEADING_RE =
 
 const NON_PRODUCT_IMG_RE =
   /\b(logo|icon|sprite|avatar|badge|flag|social|pixel|spacer|tracking|placeholder|spinner|loader|arrow|chevron|banner-ad|payment|visa|mastercard|paypal)\b/i;
+
+const INTERSTITIAL_TITLE =
+  /^(?:access denied|request blocked|forbidden|just a moment|attention required|are you (?:a robot|human)|captcha|enable javascript|javascript is required|verify (?:you are|that you are) human|page not found|404(?: not found)?)(?:\b|[.!…])/i;
+const NO_PRODUCT_DESCRIPTION = /\b(?:enable javascript|verify (?:you are|that you are) human|checking your browser)\b/i;
 
 function decodeEntities(text: string): string {
   return text
@@ -468,7 +474,7 @@ function deduplicateAndCap(lines: string[], maxChars: number): string {
 /**
  * Pure extraction from raw HTML + final page URL into structured product fields.
  */
-export function extractProductInfo(html: string, pageUrl: string): ExtractedProduct {
+export function extractProductInfo(html: string, pageUrl: string, captureBudget = false): ExtractedProduct {
   const root = parse(html, { comment: false });
 
   // Extract JSON-LD before removing script/style noise.
@@ -485,7 +491,9 @@ export function extractProductInfo(html: string, pageUrl: string): ExtractedProd
     }
   })();
 
-  const title = ogTitle || docTitle || h1Title || jsonLd?.name || fallbackHost;
+  const title = captureBudget
+    ? (ogTitle || jsonLd?.name || h1Title || docTitle || fallbackHost).slice(0, 280)
+    : ogTitle || docTitle || h1Title || jsonLd?.name || fallbackHost;
 
   const metaDescription = readMeta(root, [
     'meta[property="og:description"]',
@@ -493,6 +501,9 @@ export function extractProductInfo(html: string, pageUrl: string): ExtractedProd
     'meta[name="description"]',
   ]);
   const description = metaDescription || jsonLd?.description || "";
+  const interstitial = [ogTitle, docTitle, h1Title].some((value) => INTERSTITIAL_TITLE.test(value))
+    || Boolean(root.querySelector("#challenge-form, #cf-error-details"));
+  const javascriptShell = root.querySelectorAll("noscript").some((node) => NO_PRODUCT_DESCRIPTION.test(node.text));
 
   const ogImage = resolveHttpUrl(
     readMeta(root, [
@@ -518,10 +529,6 @@ export function extractProductInfo(html: string, pageUrl: string): ExtractedProd
   if (jsonLd?.brand) specLines.push(`Brand: ${jsonLd.brand}`);
   if (jsonLd?.model) specLines.push(`Model: ${jsonLd.model}`);
   if (jsonLd?.sku) specLines.push(`SKU: ${jsonLd.sku}`);
-  if (description) specLines.push(`Description: ${description}`);
-  if (jsonLd?.description && jsonLd.description.toLowerCase() !== description.toLowerCase()) {
-    specLines.push(`Details: ${jsonLd.description}`);
-  }
   if (jsonLd) {
     for (const prop of jsonLd.properties) {
       specLines.push(`${prop.name}: ${prop.value}`);
@@ -532,12 +539,21 @@ export function extractProductInfo(html: string, pageUrl: string): ExtractedProd
   specLines.push(...extractDefinitionListLines(root));
   specLines.push(...extractSpecListLines(root));
 
-  const specText = deduplicateAndCap(specLines, MAX_SPEC_TEXT_CHARS);
+  if (description && (!captureBudget || !NO_PRODUCT_DESCRIPTION.test(description))) specLines.push(`Description: ${description}`);
+  if (jsonLd?.description && jsonLd.description.toLowerCase() !== description.toLowerCase()
+    && (!captureBudget || !NO_PRODUCT_DESCRIPTION.test(jsonLd.description))) {
+    specLines.push(`Details: ${jsonLd.description}`);
+  }
+  const specText = captureBudget ? compactProductSpecs(specLines) : deduplicateAndCap(specLines, MAX_SPEC_TEXT_CHARS);
+  const hasFacts = Boolean(specText || jsonLd?.name);
+  const pageKind = interstitial || title === fallbackHost ? "unreadable"
+    : hasFacts ? "product" : imageUrl && !javascriptShell ? "image-only" : "unreadable";
 
   return {
     title,
     description,
     specText,
     imageUrl,
+    pageKind,
   };
 }

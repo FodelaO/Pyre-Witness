@@ -9,7 +9,8 @@ export type LinkFetchErrorCode =
   | "timeout"
   | "http_error"
   | "too_large"
-  | "not_html";
+  | "not_html"
+  | "unreadable_product";
 
 export class LinkFetchError extends Error {
   readonly code: LinkFetchErrorCode;
@@ -21,4 +22,10 @@ export class LinkFetchError extends Error {
     this.code = code;
     this.status = options?.status;
   }
+}
+
+/** DNS and fetch failures carry a cause, unlike URL, redirect, or content rejections. */
+export function isLinkConnectionFailure(error: unknown): boolean {
+  return error instanceof LinkFetchError && error.code === "http_error"
+    && error.status === undefined && error.cause instanceof Error;
 }

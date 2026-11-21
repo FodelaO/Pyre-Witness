@@ -46,6 +46,7 @@ export interface SafeFetchOptions {
   timeoutMs?: number;
   maxRedirects?: number;
   accept?: string;
+  acceptLanguage?: string;
   signal?: AbortSignal;
   /** Dependency injection hooks for unit tests. */
   fetchImpl?: typeof fetch;
@@ -374,7 +375,7 @@ export async function safeFetch(rawUrl: string, options: SafeFetchOptions): Prom
 
       const headers = new Headers({
         "User-Agent": BROWSER_USER_AGENT,
-        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Language": options.acceptLanguage ?? "en-US,en;q=0.9",
         Accept: options.accept ?? "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
       });
 

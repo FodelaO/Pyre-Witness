@@ -1,9 +1,10 @@
 /** Maps captured evidence to a provisional asset and finds clear floor positions. */
 import { FOOTPRINT } from "@/equipment/types";
+import { isPlantHome } from "@/rules/engine";
 import { areaAt, areaById, areaCenter, areasAt, assetById, containsPoint, distance, type Point } from "@/twin/geometry";
 import { DEFAULT_DROP } from "@/twin/dropPoint";
 import type { Area, Asset, EquipmentKind, NetworkPresence, PurdueLevel, Twin } from "@/twin/types";
-import type { Assessment, DeviceProfile, DropPoint } from "./types";
+import type { Assessment, DeviceProfile, DropPoint, ObjectClass } from "./types";
 
 const DEVICE_LEVEL: Partial<Record<EquipmentKind, PurdueLevel>> = {
   plc_cabinet: 1,
@@ -21,15 +22,55 @@ const IT_KINDS = new Set<EquipmentKind>([
   "wifi_ap", "ip_camera", "gateway", "laptop", "phone", "usb_drive",
 ]);
 
-export function capturedAssetId(runId: string): string {
-  return `NEW-${runId.slice(0, 8).toUpperCase()}`;
+const KIND_TAG: Record<EquipmentKind, string> = {
+  vertical_tank: "TK", bullet_tank: "VSL", agitated_tank: "MX", pump: "P", valve: "V",
+  instrument: "INST", ro_skid: "RO", uv_reactor: "UV", carbo_cooler: "CARB", heat_exchanger: "HX",
+  rotary_filler: "FLR", conveyor: "CV", labeler: "LBL", palletizer: "PAL", chiller_compressor: "CMP",
+  condenser: "COND", plc_cabinet: "PLC", hmi: "HMI", workstation: "WS", server_rack: "SRV",
+  firewall: "FW", network_switch: "SW", wifi_ap: "AP", ip_camera: "CAM", gateway: "GW", laptop: "LT",
+  phone: "PH", usb_drive: "USB", generic_device: "DEV",
+};
+
+function tagPrefix(profile: DeviceProfile): string {
+  if (profile.object_class !== "passive_object") return KIND_TAG[profile.physical_kind];
+  const item = profile.device_type;
+  if (/\b(mug|cup)s?\b/i.test(item)) return "MUG";
+  if (/\bbottles?\b/i.test(item)) return "BTL";
+  if (/\b(backpack|bag)s?\b/i.test(item)) return "BAG";
+  if (/\bpallets?\b/i.test(item)) return "PLT";
+  if (/\blighters?\b/i.test(item)) return "LTR";
+  return "OBJ";
+}
+
+const rememberedTags = new Map<string, string>();
+
+/** Keeps the browser's run-to-asset receipt available to existing voice tools. */
+export function rememberCapturedAssetId(runId: string, id: string): void {
+  if (typeof window === "undefined") return;
+  rememberedTags.set(runId, id);
+  if (rememberedTags.size > 64) {
+    const oldest = rememberedTags.keys().next().value;
+    if (oldest !== undefined) rememberedTags.delete(oldest);
+  }
+}
+
+export function capturedAssetId(runId: string, profile?: DeviceProfile, twin?: Twin): string {
+  if (!profile || !twin) return rememberedTags.get(runId) ?? `NEW-${runId.slice(0, 8).toUpperCase()}`;
+  const used = new Set(twin.assets.flatMap(({ id }) => {
+    const match = /^[a-z]+-(\d{3,})$/i.exec(id);
+    return match ? [Number(match[1])] : [];
+  }));
+  let sequence = 901;
+  while (used.has(sequence)) sequence += 1;
+  return `${tagPrefix(profile)}-${sequence}`;
 }
 
 export function resolveDropPoint(twin: Twin, dropPoint?: DropPoint | null): DropPoint {
   if (dropPoint) return dropPoint;
   const preferred = areaById(twin, DEFAULT_DROP.area);
   if (preferred && containsPoint(preferred, DEFAULT_DROP.x, DEFAULT_DROP.y)) return DEFAULT_DROP;
-  const area = twin.areas.find((candidate) => candidate.kind !== "context") ?? twin.areas[0];
+  const plantAreas = twin.areas.filter(({ id }) => isPlantHome(id));
+  const area = plantAreas.find((candidate) => candidate.kind !== "context") ?? plantAreas[0];
   if (!area) throw new Error("The plant has no placement areas.");
   return { ...areaCenter(area), area: area.id };
 }
@@ -50,6 +91,21 @@ export function networkAt(
   return { level: chosenLevel, area: nearest?.network.area ?? area?.name ?? point.area, conduit: null };
 }
 
+export function passiveNetworkAt(twin: Twin, area: Area["id"]): NetworkPresence {
+  return { level: 0, area: areaById(twin, area)?.name ?? area, conduit: null };
+}
+
+/** Reapply passive placement after an asset moves on either view of the twin. */
+export function asPassiveObject(twin: Twin, asset: Asset): Asset {
+  return {
+    ...asset,
+    physical: { ...asset.physical, kind: "generic_device", connections: [] },
+    network: passiveNetworkAt(twin, asset.physical.area),
+    cyber: undefined,
+    process: undefined,
+  };
+}
+
 /** Derives restrictions at the exact point so they follow an asset when it moves. */
 export function placementEnvironment(twin: Twin, { x, y }: Point) {
   const areas = areasAt(twin, x, y);
@@ -66,16 +122,18 @@ export function placementEnvironment(twin: Twin, { x, y }: Point) {
 
 export function assetFromProfile(profile: DeviceProfile, twin: Twin, id: string, point: DropPoint): Asset {
   const location = { ...point, area: areaAt(twin, point.x, point.y)?.id ?? point.area };
+  const passive = profile.object_class === "passive_object";
+  const kind = passive ? "generic_device" : profile.physical_kind;
   const hasRemovableStorage = profile.category === "removable_storage"
     || /\b(?:removable|(?:micro[ -]?)?sd(?:hc|xc)?|usb (?:drive|storage))\b/i.test(profile.storage ?? "");
-  const hasCyber = IT_KINDS.has(profile.physical_kind) || profile.radios.length > 0 || profile.ports.length > 0
-    || profile.cloud_connectivity === true || profile.default_credentials_visible || hasRemovableStorage;
+  const hasCyber = !passive && (IT_KINDS.has(kind) || profile.radios.length > 0 || profile.ports.length > 0
+    || profile.cloud_connectivity === true || profile.default_credentials_visible || hasRemovableStorage);
   return {
     id,
     name: [profile.vendor, profile.model].filter(Boolean).join(" ") || profile.device_type,
     description: profile.device_type,
-    physical: { ...location, kind: profile.physical_kind, rotation: 0, connections: [] },
-    network: networkAt(twin, location, profile.physical_kind),
+    physical: { ...location, kind, rotation: 0, connections: [] },
+    network: passive ? passiveNetworkAt(twin, location.area) : networkAt(twin, location, kind),
     cyber: hasCyber ? {
       vendor: profile.vendor ?? undefined,
       model: profile.model ?? undefined,
@@ -158,20 +216,25 @@ export function knownNetworkLocation(twin: Twin, area: string, conduit: string |
 }
 
 /** Build the same modeled recommendation for the Inspector and the Move button. */
-export function atRecommendedPlacement(twin: Twin, asset: Asset, assessment: Assessment): Asset | null {
+export function atRecommendedPlacement(twin: Twin, asset: Asset, assessment: Assessment, objectClass?: ObjectClass): Asset | null {
   const { physical_placement: physical, placement: network } = assessment;
+  if (network.why.startsWith("HOLD:")) return null;
   const area = areaById(twin, physical.area);
-  if (!area || !knownNetworkLocation(twin, network.network_area, network.conduit)) return null;
+  const passive = objectClass === "passive_object";
+  if (!area || !isPlantHome(area.id) || (!passive && !knownNetworkLocation(twin, network.network_area, network.conduit))) return null;
+  const candidate = passive ? asPassiveObject(twin, asset) : asset;
   const near = physical.near_asset_id ? assetById(twin, physical.near_asset_id) : undefined;
   const preferred = near?.physical ?? (asset.physical.area === area.id ? asset.physical : areaCenter(area));
-  const point = clearPlacementPoint(twin, asset, area, preferred);
+  const point = clearPlacementPoint(twin, candidate, area, preferred);
   if (!point) return null;
   return {
-    ...asset,
+    ...candidate,
     physical: {
-      ...asset.physical, ...point, area: area.id,
-      connections: physical.connections.filter(({ to }) => to !== asset.id && assetById(twin, to)),
+      ...candidate.physical, ...point, area: area.id,
+      connections: passive ? [] : physical.connections.filter(({ to }) => to !== asset.id && assetById(twin, to)),
     },
-    network: { ...asset.network, level: network.level, area: network.network_area, conduit: network.conduit },
+    network: passive
+      ? passiveNetworkAt(twin, area.id)
+      : { ...candidate.network, level: network.level, area: network.network_area, conduit: network.conduit },
   };
 }

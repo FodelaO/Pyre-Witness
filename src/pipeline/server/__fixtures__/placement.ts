@@ -3,7 +3,7 @@ import type { DeviceProfile } from "@/pipeline/types";
 import type { ModelAssessment } from "@/gemini/schemas";
 
 export const pressureProfile: DeviceProfile = {
-  device_type: "Pressure gauge", category: "instrument", physical_kind: "instrument",
+  device_type: "Pressure gauge", category: "instrument", physical_kind: "instrument", object_class: "process_equipment",
   vendor: null, model: null, radios: [], ports: [], storage: null, cloud_connectivity: null,
   default_credentials_visible: false, default_credentials_note: null, power: null,
   capacity_or_size: null, material: null, food_grade: null, hazardous_area_rating: null, ip_rating: null,

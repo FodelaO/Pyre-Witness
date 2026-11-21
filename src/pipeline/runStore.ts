@@ -12,6 +12,7 @@ import type {
   PipelineEvent,
   PipelineStage,
   SelfCheckResult,
+  TranscriptEntry,
 } from "./types";
 
 export interface RunState {
@@ -30,6 +31,8 @@ export interface RunState {
   placedAssetId: string | null;
   /** First captured photo of this run (set by the pipeline client), for the device card and fit preview. */
   captureThumbnail: CaptureImage | null;
+  /** Full-fidelity record of every model / rules call of this run, in order (transcript view). */
+  transcript: TranscriptEntry[];
 
   ingest: (event: PipelineEvent) => void;
   setPlacedAsset: (id: string | null) => void;
@@ -50,6 +53,7 @@ const EMPTY = {
   error: null,
   placedAssetId: null,
   captureThumbnail: null,
+  transcript: [] as TranscriptEntry[],
 };
 
 export const useRunStore = create<RunState>((set, get) => ({
@@ -110,6 +114,9 @@ export const useRunStore = create<RunState>((set, get) => ({
         break;
       case "revision.done":
         set({ ...base, assessment: event.assessment });
+        break;
+      case "transcript.entry":
+        set({ ...base, transcript: [...get().transcript, event.entry] });
         break;
       case "summary.started":
         set({ ...base, stage: "summary" });

@@ -1,11 +1,12 @@
 /** Adapts a validated pipeline request to the browser's cancellable event stream. */
 import { randomUUID } from "node:crypto";
-import type { CaptureImage, PipelineEvent } from "@/pipeline/types";
+import type { Assessment, CaptureImage, PipelineEvent } from "@/pipeline/types";
 import type { z } from "zod";
 
-/** Link image bytes ride the stream to the browser without entering the shared event history. */
-export type StreamEvent = Exclude<PipelineEvent, { type: "link.fetched" }>
-  | (Extract<PipelineEvent, { type: "link.fetched" }> & { thumbnail?: CaptureImage });
+/** Adds link thumbnails and the final checked assessment to the stream. */
+export type StreamEvent = Exclude<PipelineEvent, { type: "link.fetched" | "summary.started" }>
+  | (Extract<PipelineEvent, { type: "link.fetched" }> & { thumbnail?: CaptureImage })
+  | (Extract<PipelineEvent, { type: "summary.started" }> & { assessment?: Assessment });
 
 type RunPipeline<T> = (body: T, sink: (event: StreamEvent) => void, signal: AbortSignal) => Promise<void>;
 

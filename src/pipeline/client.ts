@@ -3,7 +3,7 @@ import { evaluatePlacement } from "@/rules/engine";
 import { assetById } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import type { Asset, Twin } from "@/twin/types";
-import { assetFromProfile, atRecommendedPlacement, capturedAssetId, resolveDropPoint } from "./assetFromProfile";
+import { asPassiveObject, assetFromProfile, atRecommendedPlacement, capturedAssetId, rememberCapturedAssetId, resolveDropPoint } from "./assetFromProfile";
 import { useRunStore } from "./runStore";
 import type { StreamEvent } from "./server/sse";
 import type {
@@ -22,8 +22,10 @@ interface ActiveRun {
   controller: AbortController;
   runId: string | null;
   dropPoint: DropPoint | null;
+  dropTwin: Twin | null;
   assetId: string | null;
   failure: string | null;
+  markComplete: () => void;
   finished: Promise<void>;
 }
 
@@ -83,6 +85,18 @@ function ingest(run: ActiveRun, event: StreamEvent, request: AnalyzeRequest | Re
   }
   run.runId = event.runId;
   if (event.type === "run.error") run.failure = event.message;
+  const runState = useRunStore.getState();
+  const currentCheck = event.type === "selfcheck.done"
+    && (event.phase === undefined ? !runState.assessment : event.phase === "as-dropped");
+  // Each assessment needs its own verdict. In particular, the as-dropped verdict
+  // describes the asset on the floor and cannot validate the Architect's proposal.
+  if ((event.type === "reasoning.done" || event.type === "revision.done") && runState.selfCheck) {
+    useRunStore.setState({ selfCheck: null });
+  }
+  if (event.type === "summary.started" && event.assessment) {
+    // Final risk enrichment keeps the Inspector verdict already shown for this placement.
+    useRunStore.setState({ assessment: event.assessment });
+  }
   if (event.type === "link.fetched") {
     const { thumbnail, ...step } = event;
     useRunStore.getState().ingest(step);
@@ -105,23 +119,28 @@ function ingest(run: ActiveRun, event: StreamEvent, request: AnalyzeRequest | Re
     }
   }
   if (event.type === "perception.done") {
-    const id = capturedAssetId(event.runId);
-    if (assetById(useTwinStore.getState().twin, id)) {
+    const { twin } = request;
+    const id = capturedAssetId(event.runId, event.profile, twin);
+    const store = useTwinStore.getState();
+    if (assetById(store.twin, id)) {
       throw new ConnectionFailure("The plant already contains this device tag. Start a new capture.");
     }
-    const { twin } = request;
     const asset = assetFromProfile(event.profile, twin, id, resolveDropPoint(twin, run.dropPoint));
     const { gate, captureThumbnail } = useRunStore.getState();
     captured.set(id, { profile: event.profile, gate, thumbnail: captureThumbnail });
     run.assetId = id;
-    useTwinStore.getState().addAsset(asset);
+    store.addAsset(asset);
+    rememberCapturedAssetId(event.runId, id);
+    if (store.twin === twin) run.dropTwin = useTwinStore.getState().twin;
     useRunStore.getState().setPlacedAsset(id);
   }
   if (event.type === "selfcheck.done" && run.assetId) {
     const store = useTwinStore.getState();
     const asset = assetById(store.twin, run.assetId);
     if (asset) {
-      const placement = currentMark(store.twin, asset);
+      const placement = currentCheck && store.twin === run.dropTwin
+        ? (event.result.passed ? "recommended" : "unsafe")
+        : currentMark(store.twin, asset);
       if (asset.placement !== placement) store.updateAsset(asset.id, (item) => ({ ...item, placement }));
     }
   }
@@ -134,7 +153,7 @@ function ingest(run: ActiveRun, event: StreamEvent, request: AnalyzeRequest | Re
       store.proposeMitigations(assessment.mitigations);
     }
   }
-  return event.type === "run.completed" || event.type === "run.error";
+  return event.type === "run.error";
 }
 
 function eventFromFrame(frame: string): StreamEvent | null {
@@ -163,6 +182,7 @@ async function consume(run: ActiveRun, request: AnalyzeRequest | ReassessRequest
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let completed = false;
   try {
     while (active === run && !run.controller.signal.aborted) {
       const chunk = await reader.read();
@@ -174,10 +194,16 @@ async function consume(run: ActiveRun, request: AnalyzeRequest | ReassessRequest
         const event = eventFromFrame(buffer.slice(0, boundary.index));
         buffer = buffer.slice(boundary.index + boundary[0].length);
         if (event && ingest(run, event, request)) return;
+        if (event?.type === "run.completed" && event.runId === run.runId) {
+          completed = true;
+          run.markComplete();
+        }
         boundary = frameEnd.exec(buffer);
       }
     }
-    if (active === run) throw new ConnectionFailure("The analysis stream closed before the run finished. Try again.");
+    if (active === run && !completed) throw new ConnectionFailure("The analysis stream closed before the run finished. Try again.");
+  } catch (error) {
+    if (!completed) throw error;
   } finally {
     await reader.cancel().catch(() => undefined);
     reader.releaseLock();
@@ -186,10 +212,12 @@ async function consume(run: ActiveRun, request: AnalyzeRequest | ReassessRequest
 
 function startRun(kind: ActiveRun["kind"], request: AnalyzeRequest | ReassessRequest): Promise<void> {
   abortActive();
+  const { promise: completed, resolve: markComplete } = Promise.withResolvers<void>();
   const run: ActiveRun = {
     kind, controller: new AbortController(), runId: null, dropPoint: null, failure: null,
+    dropTwin: kind === "reassess" ? request.twin : null,
     assetId: "assetId" in request ? request.assetId : null,
-    finished: Promise.resolve(),
+    markComplete, finished: Promise.resolve(),
   };
   active = run;
   run.finished = consume(run, request).catch((error: unknown) => {
@@ -202,9 +230,10 @@ function startRun(kind: ActiveRun["kind"], request: AnalyzeRequest | ReassessReq
       message,
     }, request);
   }).finally(() => {
+    markComplete();
     if (active === run) active = null;
   });
-  return run.finished.then(() => {
+  return completed.then(() => {
     if (run.failure && !run.controller.signal.aborted) throw new ConnectionFailure(run.failure);
   });
 }
@@ -228,13 +257,17 @@ export async function reassessAsset(assetId: string): Promise<void> {
           if (active?.kind === "analyze") await active.finished;
           if (queued !== ticket) return;
           queued = null;
-          const twin = useTwinStore.getState().twin;
-          const asset = assetById(twin, assetId);
+          const store = useTwinStore.getState();
+          const asset = assetById(store.twin, assetId);
           const device = captured.get(assetId);
           if (asset?.origin !== "added" || !device) return;
-          const { area, x, y } = asset.physical;
+          const passive = device.profile.object_class === "passive_object";
+          const candidate = passive ? asPassiveObject(store.twin, asset) : asset;
+          if (passive) store.updateAsset(assetId, () => candidate);
+          const { area, x, y } = candidate.physical;
           await startRun("reassess", {
-            twin, assetId, profile: device.profile, placement: { area, x, y, level: asset.network.level },
+            twin: useTwinStore.getState().twin, assetId, profile: device.profile,
+            placement: { area, x, y, level: candidate.network.level },
           });
         } catch (error) {
           reject(error);
@@ -251,9 +284,10 @@ export async function reassessAsset(assetId: string): Promise<void> {
 export function moveToRecommended(assetId: string): void {
   const store = useTwinStore.getState();
   const asset = assetById(store.twin, assetId);
-  const assessment = capturedDevice(assetId)?.assessment;
+  const device = capturedDevice(assetId);
+  const assessment = device?.assessment;
   if (asset?.origin !== "added" || !assessment) return;
-  const next = atRecommendedPlacement(store.twin, asset, assessment);
+  const next = atRecommendedPlacement(store.twin, asset, assessment, device.profile.object_class);
   if (next) {
     const placement = currentMark(store.twin, next);
     store.updateAsset(assetId, () => ({ ...next, placement }));

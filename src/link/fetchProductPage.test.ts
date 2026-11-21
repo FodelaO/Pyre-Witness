@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { isLinkConnectionFailure } from "./errors";
 import { fetchProductPage, LinkFetchError } from "./fetchProductPage";
 import { fetchMainImage } from "./image";
 import type { DnsLookupFn } from "./safeFetch";
@@ -190,4 +191,76 @@ describe("fetchProductPage", () => {
     expect(snapshot.imageUrl).toBe("https://celllink.example.com/og/gw-900.png");
     expect(snapshot.image).toBeNull();
   });
+
+  it.each([true, false])("caps a rich capture thumbnail while retaining sparse visual evidence (%s)", async (rich) => {
+    const url = "https://shop.example.com/gauge";
+    const html = rich
+      ? readFileSync(resolve(import.meta.dirname, "__fixtures__", "camera-jsonld.html"), "utf-8")
+      : '<html><head><title>Item</title><meta property="og:image" content="/item.png"></head></html>';
+    const image = new Uint8Array(512 * 1024);
+    image.set(TINY_PNG);
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => String(input) === url
+      ? new Response(html, { headers: { "content-type": "text/html" } })
+      : new Response(image, { headers: { "content-type": "image/png" } }));
+    const snapshot = await fetchProductPage(url, { captureBudget: true, fetchImpl, dnsLookup: publicDns });
+    expect(snapshot.imageUrl).toBeTruthy();
+    expect(Boolean(snapshot.image)).toBe(!rich);
+    const legacy = await fetchProductPage(url, { fetchImpl, dnsLookup: publicDns });
+    expect(legacy.image?.dataBase64).toBe(Buffer.from(image).toString("base64"));
+  });
+
+  it("retries one transient page failure with a second Accept and language preference", async () => {
+    const html = '<html><head><title>Gauge PG-100</title><meta name="description" content="Mechanical pressure gauge rated to 100 psi."></head></html>';
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("Service unavailable", { status: 503 }))
+      .mockResolvedValueOnce(new Response(html, { headers: { "content-type": "text/html" } }));
+    const dnsLookup = vi.fn(publicDns);
+    const snapshot = await fetchProductPage("https://shop.example.com/gauge", { captureBudget: true, fetchImpl, dnsLookup });
+    expect(snapshot.specText).toContain("100 psi");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(dnsLookup).toHaveBeenCalledTimes(2);
+    const [first, retry] = fetchImpl.mock.calls.map(([, init]) => new Headers(init?.headers));
+    expect(first.get("Accept")).not.toEqual(retry.get("Accept"));
+    expect(first.get("Accept-Language")).not.toEqual(retry.get("Accept-Language"));
+    expect(first.get("User-Agent")).toBe(retry.get("User-Agent"));
+  });
+
+  it("limits repeated transient failures to two credential-free requests", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => new Response(null, { status: 503 }));
+    await expect(fetchProductPage("https://shop.example.com/gauge", {
+      captureBudget: true, fetchImpl, dnsLookup: publicDns,
+    })).rejects.toMatchObject({ status: 503 });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls.map(([, init]) => init?.credentials)).toEqual(["omit", "omit"]);
+  });
+
+  it.each([401, 403, 429])("stops on a site restriction (%s)", async (status) => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status }));
+    await expect(fetchProductPage("https://shop.example.com/gauge", {
+      captureBudget: true, fetchImpl, dnsLookup: publicDns,
+    })).rejects.toMatchObject({ status });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    '<html><head><title>Just a moment...</title><meta name="description" content="Access this product by completing this challenge"></head><body><form id="challenge-form"></form></body></html>',
+    '<html><head><title>Store</title></head><body><noscript>You need to enable JavaScript.</noscript><div id="root"></div></body></html>',
+    '<html><head><title>Store</title><meta property="og:image" content="/default.png"></head><body><noscript>You need to enable JavaScript.</noscript><div id="root"></div></body></html>',
+    '<html><head><title>Empty result</title></head></html>',
+  ])("rejects an unreadable page without emitting a product snapshot", async (html) => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(html, { headers: { "content-type": "text/html" } }));
+    await expect(fetchProductPage("https://shop.example.com/gauge", {
+      captureBudget: true, fetchImpl, dnsLookup: publicDns,
+    })).rejects.toMatchObject({ code: "unreadable_product" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+it("only classifies link connection failures as retryable without an HTTP status", async () => {
+  const fetchImpl = vi.fn<typeof fetch>().mockRejectedValue(new TypeError("fetch failed"));
+  const url = "https://shop.example.com/gauge";
+  const failed = await fetchProductPage(url, { fetchImpl, dnsLookup: publicDns }).catch((error: unknown) => error);
+  expect(isLinkConnectionFailure(failed)).toBe(true);
+  expect(isLinkConnectionFailure(new LinkFetchError("http_error", "Forbidden", { status: 403 }))).toBe(false);
+  expect(isLinkConnectionFailure(new LinkFetchError("blocked_host", "Private host"))).toBe(false);
 });

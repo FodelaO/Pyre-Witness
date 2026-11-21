@@ -203,10 +203,50 @@ export interface SelfCheckResult {
 
 export type PipelineStage = "link" | "gate" | "perception" | "reasoning" | "selfcheck" | "revision" | "summary";
 
+/**
+ * Which placement a rules-engine check refers to. One run checks the device where the user
+ * dropped it (shown first, within seconds), then the Architect's recommendation, then the
+ * revised recommendation if there was one.
+ */
+export type SelfCheckPhase = "as-dropped" | "recommendation" | "post-revision";
+
 interface Base {
   runId: string;
   /** Server epoch ms. */
   at: number;
+}
+
+/**
+ * Full-fidelity record of ONE real model call or rules-engine pass, for the transcript view.
+ * Emitted by the server right after the call returns. Nothing here is paraphrased: `request`
+ * is what was sent (images are counted, not inlined) and `response` is what came back before
+ * the server grounded or trimmed it.
+ */
+export interface TranscriptEntry {
+  stage: PipelineStage;
+  /** Which crew member this call belongs to ("gate" = the Decisions API guard). */
+  crew: "gate" | "scout" | "architect" | "inspector" | "chief";
+  /** Model id, or "rules engine" for the deterministic Inspector. */
+  engine: string;
+  thinkingLevel?: string;
+  request?: {
+    system?: string;
+    text?: string;
+    /** Number of images / documents attached. */
+    attachments?: number;
+    /** Name of the structured-output schema or the Decisions question keys. */
+    schema?: string;
+  };
+  response?: {
+    text?: string;
+    json?: unknown;
+  };
+  /** Thought summaries streamed by the model, in order. */
+  thoughts?: string[];
+  usage?: { inputTokens?: number; outputTokens?: number; thoughtTokens?: number; totalTokens?: number };
+  latencyMs?: number;
+  /** e.g. "retry 1 after HTTP 429", "revision skipped: no interaction id". */
+  note?: string;
 }
 
 /**
@@ -230,13 +270,14 @@ export type PipelineEvent =
   | (Base & { type: "reasoning.started"; model: string; candidateArea: AreaId | null })
   | (Base & { type: "reasoning.thought"; text: string })
   | (Base & { type: "reasoning.done"; model: string; latencyMs: number; assessment: Assessment })
-  | (Base & { type: "selfcheck.started"; engine: "rules engine" })
-  | (Base & { type: "selfcheck.path"; path: AttackPath })
-  | (Base & { type: "selfcheck.done"; latencyMs: number; result: SelfCheckResult })
+  | (Base & { type: "selfcheck.started"; engine: "rules engine"; phase?: SelfCheckPhase })
+  | (Base & { type: "selfcheck.path"; path: AttackPath; phase?: SelfCheckPhase })
+  | (Base & { type: "selfcheck.done"; latencyMs: number; result: SelfCheckResult; phase?: SelfCheckPhase })
   | (Base & { type: "revision.started"; model: string; reason: string })
   | (Base & { type: "revision.done"; model: string; latencyMs: number; assessment: Assessment })
   | (Base & { type: "summary.started"; model: string })
   | (Base & { type: "summary.done"; model: string; latencyMs: number; text: string })
+  | (Base & { type: "transcript.entry"; entry: TranscriptEntry })
   | (Base & { type: "run.completed"; totalMs: number })
   | (Base & { type: "run.error"; stage: PipelineStage | "unknown"; message: string });
 

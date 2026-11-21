@@ -1,0 +1,8 @@
+{
+  "run": "run-4",
+  "frozenAtUtc": "2026-11-21T18:49:45.477Z",
+  "evaluatorSourceSha256": "16359d87973d668b3a8a389eb02f8f4bfce6ce028eb5461fb09cb7df4f22ba30",
+  "pipelineSourceSha256": "59cd79a93f3ecc3cbe4a47e8e3a772bf95fe92c8b4154713c45f8f6ec606a985",
+  "pipelineProductionFiles": 29,
+  "handoff": "docs/log/pipeline-speed-handoff.md"
+}
