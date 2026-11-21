@@ -63,7 +63,9 @@ function CrewBillboard({ id, register, sizes, writing, invalidate }: {
   const member = CREW[id];
   const { status, message, active, walking, resting, patrol } = useCrewReadout(id);
   const speech = useCrewStore((state) => state.avatars?.[id]?.speech);
-  const working = writing || active || (walking && !!speech && !patrol);
+  // Recorded traces keep playing after selfcheck.done; stay active through the short stops between paths.
+  const tracing = useCrewStore((state) => state.phase !== "idle" && state.visuals[id]?.effect.kind === "trace");
+  const working = writing || active || tracing || (walking && !!speech && !patrol);
   const compact = resting || (!walking && !working && !patrol && (status === "idle" || status === "done"));
   const text = id === "inspector" && speech?.kind === "inspection" ? speech.text : message;
   const plate = useRef<HTMLDivElement>(null);

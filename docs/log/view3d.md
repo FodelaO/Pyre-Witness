@@ -284,3 +284,8 @@ The 3D view follows the shared crew walks and projects their foot trails and han
 - The final patrol showed the `idle patrol` label with zero work plates and trails. Keys `1`, `2` and `3` switched Material, Both and Data in 3D. [Idle patrol](shots/crew-work-3d-after-idle-patrol.png)
 
 The integration is in `Plant3D.tsx`, `Overlay.tsx`, `attackArcs.ts` and `view3d.css`. The focused work modules are `CrewWorkLabels.tsx`, `CrewWorkMotion.tsx`, `CrewWorkBriefing.tsx`, `crewWork.ts`, `crewWorkGeometry.ts`, `crewWork.css` and `crewWork.test.ts` under `src/view3d`. No shared-contract requests.
+
+### Review correction (Opus)
+
+- **Inspector plate flicker during recorded traces.** `selfcheck.done` arrives right after the path events, so the Inspector's live status is already `done` while its 18 recorded traces still play. During the 160 ms stop between paths, and while waiting for a clear aisle, the 3D billboard fell back to the compact portrait. As a result, the plate size and the `rules engine` tag flickered with every path. `Overlay.tsx` now keeps the billboard active while the Inspector's displayed visual is a `trace`. A 30 ms poll during a recorded replay counted 0 compact frames while tracing (two sampled frames were compact before the fix). Screenshots: `.agents/qa/opus-correct/crew-work-3d/`.
+- Known gap for the crew owner (`src/crew/**`): during long as-dropped trace queues, the Inspector's message can briefly show `Returning to desk` and then `Recommendation · 1 finding` before the remaining traces resume. This comes from the crew job queue, not from the 3D view.
