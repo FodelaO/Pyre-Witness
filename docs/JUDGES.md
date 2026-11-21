@@ -41,6 +41,7 @@ Light mode is the default. The app opens in 3D on browsers with WebGL2. The `2D`
 
 - Run 3 trailed Hydrogen on equipment kind and key-risk recall. Run 4 fixed those gaps with kind guidance and a risk list that combines model risks, rules findings and Scout evidence.
 - Run 4 trailed on radio recall (33.3%) and cloud flags (23.1%). Asking Scout for explicit connectivity evidence brought Run 5 up to Hydrogen's rates on both.
+- **Held-out test.** `20` new captures, labelled before their single run and never tuned on. Key-risk recall rose from `40.8%` to `61.2%`, a significant `+20.4 pp` (`+8.3` to `+34.0`). Device-type naming rose from `57.1%` to `92.9%`, also significant. The rules check passed `20/20` vs `15/18` (inconclusive), and neither side made a forbidden placement. Hydrogen led on area (`88.9%` vs `83.3%`) and Purdue level (`85.7%` vs `78.6%`), both inconclusive. [Held-out report](../eval/heldout/REPORT.md) · [Held-out log](log/heldout-eval.md)
 - `Proof` in the top bar opens `/proof` for run history, comparisons and failure images.
 - `AI crew` dock → `Gemini` in the header opens the `10` service probes. Each model-backed crew member has a dot for its model. The Inspector's dot shows local rules-engine status. [Crew dock](../src/crew/CrewDock.tsx)
 - Press `T` or use the transcript icon in the `AI crew` dock to see prompts, raw responses, tokens and timing. Export JSON or Markdown. [Transcript](../src/transcript/)
@@ -106,7 +107,7 @@ Latencies: `docs/log/pipeline-speed.md` (6-worker batch), `docs/log/voice.md`, `
 ## Questions you might ask
 
 - **What is simulated?** The plant, its inventory and telemetry, the `6` what-if scenarios, the cost inputs and the labelled rogue LTE test alert.
-- **Does it beat one Gemini call?** On shared answers, Run 5 significantly improved key-risk recall from `51.7%` to `70.0%`. The drop from `3/55` to `0/55` forbidden-area recommendations was inconclusive, as were the area, kind and naming differences. Purdue level, device vs non-device, radio recall and cloud flags tied. Hydrogen's category lead was inconclusive. It was significantly faster. [Full report](../eval/report/REPORT.md)
+- **Does it beat one Gemini call?** On shared answers, Run 5 significantly improved key-risk recall from `51.7%` to `70.0%`. The drop from `3/55` to `0/55` forbidden-area recommendations was inconclusive, as were the area, kind and naming differences. Purdue level, device vs non-device, radio recall and cloud flags tied. Hydrogen's category lead was inconclusive. It was significantly faster. On the `20`-capture held-out set, the key-risk recall gain held (`40.8%` to `61.2%`, significant) and naming rose from `57.1%` to `92.9%` (significant). Area and Purdue level trailed Hydrogen, inconclusively. [Full report](../eval/report/REPORT.md) · [Held-out report](../eval/heldout/REPORT.md)
 - **What does the rules engine add?** Spatial, radio, washdown, hazard and food checks. The offline check passed `100.0%` of 66 Pyre Witness recommendations and `85.0%` of 60 baseline recommendations in the shared-answer cohort. [Full report](../eval/report/REPORT.md)
 - **How fast?** Run 5 took `23.3 s` median and `42.0 s` p95, versus `13.3 s` and `18.4 s` for Hydrogen. The first rules verdict took `6.605 s` p50 in the separate reliability batch. [Full report](../eval/report/REPORT.md) · [Reliability log](log/pipeline-speed.md)
 - **Is the call a real phone call?** Tap `Call [name] · [masked number]` on the paired phone to use its own dialer for a real call. Confirm if the phone asks. The app records the tap and uses no carrier integration for this flow. [On-call demo](CALL_DEMO.md)
@@ -116,7 +117,8 @@ Latencies: `docs/log/pipeline-speed.md` (6-worker batch), `docs/log/voice.md`, `
 
 ## Honest limits
 
-- One development set informed all runs. No held-out set has been evaluated. Run 5 missed `36` of `120` labelled risks on shared answers. Radio recall (`12/12`) and cloud flags (`23/26`) matched Hydrogen on their labelled subsets. [Full report](../eval/report/REPORT.md)
+- One development set informed all runs. The held-out set has only `20` captures, one labeller and one reviewer. A pre-run label review decided its drone item. Under the original labels Hydrogen passes `14/20` cases and Pyre Witness `12/20`, instead of `13/20` each. Placement accuracy did not beat the single call there. [Held-out log](log/heldout-eval.md)
+- Run 5 missed `36` of `120` labelled risks on shared answers. Radio recall (`12/12`) and cloud flags (`23/26`) matched Hydrogen on their labelled subsets. [Full report](../eval/report/REPORT.md)
 - Hydrogen's observed category lead (`87.3%` vs `80.0%`) is inconclusive, as are the area, kind, forbidden-placement and naming differences. Only the key-risk recall gain and the slower median and p95 times were significant among the metrics in the table. [Full report](../eval/report/REPORT.md)
 - Loss priors are not calibrated: read them as order of magnitude and ranking.
 - Call: phone audio, vibration and a carrier connection unverified on a physical handset (`docs/log/escalation-call.md`).

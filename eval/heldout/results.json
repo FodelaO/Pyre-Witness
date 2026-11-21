@@ -1,0 +1,1247 @@
+{
+  "version": 1,
+  "label": "heldout-1",
+  "date": "2026-11-21T21:47:12.089Z",
+  "startedAt": "2026-11-21T21:45:23.097Z",
+  "datasetFingerprint": "55018add30f920decd82a06da76ba61286824ce1094b4ecda216ac68d26fd25d",
+  "pipelineFingerprint": "dc5d05dad7696e32b0f73afcb58f0a7740c9b8df7af57f1f75764961f82b0cd6",
+  "concurrency": 6,
+  "models": {
+    "baseline": "gemini-4-hydrogen",
+    "perception": "gemini-4-hydrogen",
+    "reasoning": "gemini-4-carbon",
+    "chief": "gemini-4-neon",
+    "gate": "gemini-decision-1",
+    "judge": "gemini-decision-1"
+  },
+  "thinking": {
+    "perception": "low",
+    "reasoning": "low",
+    "chief": "low"
+  },
+  "baseline": {
+    "status": "matches",
+    "contract": "original-output-v1",
+    "promptSha256": "a2647ff2dfafb3dd1cb774783c66e748c0ffb59637c7c8b1b328ab07456e8457",
+    "responseSchemaSha256": "f65c7d9c62d09f0c4fd8a45e9c022bba169cdba384549ccdbbb47d6b99c2879e",
+    "plantContext": {
+      "archived": "Bebidas del Norte",
+      "current": "North Beverage Facility"
+    },
+    "archived": [
+      {
+        "label": "run-4",
+        "contracts": [
+          "original-output-v1"
+        ],
+        "donorLabel": "run-3-baseline",
+        "donorFingerprint": "d4b1ecc47007e9332038e4a6fa54d7b873c123599e5f23ff8fc7b602619bd87b",
+        "donorContract": "original-output-v1",
+        "available": true,
+        "differs": false,
+        "matches": true
+      },
+      {
+        "label": "run-5",
+        "contracts": [
+          "original-output-v1"
+        ],
+        "donorLabel": "run-3-baseline",
+        "donorFingerprint": "d4b1ecc47007e9332038e4a6fa54d7b873c123599e5f23ff8fc7b602619bd87b",
+        "donorContract": "original-output-v1",
+        "available": true,
+        "differs": false,
+        "matches": true
+      }
+    ]
+  },
+  "available": 20,
+  "selected": 20,
+  "completed": 20,
+  "shared": 20,
+  "metrics": [
+    {
+      "key": "physicalAreaAccuracy",
+      "baseline": {
+        "numerator": 16,
+        "n": 18,
+        "value": 0.8888888888888888,
+        "interval": [
+          0.672002348698212,
+          0.9689804773543876
+        ]
+      },
+      "system": {
+        "numerator": 15,
+        "n": 18,
+        "value": 0.8333333333333334,
+        "interval": [
+          0.6077796189608429,
+          0.9416342319413855
+        ]
+      },
+      "difference": {
+        "n": 18,
+        "value": -0.05555555555555547,
+        "interval": [
+          -0.2777777777777777,
+          0.11111111111111116
+        ]
+      }
+    },
+    {
+      "key": "physicalKindAccuracy",
+      "baseline": {
+        "numerator": 13,
+        "n": 18,
+        "value": 0.7222222222222222,
+        "interval": [
+          0.4912734343970255,
+          0.87500246620446
+        ]
+      },
+      "system": {
+        "numerator": 14,
+        "n": 18,
+        "value": 0.7777777777777778,
+        "interval": [
+          0.5478541568378739,
+          0.9099907189139831
+        ]
+      },
+      "difference": {
+        "n": 18,
+        "value": 0.05555555555555558,
+        "interval": [
+          0,
+          0.16666666666666674
+        ]
+      }
+    },
+    {
+      "key": "purdueAccuracy",
+      "baseline": {
+        "numerator": 12,
+        "n": 14,
+        "value": 0.8571428571428571,
+        "interval": [
+          0.6005862050302965,
+          0.9599060787285351
+        ]
+      },
+      "system": {
+        "numerator": 11,
+        "n": 14,
+        "value": 0.7857142857142857,
+        "interval": [
+          0.524107694133997,
+          0.9242861328730683
+        ]
+      },
+      "difference": {
+        "n": 14,
+        "value": -0.0714285714285714,
+        "interval": [
+          -0.2857142857142857,
+          0.1428571428571429
+        ]
+      }
+    },
+    {
+      "key": "gateAccuracy",
+      "baseline": {
+        "numerator": 20,
+        "n": 20,
+        "value": 1,
+        "interval": [
+          0.8388748419471806,
+          1
+        ]
+      },
+      "system": {
+        "numerator": 20,
+        "n": 20,
+        "value": 1,
+        "interval": [
+          0.8388748419471806,
+          1
+        ]
+      },
+      "difference": {
+        "n": 20,
+        "value": 0,
+        "interval": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "key": "riskRecall",
+      "baseline": {
+        "numerator": 20,
+        "n": 49,
+        "value": 0.40816326530612246,
+        "interval": [
+          0.28215238520386865,
+          0.5475268060815286
+        ]
+      },
+      "system": {
+        "numerator": 30,
+        "n": 49,
+        "value": 0.6122448979591837,
+        "interval": [
+          0.4724599944352045,
+          0.7357098828826433
+        ]
+      },
+      "difference": {
+        "n": 18,
+        "value": 0.20408163265306123,
+        "interval": [
+          0.08333333333333331,
+          0.3404514789828748
+        ]
+      }
+    },
+    {
+      "key": "neverPlaceViolation",
+      "baseline": {
+        "numerator": 0,
+        "n": 14,
+        "value": 0,
+        "interval": [
+          1.3877787807814457e-17,
+          0.2153108027376358
+        ]
+      },
+      "system": {
+        "numerator": 0,
+        "n": 14,
+        "value": 0,
+        "interval": [
+          1.3877787807814457e-17,
+          0.2153108027376358
+        ]
+      },
+      "difference": {
+        "n": 14,
+        "value": 0,
+        "interval": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "key": "radiosRecall",
+      "baseline": {
+        "numerator": 4,
+        "n": 5,
+        "value": 0.8,
+        "interval": [
+          0.3755346297625253,
+          0.9637758913675698
+        ]
+      },
+      "system": {
+        "numerator": 5,
+        "n": 5,
+        "value": 1,
+        "interval": [
+          0.5655175352168251,
+          1
+        ]
+      },
+      "difference": {
+        "n": 3,
+        "value": 0.19999999999999996,
+        "interval": [
+          0,
+          0.5
+        ]
+      }
+    },
+    {
+      "key": "cloudAccuracy",
+      "baseline": {
+        "numerator": 12,
+        "n": 13,
+        "value": 0.9230769230769231,
+        "interval": [
+          0.6668604907890041,
+          0.9862895787574435
+        ]
+      },
+      "system": {
+        "numerator": 10,
+        "n": 13,
+        "value": 0.7692307692307693,
+        "interval": [
+          0.49743624053272495,
+          0.9182047128150143
+        ]
+      },
+      "difference": {
+        "n": 13,
+        "value": -0.15384615384615385,
+        "interval": [
+          -0.3846153846153846,
+          0
+        ]
+      }
+    },
+    {
+      "key": "categoryAccuracy",
+      "baseline": {
+        "numerator": 10,
+        "n": 14,
+        "value": 0.7142857142857143,
+        "interval": [
+          0.4535091567010681,
+          0.8827862135542308
+        ]
+      },
+      "system": {
+        "numerator": 11,
+        "n": 14,
+        "value": 0.7857142857142857,
+        "interval": [
+          0.524107694133997,
+          0.9242861328730683
+        ]
+      },
+      "difference": {
+        "n": 14,
+        "value": 0.0714285714285714,
+        "interval": [
+          -0.1428571428571429,
+          0.28571428571428575
+        ]
+      }
+    },
+    {
+      "key": "deviceTypeMatch",
+      "baseline": {
+        "numerator": 8,
+        "n": 14,
+        "value": 0.5714285714285714,
+        "interval": [
+          0.3259064457965074,
+          0.7861920109552588
+        ]
+      },
+      "system": {
+        "numerator": 13,
+        "n": 14,
+        "value": 0.9285714285714286,
+        "interval": [
+          0.6853129557584889,
+          0.9872777847521093
+        ]
+      },
+      "difference": {
+        "n": 14,
+        "value": 0.3571428571428572,
+        "interval": [
+          0.1428571428571428,
+          0.6428571428571428
+        ]
+      }
+    },
+    {
+      "key": "ruleConsistency",
+      "baseline": {
+        "numerator": 15,
+        "n": 18,
+        "value": 0.8333333333333334,
+        "interval": [
+          0.6077796189608429,
+          0.9416342319413855
+        ]
+      },
+      "system": {
+        "numerator": 20,
+        "n": 20,
+        "value": 1,
+        "interval": [
+          0.8388748419471806,
+          1
+        ]
+      },
+      "difference": {
+        "n": 18,
+        "value": 0.16666666666666663,
+        "interval": [
+          0,
+          0.33333333333333337
+        ]
+      }
+    }
+  ],
+  "exact": [
+    {
+      "key": "physicalAreaAccuracy",
+      "shared": {
+        "n": 18,
+        "bothPositive": 14,
+        "baselineOnly": 2,
+        "systemOnly": 1,
+        "neither": 1,
+        "p": 1
+      },
+      "all": {
+        "n": 18,
+        "bothPositive": 14,
+        "baselineOnly": 2,
+        "systemOnly": 1,
+        "neither": 1,
+        "p": 1
+      }
+    },
+    {
+      "key": "physicalKindAccuracy",
+      "shared": {
+        "n": 18,
+        "bothPositive": 13,
+        "baselineOnly": 0,
+        "systemOnly": 1,
+        "neither": 4,
+        "p": 1
+      },
+      "all": {
+        "n": 18,
+        "bothPositive": 13,
+        "baselineOnly": 0,
+        "systemOnly": 1,
+        "neither": 4,
+        "p": 1
+      }
+    },
+    {
+      "key": "neverPlaceViolation",
+      "shared": {
+        "n": 14,
+        "bothPositive": 0,
+        "baselineOnly": 0,
+        "systemOnly": 0,
+        "neither": 14,
+        "p": 1
+      },
+      "all": {
+        "n": 14,
+        "bothPositive": 0,
+        "baselineOnly": 0,
+        "systemOnly": 0,
+        "neither": 14,
+        "p": 1
+      }
+    }
+  ],
+  "timing": {
+    "baseline": {
+      "n": 20,
+      "p50": 12079.5,
+      "p95": 18221.850000000002
+    },
+    "system": {
+      "n": 20,
+      "p50": 26030,
+      "p95": 34242.55000000002
+    },
+    "difference": {
+      "p50": {
+        "n": 20,
+        "value": 13950.5,
+        "interval": [
+          10954.5,
+          17197.449999999997
+        ]
+      },
+      "p95": {
+        "n": 20,
+        "value": 16020.700000000015,
+        "interval": [
+          12451,
+          40038.59999999999
+        ]
+      }
+    }
+  },
+  "riskDifferenceAll": {
+    "n": 18,
+    "value": 0.20408163265306123,
+    "interval": [
+      0.08333333333333331,
+      0.3404514789828748
+    ]
+  },
+  "attempts": [
+    {
+      "side": "baseline",
+      "n": 20,
+      "failures": 0,
+      "timeouts": 0,
+      "judgeFailures": 0,
+      "judgePending": 0,
+      "calls": {
+        "n": 20,
+        "total": 20,
+        "rateLimited": 0,
+        "mean": 1,
+        "p50": 1,
+        "p95": 1
+      }
+    },
+    {
+      "side": "system",
+      "n": 20,
+      "failures": 0,
+      "timeouts": 0,
+      "judgeFailures": 0,
+      "judgePending": 0,
+      "calls": {
+        "n": 20,
+        "total": 83,
+        "rateLimited": 0,
+        "mean": 4.15,
+        "p50": 4,
+        "p95": 5.050000000000001
+      }
+    }
+  ],
+  "judge": {
+    "attempts": 14,
+    "errors": 0,
+    "timeouts": 0
+  },
+  "inputs": [
+    {
+      "key": "clean",
+      "n": 4,
+      "baseline": {
+        "numerator": 2,
+        "n": 4,
+        "value": 0.5,
+        "interval": [
+          0.15003898915214953,
+          0.8499610108478505
+        ]
+      },
+      "system": {
+        "numerator": 2,
+        "n": 4,
+        "value": 0.5,
+        "interval": [
+          0.15003898915214953,
+          0.8499610108478505
+        ]
+      }
+    },
+    {
+      "key": "messy",
+      "n": 5,
+      "baseline": {
+        "numerator": 3,
+        "n": 5,
+        "value": 0.6,
+        "interval": [
+          0.2307242812760128,
+          0.882379225767352
+        ]
+      },
+      "system": {
+        "numerator": 2,
+        "n": 5,
+        "value": 0.4,
+        "interval": [
+          0.11762077423264783,
+          0.769275718723987
+        ]
+      }
+    },
+    {
+      "key": "edge",
+      "n": 2,
+      "baseline": {
+        "numerator": 0,
+        "n": 2,
+        "value": 0,
+        "interval": [
+          0,
+          0.6576197724933469
+        ]
+      },
+      "system": {
+        "numerator": 2,
+        "n": 2,
+        "value": 1,
+        "interval": [
+          0.34238022750665303,
+          1
+        ]
+      }
+    },
+    {
+      "key": "negatives",
+      "n": 2,
+      "baseline": {
+        "numerator": 2,
+        "n": 2,
+        "value": 1,
+        "interval": [
+          0.34238022750665303,
+          1
+        ]
+      },
+      "system": {
+        "numerator": 2,
+        "n": 2,
+        "value": 1,
+        "interval": [
+          0.34238022750665303,
+          1
+        ]
+      }
+    },
+    {
+      "key": "links",
+      "n": 4,
+      "baseline": {
+        "numerator": 4,
+        "n": 4,
+        "value": 1,
+        "interval": [
+          0.5101091635454027,
+          1
+        ]
+      },
+      "system": {
+        "numerator": 3,
+        "n": 4,
+        "value": 0.75,
+        "interval": [
+          0.30064184258240184,
+          0.9544127391902995
+        ]
+      }
+    },
+    {
+      "key": "text",
+      "n": 3,
+      "baseline": {
+        "numerator": 2,
+        "n": 3,
+        "value": 0.6666666666666666,
+        "interval": [
+          0.20765960080204765,
+          0.9385080552796037
+        ]
+      },
+      "system": {
+        "numerator": 2,
+        "n": 3,
+        "value": 0.6666666666666666,
+        "interval": [
+          0.20765960080204765,
+          0.9385080552796037
+        ]
+      }
+    }
+  ],
+  "items": [
+    {
+      "id": "ho-photo-05",
+      "input": "photo",
+      "difficulty": "clean",
+      "baseline": {
+        "status": "rejected",
+        "passed": true,
+        "latencyMs": 4499,
+        "reason": "Handled non-device correctly"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 28292,
+        "reason": "Handled non-device correctly"
+      }
+    },
+    {
+      "id": "ho-photo-01",
+      "input": "photo",
+      "difficulty": "clean",
+      "baseline": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 18118,
+        "reason": "Matched applicable kind and placement labels"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 24725,
+        "reason": "Matched applicable kind and placement labels"
+      }
+    },
+    {
+      "id": "ho-photo-04",
+      "input": "photo",
+      "difficulty": "messy",
+      "baseline": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 13607,
+        "reason": "Equipment kind missed"
+      },
+      "system": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 22482,
+        "reason": "Equipment kind missed"
+      }
+    },
+    {
+      "id": "ho-photo-12",
+      "input": "photo",
+      "difficulty": "edge",
+      "baseline": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 20195,
+        "reason": "Purdue level missed"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 32646,
+        "reason": "Matched applicable kind and placement labels"
+      }
+    },
+    {
+      "id": "ho-link-01",
+      "input": "link",
+      "difficulty": null,
+      "baseline": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 15321,
+        "reason": "Matched applicable kind and placement labels"
+      },
+      "system": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 33204,
+        "reason": "Plant area missed"
+      }
+    },
+    {
+      "id": "ho-photo-11",
+      "input": "photo",
+      "difficulty": "edge",
+      "baseline": {
+        "status": "rejected",
+        "passed": true,
+        "latencyMs": 4448,
+        "reason": "Handled non-device correctly"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 30003,
+        "reason": "Handled non-device correctly"
+      }
+    },
+    {
+      "id": "ho-photo-02",
+      "input": "photo",
+      "difficulty": "clean",
+      "baseline": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 11711,
+        "reason": "Equipment kind missed"
+      },
+      "system": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 21166,
+        "reason": "Equipment kind missed"
+      }
+    },
+    {
+      "id": "ho-photo-06",
+      "input": "photo",
+      "difficulty": "messy",
+      "baseline": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 11095,
+        "reason": "Matched applicable kind and placement labels"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 21163,
+        "reason": "Matched applicable kind and placement labels"
+      }
+    },
+    {
+      "id": "ho-photo-13",
+      "input": "photo",
+      "difficulty": "edge",
+      "baseline": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 10924,
+        "reason": "Equipment kind missed"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 28328,
+        "reason": "Matched applicable kind and placement labels"
+      }
+    },
+    {
+      "id": "ho-link-02",
+      "input": "link",
+      "difficulty": null,
+      "baseline": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 14777,
+        "reason": "Matched applicable kind and placement labels"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 29378,
+        "reason": "Matched applicable kind and placement labels"
+      }
+    },
+    {
+      "id": "ho-photo-03",
+      "input": "photo",
+      "difficulty": "clean",
+      "baseline": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 12434,
+        "reason": "Equipment kind missed"
+      },
+      "system": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 24379,
+        "reason": "Equipment kind missed"
+      }
+    },
+    {
+      "id": "ho-photo-07",
+      "input": "photo",
+      "difficulty": "messy",
+      "baseline": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 11781,
+        "reason": "Matched applicable kind and placement labels"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 21281,
+        "reason": "Matched applicable kind and placement labels"
+      }
+    },
+    {
+      "id": "ho-text-03",
+      "input": "text",
+      "difficulty": "edge",
+      "baseline": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 9811,
+        "reason": "Plant area missed"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 21067,
+        "reason": "Matched applicable kind and placement labels"
+      }
+    },
+    {
+      "id": "ho-link-03",
+      "input": "link",
+      "difficulty": null,
+      "baseline": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 12982,
+        "reason": "Matched applicable kind and placement labels"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 23194,
+        "reason": "Matched applicable kind and placement labels"
+      }
+    },
+    {
+      "id": "ho-photo-10",
+      "input": "photo",
+      "difficulty": "clean",
+      "baseline": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 12698,
+        "reason": "Matched applicable kind and placement labels"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 53975,
+        "reason": "Matched applicable kind and placement labels"
+      }
+    },
+    {
+      "id": "ho-photo-08",
+      "input": "photo",
+      "difficulty": "messy",
+      "baseline": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 12378,
+        "reason": "Matched applicable kind and placement labels"
+      },
+      "system": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 28378,
+        "reason": "Purdue level missed"
+      }
+    },
+    {
+      "id": "ho-link-04",
+      "input": "link",
+      "difficulty": null,
+      "baseline": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 11537,
+        "reason": "Matched applicable kind and placement labels"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 31647,
+        "reason": "Matched applicable kind and placement labels"
+      }
+    },
+    {
+      "id": "ho-photo-09",
+      "input": "photo",
+      "difficulty": "messy",
+      "baseline": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 10495,
+        "reason": "Equipment kind missed"
+      },
+      "system": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 25970,
+        "reason": "Equipment kind missed"
+      }
+    },
+    {
+      "id": "ho-text-01",
+      "input": "text",
+      "difficulty": "messy",
+      "baseline": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 12975,
+        "reason": "Matched applicable kind and placement labels"
+      },
+      "system": {
+        "status": "ok",
+        "passed": false,
+        "latencyMs": 26090,
+        "reason": "Plant area missed"
+      }
+    },
+    {
+      "id": "ho-text-02",
+      "input": "text",
+      "difficulty": "messy",
+      "baseline": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 9511,
+        "reason": "Matched applicable kind and placement labels"
+      },
+      "system": {
+        "status": "ok",
+        "passed": true,
+        "latencyMs": 18122,
+        "reason": "Matched applicable kind and placement labels"
+      }
+    }
+  ],
+  "devSet": {
+    "shared": 68,
+    "selected": 71,
+    "baselineConcurrency": 4,
+    "systemConcurrency": 4,
+    "pipelineFingerprint": "a12a09a4a5276acdd7205cc25c819c54a887cc3f988fc4585da44f23f168048f",
+    "metrics": [
+      {
+        "key": "physicalAreaAccuracy",
+        "baseline": {
+          "numerator": 51,
+          "n": 59,
+          "value": 0.864406779661017,
+          "interval": [
+            0.7546033919346271,
+            0.9296582532746629
+          ]
+        },
+        "system": {
+          "numerator": 54,
+          "n": 59,
+          "value": 0.9152542372881356,
+          "interval": [
+            0.8164820473258972,
+            0.9632579669823632
+          ]
+        }
+      },
+      {
+        "key": "physicalKindAccuracy",
+        "baseline": {
+          "numerator": 57,
+          "n": 60,
+          "value": 0.95,
+          "interval": [
+            0.8629948352365147,
+            0.9828504978356043
+          ]
+        },
+        "system": {
+          "numerator": 59,
+          "n": 60,
+          "value": 0.9833333333333333,
+          "interval": [
+            0.9114487027240993,
+            0.9970518402052136
+          ]
+        }
+      },
+      {
+        "key": "purdueAccuracy",
+        "baseline": {
+          "numerator": 52,
+          "n": 55,
+          "value": 0.9454545454545454,
+          "interval": [
+            0.8514693945594621,
+            0.9812767844453155
+          ]
+        },
+        "system": {
+          "numerator": 52,
+          "n": 55,
+          "value": 0.9454545454545454,
+          "interval": [
+            0.8514693945594621,
+            0.9812767844453155
+          ]
+        }
+      },
+      {
+        "key": "gateAccuracy",
+        "baseline": {
+          "numerator": 68,
+          "n": 68,
+          "value": 1,
+          "interval": [
+            0.9465286634799296,
+            1
+          ]
+        },
+        "system": {
+          "numerator": 68,
+          "n": 68,
+          "value": 1,
+          "interval": [
+            0.9465286634799296,
+            1
+          ]
+        }
+      },
+      {
+        "key": "riskRecall",
+        "baseline": {
+          "numerator": 62,
+          "n": 120,
+          "value": 0.5166666666666667,
+          "interval": [
+            0.4281358041299209,
+            0.6041635569894558
+          ]
+        },
+        "system": {
+          "numerator": 84,
+          "n": 120,
+          "value": 0.7,
+          "interval": [
+            0.6128485756752643,
+            0.7747437577572543
+          ]
+        }
+      },
+      {
+        "key": "neverPlaceViolation",
+        "baseline": {
+          "numerator": 3,
+          "n": 55,
+          "value": 0.05454545454545454,
+          "interval": [
+            0.01872321555468448,
+            0.14853060544053792
+          ]
+        },
+        "system": {
+          "numerator": 0,
+          "n": 55,
+          "value": 0,
+          "interval": [
+            0,
+            0.06528490111708637
+          ]
+        }
+      },
+      {
+        "key": "radiosRecall",
+        "baseline": {
+          "numerator": 12,
+          "n": 12,
+          "value": 1,
+          "interval": [
+            0.7575059933447592,
+            1
+          ]
+        },
+        "system": {
+          "numerator": 12,
+          "n": 12,
+          "value": 1,
+          "interval": [
+            0.7575059933447592,
+            1
+          ]
+        }
+      },
+      {
+        "key": "cloudAccuracy",
+        "baseline": {
+          "numerator": 23,
+          "n": 26,
+          "value": 0.8846153846153846,
+          "interval": [
+            0.7102409678828635,
+            0.9599675537638938
+          ]
+        },
+        "system": {
+          "numerator": 23,
+          "n": 26,
+          "value": 0.8846153846153846,
+          "interval": [
+            0.7102409678828635,
+            0.9599675537638938
+          ]
+        }
+      },
+      {
+        "key": "categoryAccuracy",
+        "baseline": {
+          "numerator": 48,
+          "n": 55,
+          "value": 0.8727272727272727,
+          "interval": [
+            0.7598297234409093,
+            0.9369578957263536
+          ]
+        },
+        "system": {
+          "numerator": 44,
+          "n": 55,
+          "value": 0.8,
+          "interval": [
+            0.6763512084273606,
+            0.8844778509023876
+          ]
+        }
+      },
+      {
+        "key": "deviceTypeMatch",
+        "baseline": {
+          "numerator": 37,
+          "n": 55,
+          "value": 0.6727272727272727,
+          "interval": [
+            0.5410322355657868,
+            0.7818693440483107
+          ]
+        },
+        "system": {
+          "numerator": 43,
+          "n": 55,
+          "value": 0.7818181818181819,
+          "interval": [
+            0.6562996597815998,
+            0.8705397595887698
+          ]
+        }
+      },
+      {
+        "key": "ruleConsistency",
+        "baseline": {
+          "numerator": 51,
+          "n": 60,
+          "value": 0.85,
+          "interval": [
+            0.7388541093022145,
+            0.9190255941983225
+          ]
+        },
+        "system": {
+          "numerator": 66,
+          "n": 66,
+          "value": 1,
+          "interval": [
+            0.9449974429864586,
+            0.9999999999999999
+          ]
+        }
+      }
+    ],
+    "timing": {
+      "baseline": {
+        "n": 71,
+        "p50": 13277,
+        "p95": 18388
+      },
+      "system": {
+        "n": 71,
+        "p50": 23297,
+        "p95": 41975.5
+      }
+    }
+  }
+}

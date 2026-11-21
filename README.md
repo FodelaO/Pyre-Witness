@@ -153,10 +153,29 @@ Both answered 68 of 71 captures. The table uses shared answers for scores and al
 | Median time per capture | 13.3 s | 23.3 s | Significantly slower |
 | p95 time per capture | 18.4 s | 42.0 s | Significantly slower |
 
-These results use one development set that informed the changes. No held-out set has been evaluated. [Summary](eval/report/SUMMARY.md) · [Full report](eval/report/REPORT.md)
+These results use one development set that informed the changes. The held-out test below uses captures that no change was tuned on. [Summary](eval/report/SUMMARY.md) · [Full report](eval/report/REPORT.md)
 
 - Run 3 trailed Hydrogen on equipment kind and key-risk recall. Run 4 fixed those gaps with kind guidance and a risk list that combines model risks, rules findings and Scout evidence.
 - Run 4 trailed on radio recall (33.3%) and cloud flags (23.1%). Asking Scout for explicit connectivity evidence brought Run 5 up to Hydrogen's rates on both.
+
+### Held-out test
+
+After the last pipeline change we built 20 new captures: 13 Wikimedia Commons photos (4 clean, 5 messy, 2 edge, 2 non-devices), 3 hurried free-text descriptions and 4 manufacturer product links. None overlaps the development set. They were labelled from source evidence before any system saw them, and no change was made after the run. Both sides ran fresh once (`heldout-1`) with 0 errors, the same baseline contract and Run 5 scoring.
+
+| Metric | Single-call Hydrogen | Pyre Witness | Paired result |
+| --- | ---: | ---: | --- |
+| Key-risk recall | 40.8% (20/49) | 61.2% (30/49) | Significant gain of 20.4 pp (+8.3 to +34.0 pp) |
+| Device-type naming match | 57.1% (8/14) | 92.9% (13/14) | Significant gain of 35.7 pp (+14.3 to +64.3 pp) |
+| Offline rules-engine pass rate | 83.3% (15/18) | 100.0% (20/20) | Inconclusive |
+| Forbidden-area recommendations | 0.0% (0/14) | 0.0% (0/14) | Tie |
+| Device vs non-device accuracy | 100.0% (20/20) | 100.0% (20/20) | Tie |
+| Plant area accuracy | 88.9% (16/18) | 83.3% (15/18) | Hydrogen leads, inconclusive |
+| Purdue level accuracy | 85.7% (12/14) | 78.6% (11/14) | Hydrogen leads, inconclusive |
+| Equipment kind accuracy | 72.2% (13/18) | 77.8% (14/18) | Inconclusive |
+| Cloud flag accuracy | 92.3% (12/13) | 76.9% (10/13) | Hydrogen leads, inconclusive |
+| Median time per capture | 12.1 s | 26.0 s | Significantly slower |
+
+The key-risk recall gain held on unseen captures. Placement accuracy did not beat the single call. Before the run, a label review changed two labels to match development-set conventions, and the drone change decided that item. Under the original labels, Hydrogen passes 14 of 20 cases and Pyre Witness 12, instead of 13 each. Risk recall, naming and the rules check do not depend on those labels. With n = 20, most differences are inconclusive. [Held-out report](eval/heldout/REPORT.md) · [Held-out log](docs/log/heldout-eval.md)
 
 Open `Proof` (`/proof`) for the runs, failure cases and changes after each run. Run 5 recorded zero system execution errors. [Summary](eval/report/SUMMARY.md)
 

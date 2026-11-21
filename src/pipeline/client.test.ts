@@ -287,3 +287,30 @@ it("keeps readable sequential tags unique across captures on the same twin", asy
   expect(useRunStore.getState().placedAssetId).toBe("CAM-903");
   expect(useTwinStore.getState().twin.assets.map(({ id }) => id)).toEqual(expect.arrayContaining(["CAM-901", "MUG-902", "CAM-903"]));
 });
+
+it("retries an interrupted placement once per draft", async () => {
+  const input: CaptureInput = { kind: "photo", images: [photo] };
+  const profile: DeviceProfile = { ...pressureProfile, physical_kind: "plc_cabinet", object_class: "networked_device" };
+  const tags = () => useTwinStore.getState().twin.assets.filter((a) => a.origin === "added").map((a) => a.id);
+  const serverTags: string[] = [];
+  const fetch = vi.fn().mockImplementation((_path, init: RequestInit) => {
+    const { twin } = JSON.parse(String(init.body));
+    const run = { ...base, runId: `retry-${serverTags.length}` };
+    serverTags.push(capturedAssetId(run.runId, profile, twin));
+    return sse(frame({ ...run, type: "run.started", input: { kind: "photo", label: "PLC" }, dropPoint: null })
+      + frame({ ...run, type: "perception.done", model: "fixture", latencyMs: 1, profile })
+      + ([1, 3].includes(serverTags.length) ? "" : frame({ ...run, type: "run.completed", totalMs: 2 })));
+  });
+  vi.stubGlobal("fetch", fetch);
+  await expect(analyze(input)).rejects.toThrow("closed before the run finished");
+  expect(tags()).toEqual(["PLC-901"]);
+  const provisionalRisk = useTwinStore.getState().risk.score;
+  await analyze(structuredClone(input), null, true);
+  expect(tags()).toEqual(["PLC-901"]);
+  expect(useTwinStore.getState().risk.score).toBe(provisionalRisk);
+  await expect(analyze(input, null, false)).rejects.toThrow("closed before the run finished");
+  expect(tags()).toEqual(["PLC-901", "PLC-902"]);
+  await analyze(input, null, false);
+  expect(tags()).toEqual(["PLC-901", "PLC-902", "PLC-903"]);
+  expect(serverTags).toEqual(["PLC-901", "PLC-901", "PLC-902", "PLC-903"]);
+});

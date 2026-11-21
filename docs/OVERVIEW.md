@@ -114,7 +114,7 @@ Run 5 uses the same saved fair baseline as Run 4, one `gemini-4-hydrogen` call w
 - Run 3 trailed Hydrogen on equipment kind and key-risk recall. Run 4 fixed those gaps with kind guidance and a risk list that combines model risks, rules findings and Scout evidence.
 - Run 4 trailed on radio recall (33.3%) and cloud flags (23.1%). Asking Scout for explicit connectivity evidence brought Run 5 up to Hydrogen's rates on both.
 
-One development set informed the iterations. No held-out set has been evaluated. See `/proof` for failure cases and the build log for run history. [Build log](BUILD_LOG.md)
+One development set informed the iterations. A `20`-capture held-out set confirmed the key-risk recall gain (`40.8%` to `61.2%`, significant) but not better placement. [Held-out log](log/heldout-eval.md). See `/proof` for failure cases and the build log for run history. [Build log](BUILD_LOG.md)
 
 Reliability batch: `61/63` completed at 6 workers, `2` correct rejections, `0` operational failures (`docs/log/pipeline-speed.md`).
 
