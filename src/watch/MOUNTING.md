@@ -5,8 +5,9 @@ The QA handoff completed. `src/watch/WatchPanel.tsx` now mounts the live desk be
 ```tsx
 import { WatchSignalDesk } from "./WatchSignalDesk";
 
-<WatchSignalDesk report={run.report} reviewing={run.status === "running"} onReview={() => void runNow()} />
+<WatchSignalDesk live={live} feed={feed} label={presentation.label} report={run.report}
+  reviewing={run.status === "running"} onReview={() => void runNow()} />
 <WatchRun run={run} />
 ```
 
-The desk uses `GET /api/watch/feeds`. The local model review, approval queue and Antigravity comparison continue using their existing routes. The existing shell mount covers this change.
+`WatchPanel` calls `GET /api/watch/feeds` through `useWatchLive` and supplies the same status label to the pill and the desk. The local model review, approval queue and Antigravity comparison continue using their existing routes. The existing shell mount covers this change.

@@ -1,11 +1,11 @@
 /* Compact feed instrument with plant links and a conditional loss readout. */
-.pw-signal-desk { display: grid; min-width: 0; gap: 6px; }
+.pw-signal-desk { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 6px; }
 .pw-signal-header, .pw-signal-subhead { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .pw-signal-live, .pw-signal-subhead, .pw-signal-row-meta, .pw-signal-chip {
   font: 10px/1.35 var(--font-geist-mono), ui-monospace, monospace;
   color: var(--pw-text-dim);
 }
-.pw-signal-live { min-width: 0; }
+.pw-signal-live { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pw-signal-live strong, .pw-signal-chief strong { font-weight: 650; color: var(--pw-text); }
 .pw-signal-desk .pw-signal-run { flex: none; min-height: 26px; padding: 3px 6px; white-space: nowrap; }
 .pw-signal-subhead { min-height: 18px; flex-wrap: wrap; }

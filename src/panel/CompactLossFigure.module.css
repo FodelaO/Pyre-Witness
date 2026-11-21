@@ -33,10 +33,10 @@
   .scope[data-origin-count="2"]:not([data-show-all])
     :where(ul[aria-label="Asset losses"] > [data-loss-item]:nth-child(n + 3)) { display: none; }
 
-  .scope[data-compact-ready] :where([data-loss-total]) {
-    position: sticky;
-    inset-block-end: 0;
-    z-index: 1;
+  .scope[data-compact-ready]:not([data-show-all]) :where([data-loss-line-share-amount]) { display: none; }
+  .scope[data-compact-ready]:not([data-show-all]) :where([data-loss-line-share-label]) { display: inline; }
+
+  .scope[data-compact-ready]:not([data-show-all]) :where([data-loss-total]) {
     order: 3;
     padding-block: 6px;
     background: var(--pw-panel);
@@ -51,13 +51,6 @@
     padding: 4px 2px;
     color: var(--pw-info);
     cursor: pointer;
-  }
-
-  .more[aria-expanded="true"] {
-    position: sticky;
-    inset-block-end: 31px;
-    z-index: 1;
-    background: var(--pw-panel);
   }
 
   .more[aria-expanded="true"] svg { transform: rotate(180deg); }

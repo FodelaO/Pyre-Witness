@@ -1,0 +1,22 @@
+# Panel and ledger fixes
+
+| Defect | Cause and fix | Before | After |
+| --- | --- | --- | --- |
+| Expanded ledger overlapped its rows | The total and inner collapse control were sticky inside the scrolling ledger. Both now scroll with the content. | [Expanded ledger](shots/fix-panel-ledger-before-ledger-expanded-dark-1440.png) | [Expanded rows](shots/fix-panel-ledger-after-ledger-expanded-dark-1440.png) · [Total in flow](shots/fix-panel-ledger-after-frequency-light-1440.png) · [Scroll end](shots/fix-panel-ledger-after-ledger-expanded-scroll-end-light-1440.png) |
+| Collapsed ledger appeared short by $7.3k | Folding hid the batch and response costs. The disclosure sums hidden contributions and the visible downtime shares identify the line-wide pool. On PLC-F3, $80k + $7.1k + $7.3k rounds to the $94k estimate. | [Collapsed ledger](shots/contrast-light-after-loss-1440x900.png) | [Collapsed ledger](shots/fix-panel-ledger-after-ledger-collapsed-light-1440.png) |
+| PLC-F3 frequency arithmetic looked inconsistent | The two factors were rounded more coarsely than the return period. The display now multiplies the factors as shown. PLC-F3 reads 0.65/yr × 14% ≈ 1 in 11 yr. | [Original renderer replay](shots/fix-panel-ledger-before-frequency-replay-light-1440.png) | [Frequency](shots/fix-panel-ledger-after-frequency-light-1440.png) |
+| Installed value looked like another loss | The affected-asset aggregate lacked a label. The ledger now calls it **Installed value**. | [Unlabelled aggregate](shots/contrast-light-after-loss-1440x900.png) | [Installed value](shots/fix-panel-ledger-after-ledger-collapsed-light-1440.png) |
+| TK-201 omitted its tank level | The inspector read only instrument points. It now uses the drawing's process level when a matching point is absent. | [Inspector](shots/fix-panel-ledger-before-tank-light-1440.png) | [2D inspector](shots/fix-panel-ledger-after-tank-light-1440.png) · [3D inspector](shots/fix-panel-ledger-after-tank-light-3d-1440.png) |
+| Threat watch wrapped at 1280 px | The live line shared a flex row with Run now. The watch grid can shrink and the line stays whole, with a tooltip for the full text. | [Wrapped live line](shots/fix-panel-ledger-before-watch-wrap-dark-1280.png) | [Light](shots/fix-panel-ledger-after-watch-light-1280.png) · [Dark](shots/fix-panel-ledger-after-watch-dark-1280.png) |
+| Watch status and pill disagreed | Each rendered its own label and the desk could display a retained timestamp while pending. WatchPanel supplies one label to both and the desk only shows a timestamp for a completed feed status. | [Mismatched status](shots/fix-panel-ledger-before-watch-status-dark-1280.png) | [Checking](shots/fix-panel-ledger-after-watch-checking-light-1280.png) · [Live](shots/fix-panel-ledger-after-watch-light-1280.png) |
+| Simulation outcome was below four mitigation cards | The results rail rendered the queue first. The simulation outcome now precedes the queue and fits above the fold at 1440×900. | [Before](shots/fix-panel-ledger-before-simulation-dark-1440.png) | [Light](shots/fix-panel-ledger-after-simulation-light-1440.png) · [Dark](shots/fix-panel-ledger-after-simulation-dark-1440.png) |
+
+## Verification
+
+Playwright checked the running app at port 4119 in light and dark. The 2D passes covered the collapsed and expanded ledgers, tank telemetry, four-card simulation and 1280×720 watch. At 1920 px the wider ledger showed $600 for the separately folded asset rows. The linked tank and ledger also rendered in 3D. Delayed, stale and failed public-feed responses exercised the status transitions. The browser blocked model endpoints. The frequency baseline replays the original compiled renderer in an isolated browser and the other baseline shots come from earlier QA.
+
+Installed Chrome exited during launch in the workspace sandbox. The browser checks used one cached Chromium headless shell at a time.
+
+In both themes, a simulation launched from 3D replayed in 2D and kept the loss above all four cards. This checkout stayed in 2D after playback completed. The linked 3D inspector and ledger checks passed separately. [Simulation launched from 3D](shots/fix-panel-ledger-after-simulation-launched-from-3d-light-1440.png) · [3D ledger](shots/fix-panel-ledger-after-ledger-light-3d-1440.png)
+
+`npm run typecheck` passed. `npm run test -- src/panel src/watch src/econ/displayLedger.test.ts --maxWorkers=1` passed 64 tests across 17 files, with 3 skipped. Shared contract requests were unnecessary.

@@ -8,6 +8,7 @@ import { watchStatus } from "@/shell/watchStatus";
 import { useTwinStore } from "@/twin/store";
 import { WATCH_SOURCES } from "./sources";
 import type { ThreatSource, WatchStage } from "./types";
+import { useWatchLive } from "./useWatchLive";
 import { useWatchStore, type WatchRunState } from "./watchStore";
 import { WatchThreats } from "./WatchResults";
 import { WatchSignalDesk } from "./WatchSignalDesk";
@@ -18,6 +19,13 @@ const stageLabel: Record<WatchStage["name"], string> = {
 };
 const sourceIds = Object.keys(WATCH_SOURCES) as ThreatSource[];
 const managedPhase = { started: "Started", running: "Running", done: "Done", failed: "Failed" } as const;
+const feedPresentation = {
+  pending: { label: "Ready", dot: "Ready" },
+  checking: { label: "Checking", dot: "Checking" },
+  live: { label: "Live", dot: "Complete" },
+  stale: { label: "Stale", dot: "Partial" },
+  offline: { label: "Feed offline", dot: "Feed offline" },
+} as const;
 
 export function WatchRun({ run, managed = false }: { run: WatchRunState; managed?: boolean }) {
   const keyMissing = run.stages.some(({ state, detail }) => state === "failed" && /GEMINI_API_KEY/i.test(detail));
@@ -86,12 +94,12 @@ export function WatchRun({ run, managed = false }: { run: WatchRunState; managed
 }
 
 export default function WatchPanel({ open, reveal = 0, onOpenChange }: { open: boolean; reveal?: number; onOpenChange: (open: boolean) => void }) {
-  const run = useWatchStore((state) => state.local);
   const review = useWatchStore((state) => state.review);
   const feed = useWatchStore((state) => state.feedStatus);
   const managed = useWatchStore((state) => state.managed);
   const runDaily = useWatchStore((state) => state.runDaily);
   const runNow = useWatchStore((state) => state.runNow);
+  const live = useWatchLive();
   const summary = useRef<HTMLElement>(null);
   const lastReveal = useRef(0);
 
@@ -104,18 +112,21 @@ export default function WatchPanel({ open, reveal = 0, onOpenChange }: { open: b
     summary.current?.scrollIntoView({ block: "nearest" });
   }, [open, reveal]);
 
-  const status = watchStatus(run);
-  const label = { pending: "Ready", live: "Live", stale: "Stale", offline: "Feed offline" }[feed];
+  const feedState = feed !== "pending" ? feed : live.checking ? "checking" : live.error ? "offline" : "pending";
+  const presentation = feedPresentation[feedState];
+  const partial = feedState === "live" && live.snapshot?.check.sources.some(({ error }) => Boolean(error));
+  const dot = partial ? "Partial" : presentation.dot;
   return (
     <details id="pw-watch" className="pw-watch pw-panel-disclosure" open={open}
       onToggle={(event) => { if (event.target === event.currentTarget) onOpenChange(event.currentTarget.open); }}>
       <summary ref={summary}>
         <span><Radar size={16} aria-hidden />Threat watch</span>
-        <span className="pw-watch-state"><i className="pw-status-dot" data-status={status} aria-hidden />{label}</span>
+        <span className="pw-watch-state"><i className="pw-status-dot" data-status={dot} aria-hidden />{presentation.label}</span>
         <ChevronDown size={14} className="pw-panel-disclosure-caret" aria-hidden />
       </summary>
       <div className="pw-watch-body">
-        <WatchSignalDesk report={review.report} reviewing={review.status === "running"} onReview={() => void runNow()} />
+        <WatchSignalDesk live={live} feed={feed} label={presentation.label} report={review.report}
+          reviewing={review.status === "running"} onReview={() => void runNow()} />
         <WatchRun run={review} />
         <details className="pw-watch-notes">
           <summary>Antigravity comparison</summary>

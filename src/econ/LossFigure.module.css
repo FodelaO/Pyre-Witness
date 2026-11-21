@@ -78,6 +78,7 @@
   font-family: var(--font-geist-mono), ui-monospace, monospace;
 }
 .itemAmount { font-weight: 650; white-space: nowrap; }
+.shareLabel, .remaining[open] .remainingAmount { display: none; }
 .formula { font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
 .formula span { color: var(--pw-text); }
 .remaining > summary { display: flex; align-items: center; gap: 3px; cursor: pointer; }

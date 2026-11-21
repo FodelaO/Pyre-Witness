@@ -28,7 +28,7 @@ function CyberFlags({ cyber }: { cyber: NonNullable<Asset["cyber"]> }) {
   );
 }
 
-function TelemetryRow({ point: { tag, label, value, unit, lo, hi } }: { point: TelemetryPoint }) {
+function TelemetryRow({ point: { tag, label, value, unit, lo, hi } }: { point: Omit<TelemetryPoint, "tag"> & { tag?: string } }) {
   const outside = (lo != null && value < lo) || (hi != null && value > hi);
   const hasBand = Number.isFinite(value) && (lo != null || hi != null);
   const limits = lo != null && hi != null ? `${telemetryNumber(lo, unit)}–${telemetryNumber(hi, unit)}`
@@ -36,7 +36,7 @@ function TelemetryRow({ point: { tag, label, value, unit, lo, hi } }: { point: T
   const band = limits && withTelemetryUnit(limits, unit);
   return (
     <li className="pw-panel-telemetry-row" data-band={hasBand ? outside ? "out" : "in" : undefined}>
-      <div><span className="pw-mono">{tag}</span><span>{label}</span></div>
+      <div>{tag && <span className="pw-mono">{tag}</span>}<span>{label}</span></div>
       <div><strong className="pw-mono">{formatTelemetry(value, unit)}</strong>
         {hasBand && band && <span title={`Normal ${band}`}>
           <i aria-hidden="true" />{outside ? "Out of band" : "In band"} · {band}
@@ -92,6 +92,9 @@ export function AssetInspector({ mode }: { mode: LensMode }) {
 
   const assetFindings = findings.filter((finding) => finding.assetId === asset.id && showsRisk(mode, finding));
   const telemetry = asset.process?.telemetry ?? [];
+  const level = asset.process?.levelPct;
+  const showLevel = level !== undefined && Number.isFinite(level)
+    && !telemetry.some(({ unit, value }) => unit === "%" && value === level);
   return (
     <>
       <PanelHeading icon={Crosshair} aside={<span className="pw-panel-chip pw-mono">{asset.id}</span>}>Asset inspector</PanelHeading>
@@ -105,10 +108,13 @@ export function AssetInspector({ mode }: { mode: LensMode }) {
         <dt>Criticality</dt><dd><span className="pw-mono">{asset.criticality}/5</span>{asset.safetyCritical ? "Safety critical" : ""}</dd>
       </dl>
       {showData && asset.cyber && <CyberFlags cyber={asset.cyber} />}
-      {showMaterial && telemetry.length > 0 && (
+      {showMaterial && (telemetry.length > 0 || showLevel) && (
         <div className="pw-panel-subsection">
           <h3><Activity size={13} aria-hidden />Telemetry</h3>
-          <ul className="pw-panel-telemetry">{telemetry.map((point) => <TelemetryRow key={point.tag} point={point} />)}</ul>
+          <ul className="pw-panel-telemetry">
+            {telemetry.map((point) => <TelemetryRow key={point.tag} point={point} />)}
+            {showLevel && <TelemetryRow point={{ label: "Level", value: level, unit: "%" }} />}
+          </ul>
         </div>
       )}
       {(assetFindings.length > 0 || mode === "data") && (

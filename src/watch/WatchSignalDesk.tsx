@@ -6,12 +6,12 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useEconomicTwin } from "@/econ/useEconomicTwin";
 import { useTwinStore } from "@/twin/store";
 import type { Twin } from "@/twin/types";
+import type { WatchFeedStatus } from "./feedStatus";
 import { LIVE_SOURCE_LABELS, liveItemKey, type LiveItem, type LiveSourceResult } from "./liveTypes";
 import { rankWatchItems, type WatchRelevance } from "./relevance";
 import type { WatchReport } from "./types";
-import { useWatchLive } from "./useWatchLive";
+import type { useWatchLive } from "./useWatchLive";
 import { WatchLiveLoss } from "./WatchLiveLoss";
-import { useWatchStore } from "./watchStore";
 import "./watchSignals.css";
 
 const sources = Object.keys(LIVE_SOURCE_LABELS) as LiveItem["source"][];
@@ -118,31 +118,32 @@ function OtherItems({ rows, added }: { rows: WatchRelevance[]; added: Set<string
   );
 }
 
-export function WatchSignalDesk({ report, reviewing, onReview }: {
+export function WatchSignalDesk({ live, feed, label, report, reviewing, onReview }: {
+  live: ReturnType<typeof useWatchLive>;
+  feed: WatchFeedStatus;
+  label: string;
   report?: WatchReport;
   reviewing: boolean;
   onReview: () => void;
 }) {
-  const { snapshot, checking, error, nextAt, checkNow } = useWatchLive();
-  const feed = useWatchStore((state) => state.feedStatus);
+  const { snapshot, checking, error, nextAt, checkNow } = live;
   const highlight = useRowHighlight();
   const twin = useEconomicTwin();
-  const check = snapshot?.check;
+  const check = feed === "pending" ? undefined : snapshot?.check;
   const checks = check?.sources;
   const rows = useMemo(() => check ? rankWatchItems(check.items, twin, check.checkedAt, report?.candidates) : [], [check, report?.candidates, twin]);
   const matched = rows.filter(({ assetIds }) => assetIds.length);
   const other = rows.filter(({ assetIds }) => !assetIds.length);
   const headline = report?.stages.some(({ name, state }) => name === "reassessment" && state === "done") ? report.headline : undefined;
-  const label = { pending: "Awaiting check", live: "Live", stale: "Stale", offline: "Feed offline" }[feed];
+  const checked = check && (feed === "stale" ? shortClock : clock).format(check.checkedAt);
+  const sourceCount = check && feed !== "stale" ? ` · ${check.sources.length} sources` : "";
+  const title = `${label}${checked ? ` · checked ${checked}${sourceCount}` : ""}`;
 
   return (
     <section className="pw-signal-desk" aria-label="Plant intelligence" aria-busy={checking}>
       <div className="pw-signal-header">
-        <div className="pw-signal-live" aria-live="polite">
-          {check ? <>
-            <strong>{label}</strong> · checked <time dateTime={new Date(check.checkedAt).toISOString()}>{(feed === "stale" ? shortClock : clock).format(check.checkedAt)}</time>
-            {feed !== "stale" && <> · {checks?.length} sources</>}
-          </> : error ?? <>Checking {sources.length} sources…</>}
+        <div className="pw-signal-live" aria-live="polite" title={title}>
+          <strong>{label}</strong>{check && <> · checked <time dateTime={new Date(check.checkedAt).toISOString()}>{checked}</time>{sourceCount}</>}
         </div>
         <button type="button" className="pw-panel-button pw-signal-run" disabled={checking} onClick={() => { void checkNow(); onReview(); }}>
           <RefreshCw size={12} aria-hidden />Run now
@@ -154,7 +155,7 @@ export function WatchSignalDesk({ report, reviewing, onReview }: {
         </div>
         {nextAt && <span>Next <time dateTime={new Date(nextAt).toISOString()}>{clock.format(nextAt)}</time></span>}
       </div>
-      {check && error && <div className="pw-signal-basis" role="status">{error}</div>}
+      {error && <div className="pw-signal-basis" role="status">{error}</div>}
       <div className="pw-signal-basis">Inventory assumed (simulated plant) · matched by rule</div>
       {(headline || reviewing) && <div className="pw-signal-chief" title={headline} aria-live="polite">
         <strong>Chief</strong> · {headline ?? "Reviewing advisories…"}

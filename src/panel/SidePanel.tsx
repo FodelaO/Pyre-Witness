@@ -121,8 +121,8 @@ export default function SidePanel({ captureOpen, setCaptureEditor, modelerOpen, 
           </>
         ) : <PanelSection><AssetInspector mode={mode} /></PanelSection>}
         {focused && mode === "data" && selectedId && <PanelSection><AssetInspector mode={mode} /></PanelSection>}
-        {runMitigations.length > 0 && <PanelSection><MitigationQueue items={runMitigations} /></PanelSection>}
         <SimulationComparison />
+        {runMitigations.length > 0 && <PanelSection><MitigationQueue items={runMitigations} /></PanelSection>}
         {focused && profile && assessment && !running && checks.recommendation?.passed !== false && mode !== "data" && (
           <Disclosure className="pw-panel-fit-tools" label={<span><ImagePlus size={14} aria-hidden />Fit preview</span>}>
             <Slot name="Fit preview" quiet><FitPreview /></Slot>

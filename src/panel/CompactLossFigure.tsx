@@ -4,6 +4,7 @@
 import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { formatFormulaUsd } from "@/econ/format";
 import styles from "./CompactLossFigure.module.css";
 
 interface Breakdown {
@@ -11,7 +12,10 @@ interface Breakdown {
   extraAssets: HTMLDetailsElement | null;
   assetCount: number;
   originCount: number;
+  hiddenLoss: number;
 }
+
+const visibleAssetCount = 4;
 
 export function CompactLossFigure({ children }: { children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
@@ -33,16 +37,19 @@ export function CompactLossFigure({ children }: { children: ReactNode }) {
         return;
       }
       const extraAssets = container.querySelector<HTMLDetailsElement>(":scope > details");
-      const assetCount = container.querySelectorAll("[data-loss-item]").length;
+      const assets = Array.from(container.querySelectorAll<HTMLElement>("[data-loss-item]"));
+      const assetCount = assets.length;
       const originCount = container.querySelectorAll(":scope > ul[aria-label='Originating assets'] > [data-loss-item]").length;
+      const hiddenRows = [...assets.slice(visibleAssetCount), ...container.querySelectorAll<HTMLElement>("[data-loss-other]")];
+      const hiddenLoss = hiddenRows.reduce((sum, row) => sum + Number(row.dataset.lossContribution ?? 0), 0);
       setBreakdown((previous) => previous?.container === container && previous.extraAssets === extraAssets
-        && previous.assetCount === assetCount && previous.originCount === originCount
-        ? previous : { container, extraAssets, assetCount, originCount });
+        && previous.assetCount === assetCount && previous.originCount === originCount && previous.hiddenLoss === hiddenLoss
+        ? previous : { container, extraAssets, assetCount, originCount, hiddenLoss });
       setExpandedFor((previous) => previous === container ? previous : null);
     }
 
     const observer = new MutationObserver(readBreakdown);
-    observer.observe(host, { subtree: true, childList: true });
+    observer.observe(host, { subtree: true, childList: true, attributeFilter: ["data-loss-contribution"] });
     readBreakdown();
     return () => observer.disconnect();
   }, []);
@@ -55,7 +62,7 @@ export function CompactLossFigure({ children }: { children: ReactNode }) {
     return () => { extraAssets.open = previous; };
   }, [expanded, extraAssets]);
 
-  const hiddenAssets = (breakdown?.assetCount ?? 0) - 4;
+  const hiddenAssets = (breakdown?.assetCount ?? 0) - visibleAssetCount;
   return (
     <div ref={root} className={styles.scope} data-compact-ready={breakdown ? "" : undefined}
       data-show-all={expanded ? "" : undefined} data-origin-count={breakdown?.originCount}>
@@ -64,6 +71,7 @@ export function CompactLossFigure({ children }: { children: ReactNode }) {
         <button type="button" className={styles.more} aria-expanded={expanded}
           onClick={() => setExpandedFor(expanded ? null : breakdown.container)}>
           {expanded ? "Show less" : hiddenAssets > 0 ? `+${hiddenAssets} more` : "More details"}
+          {!expanded && (hiddenAssets > 0 || breakdown.hiddenLoss !== 0) && ` · ${formatFormulaUsd(breakdown.hiddenLoss)}`}
           <ChevronDown size={13} aria-hidden="true" />
         </button>,
         breakdown.container,
