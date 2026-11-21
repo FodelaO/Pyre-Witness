@@ -4,7 +4,7 @@ import {
   combineCounts, jaccardToF1, mean, pairedBootstrap, proportion, quantile,
   type Count, type PairedDifference, type Pair, type Proportion,
 } from "./statistics";
-import { SIDES, type EvaluatedItem, type Side } from "./types";
+import { SIDES, type EvaluatedItem, type ProviderCalls, type Side } from "./types";
 
 export const METRICS = {
   gateAccuracy: "Device gate accuracy",
@@ -29,16 +29,26 @@ export const METRICS = {
   placementCoverage: "Placement coverage",
   capacityMatch: "Product capacity or size match",
   failureRate: "Execution failure rate",
+  nonDeviceCyberClaims: "Non-devices with invented cyber claims",
+  nonDevicePhysicalCoverage: "Non-device physical-safety coverage",
 } as const;
 
 export type Metric = keyof typeof METRICS;
 export const METRIC_KEYS = Object.keys(METRICS) as Metric[];
 export const HEADLINES = ["gateAccuracy", "physicalKindAccuracy", "physicalAreaAccuracy", "ruleConsistency", "riskRecall"] as const satisfies Metric[];
+export const NEGATIVE_METRICS = ["nonDeviceCyberClaims", "nonDevicePhysicalCoverage"] as const satisfies Metric[];
+export const metricName = (key: Metric, objectAssessment?: boolean) => {
+  if (!objectAssessment) return METRICS[key];
+  if (key === "gateAccuracy") return "Device vs non-device accuracy";
+  if (key === "falseAcceptRate") return "Non-devices classified as devices";
+  if (key === "falseRejectRate") return "Devices classified as non-devices";
+  return METRICS[key];
+};
 
 const asCount = (correct: boolean): Count => ({ numerator: Number(correct), n: 1 });
 const exact = <T>(expected: T | undefined, predicted: T | null | undefined) => expected === undefined ? null : asCount(predicted === expected);
 const comparable = <T>(value: T | null | undefined): value is T => value !== null && value !== undefined;
-const mapForMetric = (key: Metric) => key === "radiosF1" || key === "portsF1" ? jaccardToF1 : undefined;
+export const mapForMetric = (key: Metric) => key === "radiosF1" || key === "portsF1" ? jaccardToF1 : undefined;
 
 export function normalizedPort(value: string) {
   const name = value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -63,14 +73,15 @@ export function labelMatches(expected: readonly string[], predicted: readonly st
   return { matches, expected: truth.size, predicted: answers.size, union: truth.size + answers.size - matches };
 }
 
-function metricCounts(row: EvaluatedItem, side: Side): Record<Metric, Count | null> | null {
+export function metricCounts(row: EvaluatedItem, side: Side): Record<Metric, Count | null> | null {
   const observation = row.observations[side];
   if (!observation) return null;
 
   const { expected } = row.item;
   const result = observation.prediction;
   const profile = result?.profile;
-  const gate = result?.accepted;
+  const objects = observation.objectAssessment;
+  const gate = objects ? objects.isDevice : result?.accepted;
   const area = result?.recommendation?.physical_placement.area;
   const level = result?.recommendation?.placement.level;
   const tagHits = expected.riskTags.filter((tag) => result?.riskTags.includes(tag)).length;
@@ -105,10 +116,25 @@ function metricCounts(row: EvaluatedItem, side: Side): Record<Metric, Count | nu
     placementCoverage: expected.isDevice ? asCount(Boolean(result?.recommendation)) : null,
     capacityMatch: expected.capacity ? asCount(typeof size === "string" && normalizedSize(size) === normalizedSize(expected.capacity)) : null,
     failureRate: asCount(observation.status === "error"),
+    nonDeviceCyberClaims: !expected.isDevice && objects ? asCount(objects.cyberClaims.length > 0) : null,
+    nonDevicePhysicalCoverage: !expected.isDevice && objects?.safetyDrop ? asCount(objects.safetyDrop.concerns.length > 0) : null,
   };
 }
 
 interface ScalarSummary { n: number; value: number | null }
+
+export function summarizeCalls(calls: readonly (ProviderCalls | undefined)[]) {
+  const recorded = calls.filter(comparable);
+  const attempts = recorded.map(({ attempts }) => attempts);
+  return {
+    n: recorded.length,
+    total: attempts.reduce((sum, count) => sum + count, 0),
+    rateLimited: recorded.reduce((sum, { rateLimited }) => sum + rateLimited, 0),
+    mean: mean(attempts),
+    p50: quantile(attempts, 0.5),
+    p95: quantile(attempts, 0.95),
+  };
+}
 
 function metricPairs<T>(rows: readonly EvaluatedItem[], value: (row: EvaluatedItem, side: Side) => T | null | undefined): Pair<T>[] {
   return rows.flatMap((row) => {
@@ -119,32 +145,57 @@ function metricPairs<T>(rows: readonly EvaluatedItem[], value: (row: EvaluatedIt
 }
 
 function summarizeSide(rows: readonly EvaluatedItem[], side: Side) {
-  const scored = rows.map((row) => metricCounts(row, side)).filter(comparable);
   const attempted = rows.filter((row) => row.observations[side]);
   const observations = attempted.map((row) => row.observations[side]!);
   const latencies = observations.map(({ latencyMs }) => latencyMs).filter(comparable);
+  const completedLatencies = observations.filter(({ status }) => status === "ok").map(({ latencyMs }) => latencyMs).filter(comparable);
   const probabilities = attempted.map((row) => row.judge?.answers[side]?.probability).filter(comparable);
-  const metrics = Object.fromEntries(METRIC_KEYS.map((key) => [
-    key, proportion(scored.map((counts) => counts[key]).filter(comparable), mapForMetric(key)),
+  const scored = attempted.map((row) => ({ counts: metricCounts(row, side)!, completed: row.observations[side]!.status !== "error" }));
+  const metricsFor = (entries: typeof scored) => Object.fromEntries(METRIC_KEYS.map((key) => [
+    key, proportion(entries.map(({ counts }) => counts[key]).filter(comparable), mapForMetric(key)),
   ])) as Record<Metric, Proportion>;
+  const metrics = metricsFor(scored);
+  const completed = scored.filter((entry) => entry.completed);
   return {
     n: attempted.length,
     metrics,
+    completed: { n: completed.length, metrics: metricsFor(completed) },
     gate: {
       positives: attempted.filter(({ item }) => item.expected.isDevice).length,
       negatives: attempted.filter(({ item }) => !item.expected.isDevice).length,
       falseAccepts: metrics.falseAcceptRate.numerator,
       falseRejects: metrics.falseRejectRate.numerator,
-      noDecision: observations.filter(({ prediction }) => !comparable(prediction?.accepted)).length,
+      noDecision: observations.filter(({ prediction, objectAssessment }) =>
+        !comparable(objectAssessment ? objectAssessment.isDevice : prediction?.accepted)).length,
     },
     failures: observations.filter(({ status }) => status === "error").length,
     timeouts: observations.filter(({ error }) => error?.timeout).length,
     gateRejections: observations.filter(({ status }) => status === "rejected").length,
     judgeFailures: attempted.filter(({ item, observations, judge }) =>
-      item.expected.deviceType && observations[side]?.prediction?.profile?.device_type && !judge?.answers[side]).length,
+      item.expected.deviceType && observations[side]?.prediction?.profile?.device_type && judge && !judge.answers[side]).length,
+    judgePending: attempted.filter(({ item, observations, judge }) =>
+      item.expected.deviceType && observations[side]?.prediction?.profile?.device_type && !judge).length,
     filteredUnknownTechniques: observations.reduce((sum, { prediction }) => sum + (prediction?.filteredUnknownTechniques.length ?? 0), 0),
     latencyMs: { n: latencies.length, p50: quantile(latencies, 0.5), p95: quantile(latencies, 0.95) },
+    completedLatencyMs: { n: completedLatencies.length, p50: quantile(completedLatencies, 0.5), p95: quantile(completedLatencies, 0.95) },
+    calls: summarizeCalls(observations.map(({ providerCalls }) => providerCalls)),
+    negatives: summarizeNegatives(attempted, side),
     typeProbability: { n: probabilities.length, value: mean(probabilities) } satisfies ScalarSummary,
+  };
+}
+
+function summarizeNegatives(rows: readonly EvaluatedItem[], side: Side) {
+  const negatives = rows.filter(({ item }) => !item.expected.isDevice).map(({ observations }) => observations[side]!);
+  return {
+    n: negatives.length,
+    continued: negatives.filter(({ prediction }) => prediction?.accepted === true).length,
+    stopped: negatives.filter(({ prediction }) => prediction?.accepted === false).length,
+    errors: negatives.filter(({ status }) => status === "error").length,
+    passive: negatives.filter(({ objectAssessment }) => objectAssessment?.objectClass === "passive_object").length,
+    placements: negatives.filter(({ prediction }) => prediction?.recommendation).length,
+    covered: negatives.filter(({ objectAssessment }) => objectAssessment?.safetyDrop?.concerns.length).length,
+    cyberClaims: negatives.filter(({ objectAssessment }) => objectAssessment?.cyberClaims.length).length,
+    suppressed: negatives.filter(({ objectAssessment }) => objectAssessment?.suppressedCyberClaims).length,
   };
 }
 

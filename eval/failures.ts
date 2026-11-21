@@ -3,13 +3,17 @@ import { isKnownTechnique } from "@/data/attack-ics";
 import { labelMatches, normalizedPort, normalizedSize } from "./metrics";
 import { SIDES, type EvaluatedItem, type EvaluationItem, type Observation, type Side } from "./types";
 
-type DiagnosisCategory = "perception miss" | "wrong zone" | "rule conflict" | "hallucinated technique"
-  | "gate error" | "timeout" | "risk omission" | "execution error";
+export const DIAGNOSIS_CATEGORIES = [
+  "perception miss", "wrong zone", "rule conflict", "hallucinated technique",
+  "gate error", "object classification", "invented cyber claim", "physical-safety omission",
+  "timeout", "risk omission", "product link retrieval", "execution error",
+] as const;
+export type DiagnosisCategory = typeof DIAGNOSIS_CATEGORIES[number];
 
 export interface Diagnosis { side: Side; category: DiagnosisCategory; detail: string }
 
 function output(observation: Observation, probability?: number) {
-  const { prediction, status, error, ruleCheck, latencyMs } = observation;
+  const { prediction, status, error, ruleCheck, latencyMs, gateEvidence, gateFallback, objectAssessment } = observation;
   const profile = prediction?.profile;
   return {
     status,
@@ -32,6 +36,9 @@ function output(observation: Observation, probability?: number) {
     ruleFindings: ruleCheck?.detail ?? [],
     typeProbability: probability ?? null,
     latencyMs,
+    gateEvidence,
+    gateFallback,
+    objectAssessment,
     error,
   };
 }
@@ -42,12 +49,36 @@ function diagnose(row: EvaluatedItem, side: Side): Diagnosis[] {
   const observation = row.observations[side];
   if (!observation) return [];
   const { expected } = row.item;
-  const { error, prediction } = observation;
+  const { error, prediction, objectAssessment } = observation;
   const diagnostics: Diagnosis[] = [];
   const add = (category: DiagnosisCategory, detail: string) => diagnostics.push({ side, category, detail });
-  if (error) add(error.timeout ? "timeout" : error.stage === "gate" ? "gate error" : "execution error", `${error.stage} · ${error.message}`);
-  if (prediction?.accepted === true && !expected.isDevice) add("gate error", "Accepted a negative capture.");
-  if (prediction?.accepted === false && expected.isDevice) add("gate error", "Rejected a labeled device.");
+  if (error) {
+    const category = error.timeout ? "timeout" : error.stage === "gate" ? "gate error"
+      : error.stage === "link" && objectAssessment ? "product link retrieval" : "execution error";
+    add(category, `${error.stage} · ${error.message}`);
+  }
+  const gate = observation.gateEvidence;
+  const device = gate?.is_device;
+  const readable = gate?.is_readable;
+  const route = gate?.object_class ?? gate?.route;
+  const gateDetail = typeof device?.value === "number" && typeof readable?.value === "number" && route
+    ? ` P(device) ${device.value.toFixed(2)}, confidence ${device.confidence.toFixed(2)}, P(readable) ${readable.value.toFixed(2)}, route ${route.value} (${route.confidence.toFixed(2)} confidence).`
+    : "";
+  if (objectAssessment) {
+    const { isDevice, objectClass, classSource, cyberClaims, safetyDrop } = objectAssessment;
+    if (isDevice !== null && isDevice !== expected.isDevice) {
+      add("object classification", `Classified as ${objectClass ?? (isDevice ? "device" : "non-device")} using ${classSource}.${gateDetail}`);
+    }
+    if (prediction?.accepted === false && expected.isDevice) add("gate error", `Stopped a labeled device as unusable.${gateDetail}`);
+    if (cyberClaims.length) add("invented cyber claim", `Published ${cyberClaims.join(", ")} for a labeled non-device.`);
+    if (safetyDrop && !safetyDrop.concerns.length) {
+      const context = prediction?.accepted === false ? (side === "system" ? " The usability gate stopped this capture." : " The baseline declined assessment.") : "";
+      add("physical-safety omission", `No as-dropped physical or food-safety concern for ${safetyDrop.area}.${context}`);
+    }
+  } else {
+    if (prediction?.accepted === true && !expected.isDevice) add("gate error", `Accepted a negative capture.${gateDetail}`);
+    if (prediction?.accepted === false && expected.isDevice) add("gate error", `Rejected a labeled device.${gateDetail}`);
+  }
 
   const profile = prediction?.profile;
   if (expected.isDevice && profile) {
@@ -68,9 +99,6 @@ function diagnose(row: EvaluatedItem, side: Side): Diagnosis[] {
     const probability = row.judge?.answers[side]?.probability;
     if (probability !== undefined && probability < 0.5) differences.push(`device type (P(match) ${probability.toFixed(2)})`);
     if (differences.length) add("perception miss", `Label mismatch in ${differences.join(", ")}.`);
-    if (expected.deviceType && row.judge?.error && probability === undefined) add(
-      row.judge.error.timeout ? "timeout" : "execution error", `type judge · ${row.judge.error.message}`,
-    );
   }
 
   const recommendation = prediction?.recommendation;
@@ -102,6 +130,7 @@ export interface CaseResult {
   inputLabel: string;
   sourceUrl: string;
   license: string;
+  labelNote?: string;
   credit?: EvaluationItem["credit"];
   expected: EvaluationItem["expected"];
   answers: Partial<Record<Side, Answer>>;
@@ -109,14 +138,14 @@ export interface CaseResult {
 }
 
 export function caseResult(row: EvaluatedItem): CaseResult {
-  const { id, group, input, sourceUrl, license, credit, expected } = row.item;
+  const { id, group, input, sourceUrl, license, credit, expected, notes } = row.item;
   const answers: CaseResult["answers"] = {};
   for (const side of SIDES) {
     const observation = row.observations[side];
     if (observation) answers[side] = output(observation, row.judge?.answers[side]?.probability);
   }
   return {
-    id, group, sourceUrl, license, credit, expected, answers,
+    id, group, sourceUrl, license, credit, expected, answers, labelNote: notes || undefined,
     file: input.kind === "photo" ? input.file : undefined,
     inputLabel: input.kind === "photo" ? input.file : input.kind === "link" ? new URL(input.url).hostname : "Text capture",
     diagnoses: SIDES.flatMap((side) => diagnose(row, side)),

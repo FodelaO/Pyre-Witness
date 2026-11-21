@@ -203,15 +203,15 @@ function photoCredits(sources: string) {
 /** Deterministic round robin keeps small samples from taking only the easiest rows. */
 export function selectItems(items: readonly EvaluationItem[], limit?: number): EvaluationItem[] {
   const ordered = [...items].sort((a, b) => a.id.localeCompare(b.id, "en-US"));
-  if (limit === undefined || limit >= ordered.length) return ordered;
+  const count = Math.min(limit ?? ordered.length, ordered.length);
 
   const groups = [ordered.filter(({ expected }) => !expected.isDevice),
     ...GROUPS.map((group) => ordered.filter((item) => item.group === group && item.expected.isDevice))];
   const selected: EvaluationItem[] = [];
-  for (let offset = 0; selected.length < limit; offset += 1) {
+  for (let offset = 0; selected.length < count; offset += 1) {
     for (const group of groups) {
       if (group[offset]) selected.push(group[offset]);
-      if (selected.length === limit) return selected;
+      if (selected.length === count) return selected;
     }
   }
   return selected;

@@ -1,5 +1,5 @@
 /** Evaluation labels and the common result shape scored for both systems. */
-import type { Assessment, DeviceCategory, DeviceProfile } from "@/pipeline/types";
+import type { Assessment, DeviceCategory, DeviceProfile, GateResult, ObjectClass } from "@/pipeline/types";
 import type { AreaId, EquipmentKind, PurdueLevel, Radio } from "@/twin/types";
 
 export const RISK_TAGS = [
@@ -59,12 +59,29 @@ export interface RunError {
   timeout: boolean;
 }
 
+export interface ProviderCalls {
+  attempts: number;
+  rateLimited: number;
+}
+
 export interface Observation {
   status: "ok" | "rejected" | "error";
   latencyMs: number | null;
   prediction: Prediction | null;
   ruleCheck: { passed: boolean; detail: string[] } | null;
   error?: RunError;
+  providerCalls?: ProviderCalls;
+  asDroppedPassed?: boolean | null;
+  gateFallback?: boolean;
+  gateEvidence?: GateResult["answers"];
+  objectAssessment?: {
+    isDevice: boolean | null;
+    objectClass: ObjectClass | null;
+    classSource: "perception" | "gate class" | "gate probability" | "baseline" | null;
+    cyberClaims: string[];
+    suppressedCyberClaims: boolean;
+    safetyDrop: { area: AreaId; conditions: string[]; concerns: string[] } | null;
+  };
 }
 
 export interface RunArtifact extends Observation {
@@ -80,11 +97,14 @@ export interface JudgeArtifact {
   answers: Partial<Record<Side, Judgment>>;
   latencyMs: number | null;
   error?: RunError;
+  providerCalls?: ProviderCalls;
   raw: unknown;
 }
 
 export interface EvaluatedItem {
   item: EvaluationItem;
   observations: Partial<Record<Side, Observation>>;
+  captureFingerprints?: Partial<Record<Side, string>>;
   judge?: JudgeArtifact;
+  ablation?: RunArtifact;
 }

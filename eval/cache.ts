@@ -4,12 +4,13 @@ import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:f
 import path from "node:path";
 import type { JudgeArtifact, RunArtifact, Side } from "./types";
 
-const RUNS_ROOT = path.join(process.cwd(), "eval", "runs");
+export const RUNS_ROOT = path.join(process.cwd(), "eval", "runs");
 export const REPORT_ROOT = path.join(process.cwd(), "eval", "report");
 
 const SOURCE_DIRS = ["src/gemini", "src/pipeline/server", "src/rules", "src/link"];
 const SOURCE_FILES = [
-  "eval/baseline.ts", "eval/judge.ts", "eval/system.ts", "eval/prediction.ts", "eval/types.ts",
+  "eval/baseline.ts", "eval/baselineContract.ts", "eval/baselineReuse.ts", "eval/judge.ts", "eval/system.ts", "eval/systemScoring.ts", "eval/prediction.ts", "eval/types.ts",
+  "eval/csv.ts", "eval/dataset.ts", "eval/image.ts", "eval/modality.ts", "eval/providerTelemetry.ts", "eval/run.ts",
   "src/pipeline/assetFromProfile.ts", "src/pipeline/types.ts", "src/twin/dropPoint.ts", "src/twin/geometry.ts", "src/twin/types.ts",
   "src/twin/effects.ts", "src/equipment/types.ts", "src/data/attack-ics.ts", "package-lock.json",
 ];
@@ -41,7 +42,7 @@ export async function writeAtomic(file: string, content: string) {
 
 export const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
 
-async function readJson<T>(file: string): Promise<T | null> {
+export async function readJson<T>(file: string): Promise<T | null> {
   try {
     return JSON.parse(await readFile(file, "utf8")) as T;
   } catch (error) {
@@ -50,39 +51,64 @@ async function readJson<T>(file: string): Promise<T | null> {
   }
 }
 
-interface Manifest {
+export interface Manifest {
   version: 1;
   fingerprint: string;
   itemIds: string[];
   sides: readonly Side[];
   startedAt: string;
+  label?: string;
+  concurrency?: number;
+  models?: { baseline: string; system: string[]; judge: string };
+  thinking?: Record<string, string>;
+  baselineContract?: string;
+  baselineFrom?: string;
+  objectAssessment?: boolean;
+  modalityAblation?: boolean;
+  datasetFingerprint?: string;
 }
 
-type ArtifactMap = Record<Side, RunArtifact> & { judge: JudgeArtifact };
-type ArtifactName = keyof ArtifactMap;
+export type ArtifactMap = Record<Side, RunArtifact> & { judge: JudgeArtifact; ablation: RunArtifact };
+export type ArtifactName = keyof ArtifactMap;
 
-interface Cached<T> {
+export interface Cached<T> {
   fingerprint: string;
   artifact: T;
   reusedFrom?: string;
 }
 
-export async function openRun(fingerprint: string, itemIds: string[], sides: readonly Side[], resume: boolean) {
+export async function openRun(
+  fingerprint: string, itemIds: string[], sides: readonly Side[], resume: boolean,
+  metadata: Pick<Manifest, "label" | "concurrency" | "models" | "thinking" | "baselineContract" | "datasetFingerprint" | "baselineFrom" | "objectAssessment" | "modalityAblation">,
+) {
   await mkdir(RUNS_ROOT, { recursive: true });
   const previous: string[] = [];
-  if (resume) {
+  let originalStartedAt: string | undefined;
+  if (resume || metadata.label) {
     const entries = await readdir(RUNS_ROOT, { withFileTypes: true });
     const dirs = entries.filter((entry) => entry.isDirectory()).map(({ name }) => name).sort().reverse();
     for (const dir of dirs) {
       const manifest = await readJson<Manifest>(path.join(RUNS_ROOT, dir, "manifest.json"));
-      if (manifest?.version === 1 && manifest.fingerprint === fingerprint) previous.push(dir);
+      if (manifest?.version !== 1) continue;
+      if (metadata.label && manifest.label === metadata.label) {
+        if (!resume) throw new Error(`The label ${metadata.label} already exists. Use --resume for that run or choose a new label.`);
+        if (manifest.fingerprint !== fingerprint || digest(manifest.itemIds) !== digest(itemIds)
+          || digest(manifest.sides) !== digest(sides)) {
+          throw new Error(`The inputs, sides or source for ${metadata.label} changed. Resume with the original configuration or use a new label.`);
+        }
+        originalStartedAt = manifest.startedAt;
+        previous.push(dir);
+      } else if (resume && !metadata.label && !manifest.label && manifest.fingerprint === fingerprint) {
+        previous.push(dir);
+      }
     }
   }
 
-  const startedAt = new Date().toISOString();
-  const directory = await mkdtemp(path.join(RUNS_ROOT, `${startedAt.replace(/[:.]/g, "-")}-`));
+  const now = new Date().toISOString();
+  const startedAt = originalStartedAt ?? now;
+  const directory = await mkdtemp(path.join(RUNS_ROOT, `${now.replace(/[:.]/g, "-")}-`));
   const id = path.basename(directory);
-  await writeAtomic(path.join(directory, "manifest.json"), json({ version: 1, fingerprint, itemIds, sides, startedAt } satisfies Manifest));
+  await writeAtomic(path.join(directory, "manifest.json"), json({ version: 1, fingerprint, itemIds, sides, startedAt, ...metadata } satisfies Manifest));
 
   function relativeFile(itemId: string, kind: ArtifactName) {
     return `${itemId}.${kind}.json`;
@@ -92,8 +118,7 @@ export async function openRun(fingerprint: string, itemIds: string[], sides: rea
     const file = relativeFile(itemId, kind);
     for (const dir of previous) {
       const saved = await readJson<Cached<ArtifactMap[K]>>(path.join(RUNS_ROOT, dir, file));
-      if (saved?.fingerprint === inputFingerprint && saved.artifact && !saved.artifact.error
-        && !("status" in saved.artifact && saved.artifact.status === "error")) {
+      if (saved?.fingerprint === inputFingerprint && saved.artifact && (metadata.label || !saved.artifact.error)) {
         return { ...saved, reusedFrom: saved.reusedFrom ?? dir };
       }
     }

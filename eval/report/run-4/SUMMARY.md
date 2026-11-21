@@ -1,0 +1,6 @@
+Run 4 and the saved fair single-call Hydrogen baseline recorded 71/71 comparable captures, with 66 answered by both and 3 baseline errors versus 2 Pyre Witness errors.
+On captures both sides answered, plant-area accuracy was 87.7% [76.8%–93.9%] (n=57) for Hydrogen and 89.5% [78.9%–95.1%] (n=57) for Pyre Witness (Wilson 95% intervals, exact paired McNemar p=1.00).
+Across all attempts, plant-area accuracy was 82.3% [71.0%–89.8%] (n=62) for Hydrogen and 82.3% [71.0%–89.8%] (n=62) for Pyre Witness (Wilson 95% intervals).
+On shared answers, Hydrogen versus Pyre Witness scored 100.0% (66/66) vs 100.0% (66/66) for device versus non-device, 94.8% (55/58) vs 98.3% (57/58) for equipment kind (exact paired p=0.625), and 96.3% (52/54) vs 94.4% (51/54) for Purdue level.
+On shared answers, key-risk recall was 51.7% (61/118) vs 58.5% (69/118) (system minus baseline +6.8 pp [-1.8 pp, +16.1 pp] (pairs=54), paired bootstrap 95%), placements in labeled forbidden areas were 5.6% (3/54) vs 0.0% (0/54) (exact paired p=0.250), and Pyre Witness revised 4.7% (3/64) of its checked recommendations.
+Hydrogen averaged 0.97 HTTP attempts per capture at 13.3 s median and 18.4 s p95, and Pyre Witness averaged 3.96 recorded request traces per capture at 24.6 s median and 42.0 s p95 with incomplete HTTP telemetry.

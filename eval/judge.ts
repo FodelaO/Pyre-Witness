@@ -5,9 +5,9 @@ import { providerFailure, type GeminiClients } from "@/gemini/transport";
 import type { JudgeArtifact, Side } from "./types";
 
 export async function judgeTypes(
-  client: GeminiClients["decisions"], expected: string, predictions: [Side, string][],
+  client: GeminiClients["decisions"], expected: string, predictions: [Side, string][], stop: AbortSignal,
 ): Promise<JudgeArtifact> {
-  const signal = AbortSignal.timeout(20_000);
+  const signal = AbortSignal.any([stop, AbortSignal.timeout(20_000)]);
   const start = performance.now();
   const fields: Record<string, string> = { reference: expected };
   const questions: Decisions.CreateDecisionRequest["questions"] = {};
