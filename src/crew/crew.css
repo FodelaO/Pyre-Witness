@@ -1,0 +1,139 @@
+/* Plant-floor crew symbols and the matching activity feed. */
+@import "../equipment/equipment.css";
+
+.pw-crew-layer {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+.pw-crew-body {
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 75%));
+}
+
+.pw-crew-ring {
+  fill: none;
+  stroke: var(--crew-color);
+  stroke-width: 1.35;
+  opacity: .35;
+}
+
+.pw-crew-avatar[data-state="walking"] .pw-crew-ring {
+  opacity: .82;
+  stroke-dasharray: 8 4;
+}
+
+.pw-crew-avatar[data-state="working"] .pw-crew-ring {
+  stroke-width: 2;
+  animation: pw-crew-working 1.35s ease-in-out infinite;
+}
+
+.pw-crew-avatar[data-state="done"] .pw-crew-ring {
+  opacity: .9;
+  stroke-width: 2;
+}
+
+.pw-crew-avatar[data-state="error"] .pw-crew-ring {
+  stroke: var(--pw-alarm);
+  stroke-width: 2.5;
+  opacity: 1;
+}
+
+@keyframes pw-crew-working {
+  0%, 100% { opacity: .45; }
+  50% { opacity: 1; }
+}
+
+.pw-crew-hit { pointer-events: auto; }
+.pw-crew-hit:focus-visible { outline: none; }
+.pw-crew-hit:focus-visible .pw-crew-badge { stroke: var(--pw-text); }
+
+.pw-crew-badge {
+  stroke: var(--crew-color);
+  stroke-width: 1.35;
+  fill: color-mix(in srgb, var(--crew-color) 21%, var(--pw-panel));
+}
+
+.pw-crew-initials {
+  font-size: 11px;
+  font-weight: 750;
+  fill: color-mix(in srgb, var(--crew-color) 65%, white);
+}
+
+.pw-crew-name {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pw-crew-hit:is(:hover, :focus-visible) .pw-crew-name { opacity: 1; }
+.pw-crew-name rect { stroke: var(--pw-line-strong); fill: var(--pw-panel); }
+.pw-crew-name text { font-size: 11px; fill: var(--pw-text); }
+
+.pw-crew-leader {
+  stroke: var(--crew-color);
+  fill: var(--crew-color);
+  stroke-width: 1.2;
+  opacity: .65;
+}
+
+.pw-crew-bubble {
+  filter: drop-shadow(0 3px 5px rgb(0 0 0 / 60%));
+}
+
+.pw-crew-bubble :is(rect, path) {
+  fill: var(--pw-panel);
+  stroke: color-mix(in srgb, var(--crew-color) 55%, var(--pw-line));
+  stroke-width: 1.2;
+}
+
+.pw-crew-bubble[data-kind="briefing"] :is(rect, path) { stroke-width: 1.8; }
+.pw-crew-bubble[data-kind="patrol"] :is(rect, path) { stroke: var(--pw-line-strong); }
+.pw-crew-avatar[data-state="error"] .pw-crew-bubble :is(rect, path) { stroke: var(--pw-alarm); }
+.pw-crew-bubble-copy { fill: var(--pw-text); font-weight: 550; }
+.pw-crew-patrol-label { fill: var(--pw-text-dim); font-size: 11px; letter-spacing: .055em; }
+
+.pw-crew-desk { fill: var(--pw-eq-fill); stroke: var(--pw-line-strong); stroke-width: 1; }
+.pw-crew-chair { fill: var(--pw-floor); stroke: var(--pw-line-strong); stroke-width: 1; }
+.pw-crew-monitor { fill: var(--pw-floor); stroke: var(--pw-eq-stroke); stroke-width: .85; }
+.pw-crew-desk-name { fill: var(--pw-text); font-size: 10px; font-weight: 650; }
+.pw-crew-desk-engine { fill: var(--pw-text-dim); font-size: 7px; }
+
+.pw-crew-feed {
+  min-inline-size: 0;
+  padding: 12px 14px 14px;
+  border-block-start: 1px solid var(--pw-line);
+}
+
+.pw-crew-feed-list {
+  max-block-size: 208px;
+  overflow-y: auto;
+  overflow-anchor: none;
+  outline-offset: 2px;
+  overscroll-behavior: contain;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.pw-crew-feed-list li {
+  display: grid;
+  grid-template-columns: 47px 5px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 7px;
+  height: 26px;
+  border-block-end: 1px solid var(--pw-line);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pw-crew-feed-list li > time { font-size: 9px; color: var(--pw-text-dim); }
+.pw-crew-feed-dot { width: 5px; height: 5px; border-radius: 50%; }
+.pw-crew-feed-line { display: flex; align-items: center; min-width: 0; gap: 6px; }
+.pw-crew-feed-message { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.pw-crew-feed-engine, .pw-crew-feed-latency { flex: none; color: var(--pw-text-dim); font-size: 9px; }
+.pw-crew-feed-patrol { color: var(--pw-text-dim); font-size: 9px; }
+.pw-crew-feed-list li[data-kind="patrol"] { color: var(--pw-text-dim); }
+.pw-crew-feed-list li[data-kind="patrol"] .pw-crew-feed-dot { opacity: .55; }
+.pw-crew-feed-empty { margin: 8px 0 0; color: var(--pw-text-dim); font-size: 11px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pw-crew-body, .pw-crew-avatar[data-state="working"] .pw-crew-ring { animation: none; }
+}
