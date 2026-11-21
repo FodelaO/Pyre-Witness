@@ -1,0 +1,153 @@
+/** Itemizes the asset losses, response costs, and route behind one economic estimate. */
+import { ArrowRight, ChevronDown } from "lucide-react";
+import type { displayLedger, LossDifference } from "./displayLedger";
+import { formatFormulaUsd, formatUsd, METHOD_FOOTER, roundHours } from "./format";
+import { LossGlyph } from "./LossGlyph";
+import type { LossAssumption, LossEstimate } from "./types";
+import styles from "./LossFigure.module.css";
+
+type ItemRow = ReturnType<typeof displayLedger>["rows"][number];
+
+function AssetItem({ row }: { row: ItemRow }) {
+  const { asset, origin, installedReplacement } = row.item;
+  const shareOnly = row.formulas.length === 1 && row.formulas[0].shareOnly;
+  return (
+    <li className={styles.item} data-loss-item={asset.id}>
+      <LossGlyph kind={asset.kind} size={32} />
+      <div className={styles.itemBody}>
+        <div className={styles.itemTitle}><strong>{asset.tag}</strong> · {asset.name}</div>
+        <div className={styles.method}>{formatUsd(installedReplacement)} installed{origin && " · origin"}</div>
+        {!shareOnly && row.formulas.map(({ label, formula, shareOnly }, index) => (
+          <div className={styles.formula} key={index}>{!shareOnly && <><span>{label}</span> · </>}{formula}</div>
+        ))}
+      </div>
+      <strong className={styles.itemAmount}>{shareOnly ? row.formulas[0].formula : formatFormulaUsd(row.amount)}</strong>
+    </li>
+  );
+}
+
+function eventRate(count: number) {
+  return count > 0 && count < 0.1 ? "<0.1" : roundHours(count).toString();
+}
+
+/** Rare events read as a return period, so the line reconciles with the annualized figure below it. */
+function yearly(count: number, wholeFrom: number) {
+  if (count <= 0) return "0/yr";
+  return count >= wholeFrom ? `${roundHours(count)}/yr` : `1 in ${roundHours(1 / count)} yr`;
+}
+
+function percent(fraction: number) {
+  return fraction > 0 && fraction < 0.005 ? "<1%" : `${Math.round(fraction * 100)}%`;
+}
+
+function Frequency({ estimate }: { estimate: LossEstimate }) {
+  const { frequency } = estimate;
+  const path = frequency.path;
+  const caption = path.basis === "rules" ? "Rules engine path" : path.basis === "internal" ? "Internal access" : "Modeled contact";
+  return (
+    <div className={styles.frequencyBlock}>
+      <div className={styles.method}>{caption}</div>
+      <ol className={styles.route} aria-label={caption}>
+        <li>{path.entryLabel}</li>
+        {path.assets.map((asset, index) => (
+          <li key={`${asset.id}:${index}`} title={asset.name}>
+            <ArrowRight size={12} aria-hidden="true" />
+            <LossGlyph kind={asset.kind} size={23} />
+            <span>{asset.tag}</span>
+          </li>
+        ))}
+      </ol>
+      <div className={styles.frequency}>
+        TEF {yearly(frequency.tef, 0.1)} × Vuln {percent(frequency.vulnerability)} ≈ {yearly(frequency.lef, 1)}
+      </div>
+      <div className={styles.method}>{frequency.drivers.join(" · ")}</div>
+    </div>
+  );
+}
+
+function assumptionText({ value, unit }: LossAssumption): string {
+  if (typeof value === "string") return value;
+  const values = typeof value === "number" ? [value] : value;
+  if (/fraction|multiplier|probability/.test(unit)) return values.map(percent).join(" / ");
+  if (unit.startsWith("USD")) {
+    const suffix = unit.slice(3);
+    return `${values.map(formatFormulaUsd).join(" / ")}${suffix}`;
+  }
+  if (unit === "events/yr") return `${values.map(eventRate).join(" / ")} ${unit}`;
+  return `${values.map((number) => roundHours(number).toLocaleString("en-US")).join(" / ")} ${unit}`;
+}
+
+export function LossBreakdown({ estimate, difference, comparison, ledger }: {
+  estimate: LossEstimate;
+  ledger: ReturnType<typeof displayLedger>;
+  difference?: LossDifference;
+  comparison?: readonly { label: string; amount: number }[];
+}) {
+  const { rows, other, pools, total } = ledger;
+  const originRows = pools.length ? rows.filter(({ item, stopped }) => item.origin && !stopped) : [];
+  const groupedRows = rows.filter((row) => !originRows.includes(row));
+  const visibleGroupRows = 6 - originRows.length;
+  const involved = rows.reduce((total, { item }) => total + item.installedReplacement, 0);
+  const { asset, assetValue, p10, p50, p90, annualised, assumptions, primaryLoss, secondaryLoss } = estimate;
+  const tick = p90 === p10 ? 50 : 100 * (p50 - p10) / (p90 - p10);
+  const rangeLabel = difference ? (difference.before ? "As-dropped event range" : "Recommended event range") : undefined;
+
+  return (
+    <div className={styles.calculation}>
+      <div className={styles.moneyRow} data-loss-involved><span>Assets involved · {rows.length}</span><strong>{formatUsd(involved)}</strong></div>
+      {originRows.length > 0 && <ul className={styles.items} aria-label="Originating assets">
+        {originRows.map((row) => <AssetItem row={row} key={row.item.asset.id} />)}
+      </ul>}
+      {pools.map(({ label, formula }) => (
+        <div key={label} className={styles.pool} data-loss-downtime><strong>{label}</strong> · <span className={styles.formula}>{formula}</span></div>
+      ))}
+      <ul className={styles.items} aria-label="Asset losses">
+        {groupedRows.slice(0, visibleGroupRows).map((row) => <AssetItem row={row} key={row.item.asset.id} />)}
+      </ul>
+      {groupedRows.length > visibleGroupRows && (
+        <details className={styles.remaining}>
+          <summary><span>+{groupedRows.length - visibleGroupRows} more</span><ChevronDown size={13} aria-hidden="true" /></summary>
+          <ul className={styles.items}>
+            {groupedRows.slice(visibleGroupRows).map((row) => <AssetItem row={row} key={row.item.asset.id} />)}
+          </ul>
+        </details>
+      )}
+      {other.map(({ key, label, formula, displayAmount }) => (
+        <div key={key} className={styles.nonAsset} data-loss-other={key}>
+          <div className={styles.moneyRow}><span>{label}</span><strong>{formatFormulaUsd(displayAmount)}</strong></div>
+          <div className={styles.formula}>{formula}</div>
+        </div>
+      ))}
+      {rangeLabel && <div className={styles.method}>Frequency and range · {rangeLabel}</div>}
+      <Frequency estimate={estimate} />
+      {comparison?.map(({ label, amount }) => (
+        <div className={styles.moneyRow} key={label}><span>{label}</span><strong>{formatUsd(amount)}</strong></div>
+      ))}
+      <div className={styles.total} data-loss-total>
+        <span>{difference ? "Total placement change" : "Total single-event loss"}</span><strong>{formatUsd(total)} est.</strong>
+      </div>
+      <div className={styles.range} aria-hidden="true"><span style={{ left: `${tick}%` }} /></div>
+      <div className={styles.percentiles}>
+        <span>P10 {formatUsd(p10)}</span><span>P50 {formatUsd(p50)}</span><span>P90 {formatUsd(p90)}</span>
+      </div>
+      {!difference && secondaryLoss > 0 && (
+        <div className={styles.moneyRow} data-loss-split>
+          <span>Primary · secondary loss</span><strong>{formatUsd(primaryLoss)} · {formatUsd(secondaryLoss)}</strong>
+        </div>
+      )}
+      <div className={styles.moneyRow}><span>Annualized loss (ALE)</span><strong>{formatUsd(annualised)} / yr</strong></div>
+      <div className={styles.moneyRow}><span>{asset.tag} line dependency</span><strong>{Math.round(assetValue.dependency * 100)}%</strong></div>
+      <div className={styles.moneyRow}><span>Line throughput value</span><strong>{formatUsd(assetValue.throughputPerHour)} / hr</strong></div>
+      <div className={styles.assumptionHeading}>Method and inputs</div>
+      <div className={styles.method} data-loss-method>{METHOD_FOOTER}</div>
+      <dl className={styles.assumptions}>
+        {assumptions.map((input, index) => (
+          <div key={`${input.label}:${index}`}>
+            <dt>{input.label}</dt>
+            <dd>{assumptionText(input)}<small>{input.source ? <a href={input.source} target="_blank" rel="noreferrer">{input.basis}</a> : input.basis}</small></dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}

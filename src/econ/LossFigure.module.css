@@ -1,0 +1,108 @@
+/* Compact engineering instrument for one conditional loss estimate. */
+.figure {
+  inline-size: 100%;
+  min-inline-size: 0;
+  color: var(--pw-text);
+  border-block: 1px solid var(--pw-line);
+  margin-block: 6px;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 48px;
+  padding: 2px 3px;
+  list-style: none;
+  text-align: start;
+  cursor: pointer;
+}
+
+.summary::-webkit-details-marker { display: none; }
+.summary::marker { content: ""; }
+.summary:focus-visible { outline-offset: -2px; }
+.equipment { display: block; }
+.equipment *, .equipment *::before, .equipment *::after { animation: none !important; }
+
+.headline { min-inline-size: 0; }
+.amount {
+  font: 690 21px/1.05 var(--font-geist-sans), system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+
+.amount[data-tone="attention"] { color: var(--pw-attention); }
+.amount[data-tone="alarm"] { color: var(--pw-alarm); }
+
+.estimated, .subtitle, .toggle, .method, .percentiles, .assumptions small, .formula {
+  color: var(--pw-text-dim);
+}
+
+.estimated { font-size: 9px; }
+.qualifier { display: inline-block; white-space: nowrap; }
+.subtitle {
+  display: block;
+  overflow-wrap: anywhere;
+  font: 11px/1.3 var(--font-geist-mono), ui-monospace, monospace;
+}
+
+.toggle { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; font-size: 10px; }
+.less,
+.figure[open] .more { display: none; }
+.figure[open] .less { display: inline; }
+.figure[open] .toggle svg { transform: rotate(180deg); }
+
+.calculation { display: grid; gap: 6px; padding: 5px 3px 9px; font-size: 11px; }
+.method, .assumptions small { font-size: 10px; }
+.pool {
+  padding: 5px 6px;
+  border-inline-start: 2px solid var(--pw-line-strong);
+  background: var(--pw-panel-2);
+  overflow-wrap: anywhere;
+}
+.items, .route { list-style: none; padding: 0; margin: 0; }
+.item {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px;
+  border-block-start: 1px solid var(--pw-line);
+  padding-block: 5px;
+}
+.itemBody { min-inline-size: 0; overflow-wrap: anywhere; }
+.itemTitle { line-height: 1.25; }
+.itemTitle strong, .itemAmount, .formula, .frequency, .route,
+.moneyRow strong, .total strong, .percentiles {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+.itemAmount { font-weight: 650; white-space: nowrap; }
+.formula { font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.formula span { color: var(--pw-text); }
+.remaining > summary { display: flex; align-items: center; gap: 3px; cursor: pointer; }
+.remaining > summary::marker { content: ""; }
+.remaining > summary::-webkit-details-marker { display: none; }
+.remaining[open] > summary svg { transform: rotate(180deg); }
+.nonAsset, .frequencyBlock, .total {
+  border-block-start: 1px solid var(--pw-line);
+  padding-block-start: 5px;
+}
+.route { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; font-size: 9px; }
+.route li { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.route li > svg:first-child { color: var(--pw-text-faint); }
+.frequency { font-size: 10px; }
+.moneyRow, .total, .percentiles { display: flex; justify-content: space-between; gap: 5px; }
+.moneyRow strong, .total strong { font-weight: 650; white-space: nowrap; }
+.total { font-size: 12px; font-weight: 650; }
+.range { position: relative; block-size: 3px; margin-block: 4px 1px; background: var(--pw-text-faint); }
+.range span { position: absolute; inset-block: -3px; inline-size: 2px; background: var(--pw-text); transform: translateX(-50%); }
+.percentiles { font-size: 9px; }
+.assumptionHeading { border-block-start: 1px solid var(--pw-line); padding-block-start: 5px; font-weight: 600; }
+
+.assumptions { margin: 0; border-block-start: 1px solid var(--pw-line); font-size: 10px; }
+.assumptions > div { display: flex; justify-content: space-between; gap: 8px; padding-block: 3px; }
+.assumptions dd { margin: 0; text-align: end; }
+.assumptions :is(dt, dd) { min-inline-size: 0; overflow-wrap: anywhere; }
+.assumptions small { display: block; }
+.assumptions a { color: var(--pw-info); text-decoration: underline; }
