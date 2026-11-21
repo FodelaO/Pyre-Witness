@@ -1,0 +1,150 @@
+/**
+ * Unit tests for main image download (src/link/image.ts) and end-to-end
+ * product page orchestration (src/link/fetchProductPage.ts). No live network.
+ */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it, vi } from "vitest";
+import { fetchProductPage, LinkFetchError } from "./fetchProductPage";
+import { fetchMainImage } from "./image";
+import type { DnsLookupFn } from "./safeFetch";
+
+const publicDns: DnsLookupFn = async () => [{ address: "93.184.216.34", family: 4 }];
+
+// Minimal valid magic-byte payloads for JPEG, PNG, and WebP.
+const TINY_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+const TINY_JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+const TINY_WEBP = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x10, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+
+describe("fetchMainImage", () => {
+  it("downloads JPEG, PNG, and WebP images as base64 CaptureImage", async () => {
+    const samples: Array<[string, Uint8Array<ArrayBuffer>, string]> = [
+      ["image/jpeg; charset=binary", TINY_JPEG, "image/jpeg"],
+      ["image/png", TINY_PNG, "image/png"],
+      ["image/webp", TINY_WEBP, "image/webp"],
+    ];
+
+    for (const [contentType, bytes, expectedMime] of samples) {
+      const fetchMock = vi.fn<typeof fetch>(async () =>
+        new Response(bytes, { status: 200, headers: { "content-type": contentType } }),
+      );
+      const image = await fetchMainImage("https://cdn.example.com/item.img", {
+        fetchImpl: fetchMock,
+        dnsLookup: publicDns,
+      });
+      expect(image).toEqual({
+        mimeType: expectedMime,
+        dataBase64: Buffer.from(bytes).toString("base64"),
+      });
+    }
+  });
+
+  it("returns null for unsupported MIME types, blocked hosts, or oversized images", async () => {
+    const svgFetch = vi.fn<typeof fetch>(async () =>
+      new Response("<svg></svg>", { status: 200, headers: { "content-type": "image/svg+xml" } }),
+    );
+    expect(
+      await fetchMainImage("https://cdn.example.com/icon.svg", {
+        fetchImpl: svgFetch,
+        dnsLookup: publicDns,
+      }),
+    ).toBeNull();
+
+    const hugeFetch = vi.fn<typeof fetch>(async () =>
+      new Response(TINY_PNG, {
+        status: 200,
+        headers: { "content-type": "image/png", "content-length": String(5 * 1024 * 1024) },
+      }),
+    );
+    expect(
+      await fetchMainImage("https://cdn.example.com/huge.png", {
+        fetchImpl: hugeFetch,
+        dnsLookup: publicDns,
+      }),
+    ).toBeNull();
+
+    expect(
+      await fetchMainImage("http://127.0.0.1/secret.png", {
+        fetchImpl: svgFetch,
+        dnsLookup: publicDns,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("fetchProductPage", () => {
+  it("fetches HTML, extracts fields, downloads main image, and returns LinkSnapshot", async () => {
+    const html = readFileSync(resolve(import.meta.dirname, "__fixtures__", "camera-jsonld.html"), "utf-8");
+
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const target = String(input);
+      if (target === "https://shop.example.com/products/c420") {
+        return new Response(html, {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+      if (target === "https://cdn.example.com/cams/c420-hero.webp") {
+        return new Response(TINY_WEBP, {
+          status: 200,
+          headers: { "content-type": "image/webp" },
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+
+    const snapshot = await fetchProductPage("https://shop.example.com/products/c420", {
+      fetchImpl: fetchMock,
+      dnsLookup: publicDns,
+    });
+
+    expect(snapshot.url).toBe("https://shop.example.com/products/c420");
+    expect(snapshot.title).toBe("NetEye Pro C420 Dual-Band Wi-Fi & PoE Inspection Camera");
+    expect(snapshot.specText).toContain("Brand: NetEye");
+    expect(snapshot.specText).toContain("Model: C420-POE-WF");
+    expect(snapshot.imageUrl).toBe("https://cdn.example.com/cams/c420-hero.webp");
+    expect(snapshot.image).toEqual({
+      mimeType: "image/webp",
+      dataBase64: Buffer.from(TINY_WEBP).toString("base64"),
+    });
+  });
+
+  it("throws LinkFetchError(not_html) when the target returns non-HTML content", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      new Response("%PDF-1.7", { status: 200, headers: { "content-type": "application/pdf" } }),
+    );
+
+    let caught: unknown;
+    try {
+      await fetchProductPage("https://docs.example.com/datasheet.pdf", {
+        fetchImpl: fetchMock,
+        dnsLookup: publicDns,
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(LinkFetchError);
+    expect((caught as LinkFetchError).code).toBe("not_html");
+  });
+
+  it("still succeeds with image=null when the main image fails to download", async () => {
+    const html = readFileSync(resolve(import.meta.dirname, "__fixtures__", "meta-only.html"), "utf-8");
+
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      if (String(input).endsWith("/gw-900")) {
+        return new Response(html, { status: 200, headers: { "content-type": "text/html" } });
+      }
+      return new Response("Missing", { status: 404 });
+    });
+
+    const snapshot = await fetchProductPage("https://celllink.example.com/gw-900", {
+      fetchImpl: fetchMock,
+      dnsLookup: publicDns,
+    });
+
+    expect(snapshot.title).toBe("CellLink GW-900 Industrial 4G LTE Modbus Gateway");
+    expect(snapshot.imageUrl).toBe("https://celllink.example.com/og/gw-900.png");
+    expect(snapshot.image).toBeNull();
+  });
+});
