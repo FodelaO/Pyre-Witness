@@ -10,10 +10,13 @@ export const CHANGE_IDS = [
 ] as const;
 export type ChangeId = (typeof CHANGE_IDS)[number];
 
+// Every change ID adds work to the existing device, so a model-claimed saving would create net value
+// the rules engine and loss model never derived. Costs stay non-negative and bounded.
+const usd = z.number().min(0).max(1_000_000);
 const cost = z.strictObject({
-  low: z.number(),
-  mode: z.number(),
-  high: z.number(),
+  low: usd,
+  mode: usd,
+  high: usd,
 }).refine(({ low, mode, high }) => low <= mode && mode <= high, "Expected low ≤ mode ≤ high");
 
 export const carbonResponseSchema = z.strictObject({

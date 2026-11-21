@@ -29,7 +29,7 @@ export function buildCandidates(twin: Twin, asset: Asset, profile: DeviceProfile
 
   if (ruleIds.has("RF-01")) {
     const wired = asset.physical.connections.some(({ medium, active }) => medium === "network" && active !== false)
-      || profile.ports.some((port) => /\b(?:rj[ -]?45|ethernet)\b/i.test(port));
+      || profile.ports.some((port) => /\b(?:rj[ -]?45|ether[ -]?net|profi[ -]?net)\b/i.test(port));
     const effects = (asset.cyber?.radios ?? []).filter((radio) => radio !== "nfc").map((radio): MitigationEffect => {
       const effect = { type: "disable_radio", assetId, radio } as const;
       if (wired) offer(`disable_${radio}`, `Retain wired operation and turn off optional ${radio}.`, effect);

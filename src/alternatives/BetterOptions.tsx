@@ -16,6 +16,7 @@ import { alternativesRequestSchema, carbonResponseSchema, type CarbonCandidate }
 import styles from "./BetterOptions.module.css";
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+const usdWhole = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const points = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 
 function signed(value: number, format: (value: number) => string = String) {
@@ -53,7 +54,7 @@ function Option({ item, apply }: { item: EvaluatedCandidate; apply: () => void }
   if (net === null || candidate.cost === null) return null;
   const fromCarbon = candidate.source === "carbon";
   const [low, mode, high] = candidate.cost;
-  const annual = `${signed(net, usd.format)}/yr`;
+  const annual = `${signed(net, usdWhole.format)}/yr`;
   const gaps = `${signed(-complianceReduction)} ${complianceReduction === 1 ? "gap" : "gaps"}`;
   const details = [
     candidate.name,
@@ -106,12 +107,12 @@ function ComparedOptions({ asset: selectedAsset, assessment, profile }: { asset:
   }) : null;
   const carbon = useCarbon(request);
   const options = useMemo(() => {
-    if (request && !carbon) return [];
+    // Rules-engine options show at once; Carbon's proposals join the ranking when they arrive.
     const proposals = carbon && !carbon.unavailable ? mapCarbonCandidates(carbon.proposals, changes) : [];
     return evaluateAlternatives(twin, asset.id, [...rules, ...proposals])
       .filter(({ qualifies }) => qualifies)
       .slice(0, 2);
-  }, [twin, asset.id, rules, request, carbon, changes]);
+  }, [twin, asset.id, rules, carbon, changes]);
 
   function apply(item: EvaluatedCandidate) {
     const store = useTwinStore.getState();
@@ -130,7 +131,7 @@ function ComparedOptions({ asset: selectedAsset, assessment, profile }: { asset:
   const label = options.length === 1 ? "Better option" : "Better options";
   return (
     <section className={styles.options} aria-label={label}>
-      <h3 className={`pw-mono ${styles.heading}`}>{label}</h3>
+      <h3 className={`pw-mono ${styles.heading}`}>{label} · simulated est.</h3>
       {options.map((item, index) => (
         <Option key={`${item.candidate.source}-${item.candidate.name}-${index}`} item={item} apply={() => apply(item)} />
       ))}

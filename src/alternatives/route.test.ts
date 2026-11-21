@@ -58,6 +58,12 @@ it.each([
   { ...proposal, changes: ["disable_wifi", "disable_wifi"] },
   { ...proposal, kind: "plc_cabinet" },
   { ...proposal, costDeltaUsd: { low: 90, mode: 50, high: 100 } },
+  // Metrics the model must never supply, and a claimed saving that would manufacture net value.
+  { ...proposal, net: 5000 },
+  { ...proposal, complianceReduction: 3 },
+  { ...proposal, annualLossAvoided: 1e6 },
+  { ...proposal, costDeltaUsd: { low: -1e9, mode: -1e9, high: -1e9 } },
+  { ...proposal, costDeltaUsd: { low: 0, mode: 0, high: 1e12 } },
 ])("falls back for an invalid proposal", async (invalid) => {
   output([proposal, invalid]);
   expect(await (await POST(request())).json()).toEqual({ candidates: [], unavailable: true });

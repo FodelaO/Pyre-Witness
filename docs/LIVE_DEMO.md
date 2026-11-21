@@ -17,6 +17,7 @@
 | 0:15 | "**New equipment.** One real photo." | **+** (bottom left) → **Upload** → **S7-300 PLC** sample. (Or **Describe**: type `Siemens S7-1500 PLC with built-in Wi-Fi, for Filler 3`, Enter: shows more risk.) |
 | 0:20 | "Hydrogen reads the photo, Carbon reasons over the twin, a deterministic rules engine checks every attack path, and Neon briefs the operator. The Decisions API gates the input." | Point at the crew walking (Scout, Architect, Inspector = rules engine, Chief). About 25 s. |
 | 0:50 | "It lands where it was dropped, the rules engine finds the paths, prices the loss per event, and recommends a safer place." | The asset is auto-selected. Show **Risks** and **Where it goes** in the right pane. Risk 46 → 47. |
+| 1:05 | "It also looks for a better option: Carbon proposes alternatives, and the rules engine and loss model price them. It only shows one if it wins on both net value and compliance." | Under the device drawing: **Better options** row (for example +$715/yr, −1 gap) → **Use**. Point at the est. annual loss dropping. |
 | 1:15 | "**New information**, at the same time. The Decisions API triages live CISA advisories and FDA recalls against our assets." | Click the big **risk dial** → **Threat watch** → **Run now**. Point at the crew. |
 | 1:35 | "The crew proposes fixes, ranked by computed risk drop. A human approves." | **To-dos** → top item (**Lock exposed ports**, about −8) → **Approve**. The dial drops to **38**. |
 | 1:55 | "**Escalation**, three levels at once." | **Escalation** chip → **Run test alert**. |
