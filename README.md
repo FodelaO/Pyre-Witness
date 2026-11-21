@@ -1,4 +1,4 @@
-# 🔥 Pyre Witness
+# 🔥👁️ Pyre Witness
 
 **Snap any device. See where it belongs in your plant, and what risk it brings, before you plug it in.**
 
