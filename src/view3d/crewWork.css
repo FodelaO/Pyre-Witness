@@ -116,8 +116,24 @@
   user-select: text;
 }
 .pw3d-work-briefing header { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.pw3d-work-briefing header > svg { color: var(--pw-crew-chief); }
 .pw3d-work-briefing button { margin-inline-start: auto; padding: 3px; cursor: pointer; }
+.pw3d-work-briefing .pw3d-work-briefing-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+.pw3d-work-briefing-toggle svg { color: var(--pw-crew-chief); }
+.pw3d-work-briefing[data-collapsed] {
+  width: max-content;
+  max-height: none;
+  padding: 0;
+  border-top-width: 1px;
+  border-radius: 999px;
+}
+.pw3d-work-briefing[data-collapsed] .pw3d-work-briefing-toggle { padding: 5px 10px; border-radius: inherit; }
+.pw3d-work-briefing[data-collapsed] header { border-radius: inherit; }
 .pw3d-work-source { color: var(--pw-text-dim); font-size: 10px; margin: 1px 0 6px; }
 .pw3d-work-copy { min-height: 0; overflow: auto; overscroll-behavior: contain; touch-action: pan-y; font-size: 12px; line-height: 1.45; white-space: pre-wrap; }
 
