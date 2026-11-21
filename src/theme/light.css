@@ -70,6 +70,10 @@
   box-shadow: 0 4px 12px var(--pw-light-shadow);
 }
 
+:root[data-theme="light"] .pw-live-pulse {
+  --pw-live-ring-opacity: .65;
+}
+
 :root[data-theme="light"] :is(.pw-lens-notice > span, .pw-floor-zoom, .pw-floor-legend-card, .pw-floor-tag) {
   box-shadow: 0 4px 16px var(--pw-light-shadow);
 }

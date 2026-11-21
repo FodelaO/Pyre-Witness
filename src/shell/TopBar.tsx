@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { Layers3, Map } from "lucide-react";
-import ServicesChip from "@/health/ServicesChip";
+import { useShallow } from "zustand/react/shallow";
 import LensToggle from "@/layers/LensToggle";
 import type { LensMode } from "@/layers/lensStore";
 import { displayedRiskChange, riskDelta, riskScore } from "@/panel/riskNumber";
@@ -29,7 +29,7 @@ export function TopBar({ mode, levels, lensNotice, drawerOpen, watchOpen, onTogg
   const plant = useTwinStore((state) => state.twin.plant);
   const risk = useTwinStore((state) => state.risk);
   const baseline = useTwinStore((state) => state.baselineScore);
-  const watch = useWatchStore((state) => watchStatus(state.local));
+  const watch = useWatchStore(useShallow(({ local, feedStatus, review }) => watchStatus(local, { feedStatus, review })));
   const score = riskScore(risk.score);
   const delta = displayedRiskChange(risk.score, baseline);
 
@@ -64,11 +64,10 @@ export function TopBar({ mode, levels, lensNotice, drawerOpen, watchOpen, onTogg
       </div>
       <div className="pw-top-actions">
         <button type="button" className="pw-top-watch" aria-expanded={watchOpen} aria-controls="pw-watch"
-          aria-label={"Threat watch · " + watch} data-pw-tip={"Threat watch · " + watch}
+          aria-label={watch.label} data-pw-tip={watch.label}
           onClick={(event) => onToggleWatch(event.currentTarget)}>
-          <span className="pw-status-dot" data-status={watch} aria-hidden /><span className="pw-top-watch-label">Watch</span>
+          <span className="pw-live-pulse" data-tone={watch.tone} aria-hidden />
         </button>
-        <ServicesChip />
         <Link className="pw-top-proof" href="/proof">Proof</Link>
         <ThemeToggle />
         <span className="pw-top-risk pw-top-risk-desktop" data-band={risk.band} title={band}>{riskReadout}</span>

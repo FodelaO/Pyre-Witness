@@ -1,0 +1,3 @@
+- Replaced the Watch label with a 10 px status dot that toggles Threat watch and uses the store’s last feed check time in its tooltip and accessible name.
+- Green pulses for Ready, Checking, Complete and incomplete reviews with healthy feeds. Stale and mixed feed checks stay amber. All feeds offline or a missing Gemini key stays red. Reduced motion stops the pulse.
+- Verified both themes in 3D at 1920, 1440, 1280 and 1024 px, mouse and keyboard toggling, and a live four-feed check. TypeScript and Vitest passed. Screenshots are in `docs/log/shots/live-pulse-*.png`.
