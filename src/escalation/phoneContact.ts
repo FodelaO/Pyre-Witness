@@ -1,9 +1,7 @@
-/** Keeps the contact and the first-alert prompt preference in this browser. */
+/** Stores the phone contact in this browser. */
 import { normalizePhoneNumber } from "./phoneNumber";
 
 export const PHONE_CONTACT_KEY = "pw:escalation-phone";
-const PROMPT_KEY = "pw:escalation-phone-prompted";
-let prompted = false;
 
 export interface PhoneContact {
   name: string;
@@ -29,14 +27,4 @@ export function writePhoneContact(contact: PhoneContact | null) {
   } catch {
     return false;
   }
-}
-
-export function claimPhonePrompt(): boolean {
-  if (prompted) return false;
-  prompted = true;
-  try {
-    if (localStorage.getItem(PROMPT_KEY)) return false;
-    localStorage.setItem(PROMPT_KEY, "1");
-  } catch { /* The module still remembers the prompt for the tab. */ }
-  return true;
 }

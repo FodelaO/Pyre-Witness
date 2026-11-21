@@ -1,5 +1,7 @@
 /** Runs the rehearsal through real twin, rules, economics and escalation store transitions. */
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { estimateLoss } from "@/econ/model";
 import { scenarioFromPath } from "@/econ/scenarios";
 import { SEED_TWIN } from "@/twin/seed";
@@ -7,26 +9,38 @@ import { useTwinStore } from "@/twin/store";
 import { monitorEscalations } from "./monitor";
 import { DEFAULT_THRESHOLDS, ESCALATION_DEBOUNCE_MS, thresholdCrossed } from "./policy";
 import { useEscalationStore } from "./store";
+import { TelephoneCard } from "./TelephoneCard";
 import { clearTestAlert, runTestAlert, TEST_ASSET_ID, TEST_BRIEFING_PREFIX } from "./testScenario";
 import { testScenarioCause } from "./testScenarioEvidence";
+import { useEscalationPhone } from "./useEscalationPhone";
 
 beforeEach(() => {
   useTwinStore.getState().setTwin(SEED_TWIN);
   useEscalationStore.setState({ records: [], thresholds: DEFAULT_THRESHOLDS });
   vi.useFakeTimers();
+  vi.stubGlobal("localStorage", { getItem: () => null });
 });
 
 afterEach(() => {
   useTwinStore.getState().setTwin(SEED_TWIN);
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
-it("raises and resolves one labeled test alert above the default loss threshold", () => {
+it("starts without a phone and raises and resolves one labeled test alert above the threshold", () => {
   const stop = monitorEscalations();
   const records = () => useEscalationStore.getState().records.filter(({ trigger }) => trigger.test);
   const baseline = useTwinStore.getState().risk.score;
   try {
-    expect(runTestAlert()).toBe(true);
+    let toggleTest: (() => boolean) | undefined;
+    function TestAlertControl() {
+      const phone = useEscalationPhone([]);
+      expect(phone.contact).toBeNull();
+      toggleTest = phone.toggleTest;
+      return null;
+    }
+    renderToStaticMarkup(createElement(TestAlertControl));
+    expect(toggleTest?.()).toBe(true);
     const state = useTwinStore.getState();
     const gateway = state.twin.assets.find(({ id }) => id === TEST_ASSET_ID);
     expect(gateway?.name).toBe("TEST · rogue LTE gateway");
@@ -49,6 +63,11 @@ it("raises and resolves one labeled test alert above the default loss threshold"
     expect(records()[0].script).toContain("rogue LTE gateway");
     expect(records()[0].script).toMatch(/ Attack path from .+ to FIL-3\. Estimated loss \$[\d.,]+[kM]?\. /);
     expect(records()[0].script).toContain("Remove the test gateway from the twin");
+    const callControls = renderToStaticMarkup(createElement(TelephoneCard, {
+      mode: null, resolved: false, onCall: vi.fn(), onDevice: vi.fn(),
+    }));
+    expect(callControls).toContain("Add phone to get calls</button>");
+    expect(callControls).toContain("lucide-phone");
 
     runTestAlert();
     vi.advanceTimersByTime(ESCALATION_DEBOUNCE_MS);

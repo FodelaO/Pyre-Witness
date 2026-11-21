@@ -27,3 +27,5 @@ One tap on the handset requests the system dialer. The handset shows **Dialer op
   Screenshots are in `.agents/qa/opus-correct/telephony-review-fixes/`. A physical cellular connection remains unverified.
 
 The live card and handset display **TEST SCENARIO**. The exact drawing-label edits for the floor, Purdue, and 3D views are in [Mounting](../../src/escalation/MOUNTING.md). [Two-person demo steps](../CALL_DEMO.md)
+- Feed HTTP failures and timeouts mark every source offline. Vitest verified that the dot turns green after a healthy check, and the browser showed the red dot after a simulated HTTP 503.
+- With no saved number, **Run test alert** showed **Add phone to get calls** on the card with the twin unobstructed. In the browser, the inline prompt and the chip settings each opened the dialog on click.

@@ -42,8 +42,8 @@ export function TelephoneCard({ mode, maskedNumber, receipt, resolved, onCall, o
     </div> : maskedNumber && <div className="pw-es-tel-status">{maskedNumber}</div>}
     {label && <div className="pw-es-note">{label}</div>}
     {!resolved && <div className="pw-es-tel-actions">
-      <button type="button" className="pw-es-text-button" onClick={onDevice} disabled={telephoneBusy(receipt)}>
-        <Phone size={14} aria-hidden /> {maskedNumber ? "Call from this device" : "Add your phone"}
+      <button type="button" className="pw-es-text-button" onClick={onDevice} disabled={!!maskedNumber && telephoneBusy(receipt)}>
+        <Phone size={14} aria-hidden /> {maskedNumber ? "Call from this device" : "Add phone to get calls"}
       </button>
       {mode === "twilio" && maskedNumber && <button type="button" className="pw-es-text-button" onClick={onCall}
         disabled={telephoneBusy(receipt)}>Call now</button>}
