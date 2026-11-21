@@ -1,0 +1,125 @@
+/* Compact replay controls and floor overlays in plant state colours. */
+.pw-sim-controls {
+  --pw-sim-mono: var(--font-geist-mono), ui-monospace, monospace;
+  width: max-content;
+  max-width: 100%;
+  color: var(--pw-text);
+  background: color-mix(in srgb, var(--pw-panel) 96%, var(--pw-bg));
+  border: 1px solid var(--pw-line-strong);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px #0004;
+  overflow: hidden;
+  pointer-events: auto;
+  font: 10px/1.35 var(--pw-sim-mono);
+}
+
+.pw-sim-controls[data-mount="floor"] {
+  position: absolute;
+  z-index: 5;
+  top: 48px;
+  left: 16px;
+  max-width: calc(100% - 32px);
+}
+
+@container (width < 510px) {
+  .pw-sim-controls[data-mount="floor"] { top: 42px; left: 10px; max-width: calc(100% - 20px); }
+}
+
+.pw-sim-controls-header,
+.pw-sim-heading,
+.pw-sim-transport {
+  display: flex;
+  align-items: center;
+}
+
+.pw-sim-controls-header {
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 5px 4px 10px;
+  border-bottom: 1px solid var(--pw-line);
+}
+
+.pw-sim-heading { gap: 6px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.pw-sim-heading svg { color: var(--pw-text-dim); }
+.pw-sim-transport { gap: 2px; }
+
+.pw-sim-controls button {
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  color: var(--pw-text-dim);
+  cursor: pointer;
+}
+
+.pw-sim-controls button:hover:not(:disabled) { background: var(--pw-panel-2); color: var(--pw-text); }
+.pw-sim-controls button:focus-visible { outline: 1px solid var(--pw-eq-accent); outline-offset: -1px; }
+.pw-sim-controls button:disabled { opacity: 0.45; cursor: default; }
+.pw-sim-transport button { width: 28px; height: 27px; }
+.pw-sim-transport .pw-sim-speed { color: var(--pw-text); }
+
+.pw-sim-launchers {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 64px));
+  gap: 1px;
+  padding: 4px;
+}
+
+.pw-sim-launchers button {
+  align-content: center;
+  gap: 3px;
+  min-height: 48px;
+  padding: 4px 2px;
+  border: 1px solid transparent;
+  font-size: 9px;
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.pw-sim-launchers button[aria-pressed="true"] {
+  color: var(--pw-attention);
+  border-color: color-mix(in srgb, var(--pw-attention) 32%, var(--pw-line));
+  background: color-mix(in srgb, var(--pw-attention) 7%, var(--pw-panel));
+}
+
+.pw-sim-timeline { padding: 7px 9px; border-top: 1px solid var(--pw-line); }
+.pw-sim-stages { display: flex; list-style: none; gap: 3px; margin: 0 0 5px; padding: 0; }
+.pw-sim-stages li { position: relative; height: 3px; flex: 1; border-radius: 2px; background: var(--pw-line-strong); }
+.pw-sim-stages li[data-state="advanced"] { background: var(--pw-attention); }
+.pw-sim-stages li[data-state="blocked"] { background: var(--pw-ok); }
+.pw-sim-stages li[aria-current="step"]::after {
+  content: "";
+  position: absolute;
+  inset: -2px 0;
+  border-radius: 2px;
+  border: 1px solid currentColor;
+}
+
+.pw-sim-stage-caption { display: flex; align-items: baseline; gap: 8px; }
+.pw-sim-stage-caption time { color: var(--pw-text-dim); font-variant-numeric: tabular-nums; }
+.pw-sim-stage-caption span, .pw-sim-outcome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-sim-outcome {
+  margin: 0;
+  padding: 7px 9px;
+  border-top: 1px solid var(--pw-line);
+  color: var(--pw-attention);
+}
+.pw-sim-outcome[data-outcome="contained"] { color: var(--pw-ok); }
+.pw-sim-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.pw-sim-layer { pointer-events: none; --pw-sim-mono: var(--font-geist-mono), ui-monospace, monospace; }
+.pw-sim-route { fill: none; stroke: var(--pw-attention); stroke-width: 2.5; stroke-dasharray: 4 6; opacity: 0.75; }
+.pw-sim-probe circle:first-child { fill: var(--pw-floor); stroke: var(--pw-attention); stroke-width: 2; }
+.pw-sim-probe circle:last-child { fill: var(--pw-attention); }
+.pw-sim-marker { color: var(--pw-alarm); }
+.pw-sim-marker[data-state="blocked"] { color: var(--pw-ok); }
+.pw-sim-marker[data-state="attention"] { color: var(--pw-attention); }
+.pw-sim-marker-back { fill: var(--pw-floor); stroke: currentColor; stroke-width: 1.7; }
+.pw-sim-marker-mark { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.pw-sim-area-ring { fill: none; stroke: var(--pw-alarm); stroke-width: 2; stroke-dasharray: 6 5; }
+.pw-sim-area-ring[data-state="attention"] { stroke: var(--pw-attention); }
+.pw-sim-caustic { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke: var(--pw-m-cip); stroke-width: 5; }
+.pw-sim-caustic-drop { fill: none; stroke: var(--pw-text); stroke-linecap: round; stroke-width: 7; }
+.pw-sim-map-tag rect { fill: var(--pw-floor); stroke: var(--pw-line-strong); stroke-width: 1.25; }
+.pw-sim-map-tag text { fill: var(--pw-text); font: 600 12px var(--pw-sim-mono); letter-spacing: 0.035em; }
