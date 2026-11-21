@@ -1,4 +1,4 @@
-/** Seed twin for Bebidas del Norte, Line 3: a fictional cola bottling plant. */
+/** Seed twin for North Beverage Facility, Line 3: a fictional cola bottling plant. */
 import { SEED_AREAS } from "./seed/areas";
 import { BLENDING_ASSETS } from "./seed/blending";
 import { CONTROL_ASSETS } from "./seed/control";
@@ -27,7 +27,7 @@ export const SEED_ASSETS: Asset[] = [
 
 export const SEED_TWIN: Twin = {
   plant: {
-    name: "Bebidas del Norte",
+    name: "North Beverage Facility",
     line: "Line 3",
     fictional: true,
     canvas: { w: 1600, h: 1000 },

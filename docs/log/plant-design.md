@@ -1,4 +1,4 @@
-# Bebidas del Norte, Line 3
+# North Beverage Facility, Line 3
 
 Fictional 36,000 bottle/h cola line on a 160 × 100 m floor. The water, syrup, blend and utility rooms occupy the north block. Bottles run west to east through filling and packaging. The south observation corridor is outside the production rooms and faces the parking lot. HMI-F3 is at the observation window on the production side. PLC-F3 is deeper inside. The ammonia machinery overlay sits within utilities, and the washdown overlay sits within Filler 3.
 

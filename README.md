@@ -17,7 +17,7 @@ Pyre Witness works one step earlier. An engineer takes 1–3 photos of a device,
 
 The twin updates live. The device appears on the plant floor and the Purdue map, with any new attack paths and an updated plant risk score. Moving it to the recommended zone reruns the rules check.
 
-> **Demo plant:** *Bebidas del Norte, Line 3*, a **fictional** cola bottling line. All plant data is simulated and labelled as such.
+> **Demo plant:** *North Beverage Facility, Line 3*, a **fictional** cola bottling line. All plant data is simulated and labelled as such.
 
 > 🚧 **Built during the Gemini 4 NYC Hackathon (Nov 21, 2026).** See [Status](#status).
 

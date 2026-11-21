@@ -41,7 +41,7 @@ function overlaps(a: Rect, b: Rect, clearance = 0): boolean {
     && a.top < b.bottom + clearance && a.bottom > b.top - clearance;
 }
 
-describe("Bebidas del Norte, Line 3 seed", () => {
+describe("North Beverage Facility, Line 3 seed", () => {
   it("uses unique ids for equipment, areas, conduits and entry points", () => {
     const ids = [SEED_ASSETS, SEED_AREAS, SEED_CONDUITS, SEED_ENTRY_POINTS].flatMap((items) => items.map(({ id }) => id));
     expect(new Set(ids).size).toBe(ids.length);

@@ -23,7 +23,7 @@ ATT&CK for ICS), and which new attack paths it opens. The twin updates live.
 
 The twin is the product. It is a **visual plant**, not a dashboard:
 
-- **Plant floor** (default, largest): top-down SVG schematic of "Bebidas del Norte, Line 3"
+- **Plant floor** (default, largest): top-down SVG schematic of "North Beverage Facility, Line 3"
   (fictional cola bottling line) with real equipment shapes, animated pipes, and an **AI crew
   that walks the floor** as the real pipeline runs.
 - **Purdue network map** (one click away / split view): the same assets by Purdue level 0-5 plus

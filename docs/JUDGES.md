@@ -1,7 +1,7 @@
 # Pyre Witness: judge's 2-minute guide
 
 **Snap any device. See where it belongs in your plant, and what risk it brings, before you plug it in.**
-Built Nov 21, 2026. The fictional plant, *Bebidas del Norte, Line 3*, has `92` assets, `13` areas and `6` entry points. The demo build is at `http://localhost:4120` (dev port `4119`). [Plant design](log/plant-design.md)
+Built Nov 21, 2026. The fictional plant, *North Beverage Facility, Line 3*, has `92` assets, `13` areas and `6` entry points. The demo build is at `http://localhost:4120` (dev port `4119`). [Plant design](log/plant-design.md)
 
 Light mode is the default. The app opens in 3D on browsers with WebGL2. The `2D` / `3D` switch and theme control are in the top bar.
 

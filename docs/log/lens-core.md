@@ -1,6 +1,6 @@
 # Pipeline lens
 
-The `/lens` review uses the Bebidas del Norte Line 3 seed and preserves equipment coordinates across Material, Both and Data. Material is the initial stop, and the last committed mode persists in the browser. During a drag the exposed layers cross-fade continuously. The slider snaps on release and accepts `1`, `2`, `3`, arrow keys, Home and End while focused.
+The `/lens` review uses the North Beverage Facility Line 3 seed and preserves equipment coordinates across Material, Both and Data. Material is the initial stop, and the last committed mode persists in the browser. During a drag the exposed layers cross-fade continuously. The slider snaps on release and accepts `1`, `2`, `3`, arrow keys, Home and End while focused.
 
 ## Derivation
 

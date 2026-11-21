@@ -55,7 +55,7 @@ Hours are PERT means, for example (2 + 4 × 12 + 40) ÷ 6 = 15 h. Plant header: 
 ## Honest limits
 
 - **Not calibrated.** Every prior is an assumption for a fictional plant. A real site replaces them with quotes, incident history and control test results. Read the figures as order of magnitude and ranking.
-- **Fictional plant.** Bebidas del Norte Line 3 does not exist. One published constant, used for context only.
+- **Fictional plant.** North Beverage Facility Line 3 does not exist. One published constant, used for context only.
 - **Excluded:** insurance recoveries, reputational and market-share loss, contractual penalties, fatality or injury costs.
 - The plant figure adds scenarios across assets and does not model common-cause events hitting several assets at once.
 - Liability is always incurred inside the two severe classes (no separate secondary-loss probability).

@@ -1,6 +1,6 @@
 # Line 3 simulation
 
-The floor runs a deterministic model of Bebidas del Norte while the tab is visible. Select the **Both** lens to see all six launchers. Each tabletop replay opens with a detection report and stops at the first safeguard that holds. The earliest containment is `00:04`, so the report remains visible for one real second at 4×. The replay supports pause, reset, and rerun.
+The floor runs a deterministic model of North Beverage Facility while the tab is visible. Select the **Both** lens to see all six launchers. Each tabletop replay opens with a detection report and stops at the first safeguard that holds. The earliest containment is `00:04`, so the report remains visible for one real second at 4×. The replay supports pause, reset, and rerun.
 
 The overlay resolves route endpoints against the current twin and uses documented pipe or cable geometry, plus modeled in-range radio links. Unknown, off-canvas and disconnected nodes break a segment. The shield is anchored to its safeguard independently of the trail. On the stock CIP replay the yellow trail follows the V-311 to FIL-3 pipe, and the shield stays at ZSC-311.
 

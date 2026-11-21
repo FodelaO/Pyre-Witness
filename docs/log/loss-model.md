@@ -1,6 +1,6 @@
 # Pyre Witness economic loss model
 
-Bebidas del Norte is fictional. Figures are estimated USD. The headline is the **mean cost of one event conditional on its occurrence**. Annualized loss (ALE) measures expected annual cost. The model runs locally and deterministically. The five trigger adapters accept rules-engine findings and paths, matched advisories, capture compliance gaps, and deterministic tabletop outcomes. [Open Group O-RA / O-RT overview](https://help.opengroup.org/hc/en-us/articles/32119881201682-Open-FAIR-2-Foundation-Certification-Overview)
+North Beverage Facility is fictional. Figures are estimated USD. The headline is the **mean cost of one event conditional on its occurrence**. Annualized loss (ALE) measures expected annual cost. The model runs locally and deterministically. The five trigger adapters accept rules-engine findings and paths, matched advisories, capture compliance gaps, and deterministic tabletop outcomes. [Open Group O-RA / O-RT overview](https://help.opengroup.org/hc/en-us/articles/32119881201682-Open-FAIR-2-Foundation-Certification-Overview)
 
 ## Calculation
 

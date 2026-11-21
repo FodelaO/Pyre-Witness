@@ -13,7 +13,7 @@ An engineer gives 1 to 3 photos, a product link, or a description. Gemini 4 iden
 
 The twin updates live: the device appears on the floor and the Purdue map, new paths are drawn, the risk score changes.
 
-> **Demo plant:** *Bebidas del Norte, Line 3*, a fictional 36,000 bottle/h cola line. `92` assets, `13` areas, `6` entry points, `75` connections. Seed risk score `46.09` (elevated). Source: `docs/log/plant-design.md`.
+> **Demo plant:** *North Beverage Facility, Line 3*, a fictional 36,000 bottle/h cola line. `92` assets, `13` areas, `6` entry points, `75` connections. Seed risk score `46.09` (elevated). Source: `docs/log/plant-design.md`.
 
 ## What is on the screen
 

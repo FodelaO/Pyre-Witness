@@ -12,7 +12,7 @@ Clock: all source edits were made between 14:31 and 14:34. `.agents/demo-build-c
 | # | Defect | Before | After |
 | --- | --- | --- | --- |
 | 1 | **Purdue levels, short pane (1280x720, and 1440x900 once a selection expands L0):** in the dense layout the zone names sat under the gates on each zone's top edge. "OT DMZ" was half covered by the FW-DMZ chip, "Enterprise" touched FW-EDGE, and the cell names (Water, Syrup, Blend, F3, Pack, Util.) were covered by the H gates and struck through by the bus line. | `before-1280-dark-purdue.png` (2x close-up), `before-1280-dark-levels.png`, `before-1280-light-levels.png` | `after-1280-dark-purdue.png`, `after-1280-light-levels.png`, `splitclick-1440-light-mouse.png` |
-| 2 | **Top bar at 1280x720:** the plant disclosure was cut to "Simulated plant: Bebidas del Norte, Line 3 (…", so "(fictional)" was lost. | `before-1280-dark-lens1.png` | `after-1280-dark-lens1.png`, `after-1280-light-levels.png` |
+| 2 | **Top bar at 1280x720:** the plant disclosure was cut to "Simulated plant: North Beverage Facility, Line 3 (…", so "(fictional)" was lost. | `before-1280-dark-lens1.png` | `after-1280-dark-lens1.png`, `after-1280-light-levels.png` |
 | 3 | **Selecting a device with many neighbours (PLC-F3 in Both, and in Data + Levels):** neighbour tags printed on top of each other: "SCADAHIST-03", "TT-40:FT-40:LT-404", "PT-401" on "PLC-F3". | `before-1280-dark-select-both.png`, `after-1280-dark-split-select.png` (taken before this fix) | `after2-1280-dark-select-both.png`, `after2-1280-dark-split-select.png`, `after-1440-light-select-both.png` |
 
 All paths are under `.agents/qa/qa2-stage/`.
@@ -25,7 +25,7 @@ All paths are under `.agents/qa/qa2-stage/`.
   1280x720, so it still fits without scrolling. The normal layout (1440x900 and 1920x1080 with nothing selected) is
   unchanged: `after-1440-dark-levels.png`, `after-1920-light-levels.png`.
 - `src/shell/shell.css`: from 1180 to 1365 px wide the disclosure stacks "Simulated plant:" over
-  "Bebidas del Norte, Line 3 (fictional)" (two lines, 31 px in the 62 px bar). One line at 1440 and 1920 as before.
+  "North Beverage Facility, Line 3 (fictional)" (two lines, 31 px in the 62 px bar). One line at 1440 and 1920 as before.
 - `src/floor/AssetLayer.tsx`: new `clearNeighbourTags`. On selection, the tags of the selected device and its direct
   neighbours are placed greedily at the fitted scale (selected first, then large equipment, cabinets, other, field
   devices). A neighbour tag that would land on a kept tag is no longer forced on.
