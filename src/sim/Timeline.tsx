@@ -1,13 +1,10 @@
 /** Timeline segments and a one-line simulation readout. */
 "use client";
 
+import { formatSimTime } from "./outcome";
 import type { SimStage } from "./types";
 
-export function formatSimTime(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds));
-  const minutes = Math.floor(whole / 60).toString().padStart(2, "0");
-  return minutes + ":" + (whole % 60).toString().padStart(2, "0");
-}
+export { formatSimTime } from "./outcome";
 
 export default function Timeline({ stages, current, elapsed, outcome, outcomeDetail, contained, onSeek }: {
   stages: SimStage[];
@@ -41,7 +38,7 @@ export default function Timeline({ stages, current, elapsed, outcome, outcomeDet
       </div>
       {outcome ? (
         <p className="pw-sim-outcome" data-outcome={contained ? "contained" : "impact"}
-          title={outcomeDetail && outcomeDetail !== outcome ? outcome + ". " + outcomeDetail : outcome} role="status">{outcome}</p>
+          title={outcomeDetail ?? outcome} role="status">{outcome}</p>
       ) : <p className="pw-sim-stage-caption" title={active?.title}>{active?.title ?? "Starting replay"}</p>}
     </div>
   );

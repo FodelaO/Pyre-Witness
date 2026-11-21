@@ -4,6 +4,7 @@ import { evaluateTwin } from "@/rules/engine";
 import { applyEffects } from "@/twin/effects";
 import type { Twin } from "@/twin/types";
 import { mitigationEffectKey, uniqueMitigationProjections } from "./mitigationEffects";
+import { formatSimTime } from "./outcome";
 import { ALL_SCENARIOS } from "./scenarios";
 import type { ScenarioContext, ScenarioControl, SimRun, SimScenarioId, SimStage, SimulationMitigation } from "./types";
 
@@ -14,7 +15,7 @@ function resolve(scenarioId: SimScenarioId, twin: Twin, context?: ScenarioContex
 } {
   const definition = ALL_SCENARIOS[scenarioId];
   const events = definition.stages(twin, context);
-  if (events.length < 2 || events[0].t !== 0 || events[0].control ||
+  if (events.length < 2 || events[0].t !== 0 ||
     events.some(({ t }, index) => !Number.isFinite(t) || (index > 0 && t <= events[index - 1].t))) {
     throw new Error(`Scenario ${scenarioId} must begin with a report at 0 s, followed by strictly later stages.`);
   }
@@ -23,7 +24,10 @@ function resolve(scenarioId: SimScenarioId, twin: Twin, context?: ScenarioContex
   for (const { control, effects, technique, ...event } of events) {
     const reference = technique && isKnownTechnique(technique) ? { technique } : {};
     if (control?.holds(twin)) {
-      stages.push({ ...event, ...reference, where: control.where ?? event.where, outcome: "blocked", by: control.label });
+      stages.push({
+        ...event, ...reference, where: control.where ?? event.where, outcome: "blocked", by: control.label,
+        ...(control.effectsOnHold ? { effects: control.effectsOnHold } : {}),
+      });
       held = control;
       break;
     }
@@ -42,15 +46,19 @@ function resolve(scenarioId: SimScenarioId, twin: Twin, context?: ScenarioContex
 
 export function runScenario(scenarioId: SimScenarioId, twin: Twin, context?: ScenarioContext): SimRun {
   const { run, control } = resolve(scenarioId, twin, context);
-  const copy = { ...twin };
-  const replay = resolve(scenarioId, control?.without?.(copy) ?? copy, context);
+  const heading = run.containedAt !== undefined && control
+    ? `Contained in ${formatSimTime(run.containedAt)} · ${control.label}`
+    : "Uncontained";
+  const consequence = { ...run.consequence, summary: `${heading}. ${run.consequence.summary}` };
+  const replay = control?.without ? resolve(scenarioId, control.without({ ...twin }), context) : { run, control };
   return {
     ...run,
+    consequence,
     counterfactual: {
       removedControl: control?.without ? control.label : null,
       ...(replay.run.containedAt !== undefined ? { containedAt: replay.run.containedAt } : {}),
       ...(replay.control ? { heldBy: replay.control.label } : {}),
-      consequence: replay.run.consequence,
+      consequence: control?.without ? replay.run.consequence : consequence,
     },
   };
 }
@@ -84,7 +92,7 @@ export function projectScenarioMitigations(scenarioId: SimScenarioId, twin: Twin
         ...candidate,
         status: "proposed" as const,
         proposedBy: "inspector",
-        description: `${candidate.description} ${projected.consequence.summary}`,
+        description: `SIMULATION · ${candidate.description} ${projected.consequence.summary}`,
         riskDelta: risk.score - before,
         simulationScenario: scenarioId,
         simulationContainment: { before: baseline.containedAt ?? null, after: projected.containedAt, safeguard: control.label },

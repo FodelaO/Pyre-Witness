@@ -2,7 +2,7 @@
 import { assetById } from "@/twin/geometry";
 import type { Twin } from "@/twin/types";
 import type { ScenarioDefinition, StageDefinition } from "../types";
-import { available, enforceBoundary, exposedControl, inspect, proposal, reachFrom, reading, removeRemoteAccess, reportArea, unenrolledRemoteEndpoints } from "./evidence";
+import { available, enforceBoundary, exposedControl, hasProtection, inspect, proposal, reachFrom, reading, removeRemoteAccess, reportArea, unenrolledRemoteEndpoints, withoutProtection } from "./evidence";
 
 const SUPERVISION = "SCADA-03";
 const CONTROLLER = "PLC-BL";
@@ -12,6 +12,7 @@ const PRESSURE = "PT-301";
 const DISSOLVED = "QT-301";
 const FILLER = "FIL-3";
 const PROTECTION = "independent-pressure-protection";
+const LOCAL_SETPOINTS = "local-carbonation-setpoints";
 const RELIEF_DEMAND_AT = 18;
 const FOAM_AT = 30;
 
@@ -64,11 +65,17 @@ export const carbonation: ScenarioDefinition<"carbonation"> = {
       && productPump.physical.connections.some(({ to, medium, active }) => to === FILLER && medium === "product" && active !== false)
       && available(filler) && filler.process?.running === true;
     const independentlyProtected = carbonator?.protections?.includes(PROTECTION) ?? false;
+    const controller = assetById(twin, CONTROLLER);
+    const localSetpoints = available(controller) && hasProtection(controller, LOCAL_SETPOINTS);
 
     return [
       {
         t: 0, title: "Carbonation supervision anomaly reported", where: [SUPERVISION, "blending"],
         effects: reportArea(twin, "blending"),
+        control: {
+          label: "Local-only carbonation setpoints", where: [CONTROLLER], holds: () => localSetpoints,
+          without: (current) => withoutProtection(current, CONTROLLER, LOCAL_SETPOINTS),
+        },
       },
       {
         t: 4, title: "Blend controller exposure checked", where: [exposedFrom ?? SUPERVISION, CONTROLLER],
@@ -144,6 +151,12 @@ export const carbonation: ScenarioDefinition<"carbonation"> = {
     };
   },
   mitigations(twin) {
+    const controller = assetById(twin, CONTROLLER);
+    const localOnly = available(controller) && !hasProtection(controller, LOCAL_SETPOINTS) ? [proposal(
+      "sim-carbonation-local-setpoints", "Require local setpoint approval", "software",
+      "Require local approval of carbonation setpoint changes in this exercise.", [CONTROLLER],
+      [{ type: "add_protection", assetId: CONTROLLER, protection: LOCAL_SETPOINTS }],
+    )] : [];
     const carbonator = assetById(twin, CARBONATOR);
     const physical = carbonator && !carbonator.protections?.includes(PROTECTION) ? [proposal(
       "sim-carbonation-independent", "Independent pressure protection", "physical",
@@ -151,6 +164,7 @@ export const carbonation: ScenarioDefinition<"carbonation"> = {
       [{ type: "add_protection", assetId: CARBONATOR, protection: PROTECTION }],
     )] : [];
     return [
+      ...localOnly,
       ...physical,
       ...enforceBoundary(twin, "sim-carbonation-boundary", BOUNDARY, "SW-OT"),
       ...removeRemoteAccess("sim-carbonation-remote", unenrolledRemoteEndpoints(twin, [CONTROLLER])),

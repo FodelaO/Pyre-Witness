@@ -117,7 +117,7 @@ export default function TalkToChief() {
     <section className="pw-chief-talk" data-view={view} data-phase={status.phase} aria-label="Talk to the Chief">
       <div className="pw-chief-bar">
         <button ref={talkButton} type="button" className="pw-voice-icon pw-chief-mic"
-          title="Hold to talk to the Chief (Space)" aria-label="Hold to talk to the Chief"
+          title={status.error || "Hold to talk to the Chief (Space)"} aria-label="Hold to talk to the Chief"
           aria-keyshortcuts="Space" aria-pressed={status.phase === "listening"}
           onPointerDown={pointerDown} onPointerUp={(event) => pointerEnd(event, false)}
           onPointerCancel={(event) => pointerEnd(event, true)} onLostPointerCapture={(event) => pointerEnd(event, true)}

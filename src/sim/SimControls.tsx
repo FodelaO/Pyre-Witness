@@ -31,10 +31,7 @@ export default function SimControls() {
   const playing = mode === "playing";
   const playback = playing ? "Pause" : mode === "finished" ? "Rerun" : "Play";
   const containedAt = run?.containedAt;
-  const safeguard = run?.stages.at(-1)?.by;
-  const outcomeLine = outcome && containedAt !== undefined && safeguard
-    ? "Contained in " + formatSimTime(containedAt) + " · " + safeguard
-    : outcome;
+  const outcomeLine = outcome && (containedAt === undefined ? "Uncontained" : `Contained ${formatSimTime(containedAt)}`);
   const speedTip = "Switch to " + (speed === 1 ? 4 : 1) + "× speed";
 
   return (

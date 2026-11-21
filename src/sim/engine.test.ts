@@ -1,4 +1,4 @@
-/** Exercises all five fictional incidents, the shared approval queue, and exact rollback. */
+/** Exercises fictional incidents, the shared approval queue, and exact rollback. */
 import { afterEach, describe, expect, it } from "vitest";
 import { isKnownTechnique } from "@/data/attack-ics";
 import { applyEffects } from "@/twin/effects";
@@ -7,6 +7,7 @@ import { SEED_TWIN } from "@/twin/seed";
 import { useTwinStore } from "@/twin/store";
 import type { Asset, Twin } from "@/twin/types";
 import { projectScenarioMitigations, runScenario } from "./engine";
+import { ALL_SCENARIOS } from "./scenarios";
 import { useSimStore } from "./simStore";
 import type { ScenarioId } from "./types";
 
@@ -92,6 +93,25 @@ describe("scenario player", () => {
     useSimStore.getState().reset();
     useSimStore.getState().setSpeed(1);
     useTwinStore.getState().reset();
+  });
+
+  it.each(Object.values(ALL_SCENARIOS))("queues an outcome-changing control for $label on the seeded twin", ({ id }) => {
+    useTwinStore.getState().setTwin(SEED_TWIN);
+    const { start, advance, togglePlayback } = useSimStore.getState();
+    start(id);
+    advance(100);
+    const baseline = useSimStore.getState().run!;
+    const candidate = projectScenarioMitigations(id, SEED_TWIN)[0]!;
+    expect(useTwinStore.getState().mitigations).toContainEqual(candidate);
+    expect(candidate.description).toMatch(/^SIMULATION/);
+
+    useTwinStore.getState().decideMitigation(candidate.id, "approved");
+    togglePlayback();
+    advance(100);
+    const rerun = useSimStore.getState().run!;
+    expect(rerun.containedAt).toBe(candidate.simulationContainment.after);
+    expect(rerun.containedAt).toBeLessThan(baseline.containedAt!);
+    expect(rerun.stages.at(-1)?.by).toBe(candidate.simulationContainment.safeguard);
   });
 
   it("pauses stage playback, keeps twin updates quiet, and restores the exact starting twin", () => {

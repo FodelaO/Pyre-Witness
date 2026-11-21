@@ -1,7 +1,7 @@
 /** Models loss of duty cooling, available standby and the out-of-band product response. */
 import { assetById } from "@/twin/geometry";
 import type { Twin } from "@/twin/types";
-import type { ScenarioDefinition, StageDefinition } from "../types";
+import type { ScenarioDefinition, SimEffects, StageDefinition } from "../types";
 import {
   available, editAsset, enforceBoundary, exposedControl, hasProtection, inspect, proposal, reading, removeRemoteAccess, reportArea,
   unenrolledRemoteEndpoints, withoutProtection,
@@ -34,6 +34,7 @@ export const chiller: ScenarioDefinition = {
         medium === "glycol" && active !== false && to === GLYCOL_LOOP[index + 1]);
     });
     const backupHolds = available(standby) && available(safety) && !!hasStandbyLoop && glycolLoop && !sharedExposure;
+    const standbyRunning: SimEffects = { assets: { [STANDBY]: { status: "ok", running: true } } };
     const limit = productTemp?.hi ?? 4;
 
     return [
@@ -51,15 +52,19 @@ export const chiller: ScenarioDefinition = {
       {
         t: 6, title: backupHolds ? "Standby cooling engaged" : "Standby readiness checked",
         where: [SAFETY, STANDBY],
-        effects: backupHolds ? { assets: { [STANDBY]: { status: "ok", running: true } } } : undefined,
+        effects: backupHolds ? standbyRunning : undefined,
+        control: {
+          label: "Independent C-2 standby cooling", where: [STANDBY],
+          holds: () => backupHolds && independentStandby, effectsOnHold: standbyRunning,
+          without: (current) => withoutProtection(current, STANDBY, INDEPENDENT_STANDBY),
+        },
       },
       {
         t: 12, title: "Cooling containment checked", where: [STANDBY, "EV-401"],
         control: {
-          label: independentStandby ? "Independent C-2 standby cooling" : "C-2 standby cooling",
+          label: "C-2 standby cooling",
           where: [STANDBY], holds: () => backupHolds,
-          without: (current) => independentStandby ? withoutProtection(current, STANDBY, INDEPENDENT_STANDBY)
-            : editAsset(current, STANDBY, (asset) => ({ ...asset, status: "offline" })),
+          without: (current) => editAsset(current, STANDBY, (asset) => ({ ...asset, status: "offline" })),
         },
         effects: { assets: { "TT-401": { status: "attention", telemetry: { "TT-401": -2.4 } } }, areas: { utilities: "alarm" } },
       },
@@ -98,7 +103,7 @@ export const chiller: ScenarioDefinition = {
     const standby = assetById(twin, STANDBY);
     const independent = available(standby) && !hasProtection(standby, INDEPENDENT_STANDBY) ? [proposal(
       "sim-chiller-standby", "Independent standby cooling", "physical",
-      "Credit control independence of the installed standby compressor in the exercise.",
+      "Model an independent standby that takes over at the readiness check without waiting for shared control confirmation.",
       [STANDBY], [{ type: "add_protection", assetId: STANDBY, protection: INDEPENDENT_STANDBY }],
     )] : [];
     return [

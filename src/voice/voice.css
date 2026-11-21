@@ -89,6 +89,18 @@
 .pw-chief-transcript,
 .pw-chief-path { margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--pw-line); font-size: 11px; line-height: 1.35; }
 .pw-chief-error { color: var(--pw-attention); }
+.pw-dock-voice .pw-chief-talk > .pw-chief-error {
+  bottom: calc(100% - 2px);
+  width: max-content;
+  max-width: 100%;
+  margin: 0;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.15;
+  pointer-events: none;
+  animation: pw-chief-error-fade 200ms ease 4s forwards;
+}
 .pw-chief-transcript,
 .pw-chief-path span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pw-chief-path { display: flex; align-items: center; gap: 6px; color: var(--pw-attention); }
@@ -96,5 +108,9 @@
 .pw-chief-path .pw-voice-icon { width: 20px; height: 20px; }
 
 @keyframes pw-voice-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .pw-voice-spin { animation: none; } }
+@keyframes pw-chief-error-fade { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .pw-voice-spin { animation: none; }
+  .pw-dock-voice .pw-chief-talk > .pw-chief-error { animation-timing-function: step-end; }
+}
 @media (pointer: coarse) { .pw-chief-key { display: none; } }

@@ -1,4 +1,5 @@
 /** Screens an in-range OT radio for modeled exposure to Filler 3 supervision and control. */
+import { applyEffect } from "@/twin/effects";
 import { areaById, assetById, distance, entryPointById, UNITS_PER_METRE } from "@/twin/geometry";
 import type { MitigationEffect, Twin } from "@/twin/types";
 import type { ScenarioContext, ScenarioDefinition, StageDefinition } from "../types";
@@ -28,6 +29,7 @@ function wirelessEvidence(twin: Twin) {
   return {
     context,
     candidates,
+    publicAccess: point ? parking?.attrs.publicAccess : undefined,
     hmiEndpoint: candidates.find(({ hmiRoute }) => !!hmiRoute),
     controllerReachable: context.assetById.get(PLC)?.status !== "offline" && reachFrom(graph, HMI).has(PLC),
   };
@@ -74,6 +76,10 @@ export const wireless: ScenarioDefinition = {
       {
         t: 0, title: "Untrusted RF activity reported", where: [ORIGIN, "parking_lot"],
         effects: reportArea(twin, "parking_lot"),
+        control: {
+          label: "Restricted parking access", holds: () => assessment.publicAccess === false,
+          without: (current) => applyEffect(current, { type: "set_area_attr", areaId: "parking_lot", patch: { publicAccess: true } }),
+        },
       },
       {
         t: 4, title: endpoint ? `${endpoint.id} within parking RF reach` : "Parking-lot RF exposure checked",
@@ -123,7 +129,13 @@ export const wireless: ScenarioDefinition = {
     };
   },
   mitigations(twin) {
-    const endpoints = wirelessEvidence(twin).candidates.map(({ asset }) => asset);
+    const { candidates, publicAccess } = wirelessEvidence(twin);
+    const access = publicAccess ? [proposal(
+      "sim-wireless-parking-access", "Restrict parking-lot access", "procedural",
+      "Remove public access to the modeled approach used in this wireless exercise.", ["parking_lot"],
+      [{ type: "set_area_attr", areaId: "parking_lot", patch: { publicAccess: false } }],
+    )] : [];
+    const endpoints = candidates.map(({ asset }) => asset);
     const radioEffects: MitigationEffect[] = endpoints.flatMap((asset) =>
       (asset.cyber?.radios ?? []).filter((radio) => radio !== "nfc").map((radio) =>
         ({ type: "disable_radio", assetId: asset.id, radio })),
@@ -139,6 +151,6 @@ export const wireless: ScenarioDefinition = {
       "Take the newly placed wireless endpoints out of the modeled production cell.",
       added.map((asset) => asset.id), added.map((asset) => ({ type: "remove_asset", assetId: asset.id })),
     )] : [];
-    return [...disable, ...quarantine, ...enforceBoundary(twin, "sim-wireless-f3-pack", "C-F3-PACK", "SW-F3")];
+    return [...disable, ...quarantine, ...access, ...enforceBoundary(twin, "sim-wireless-f3-pack", "C-F3-PACK", "SW-F3")];
   },
 };

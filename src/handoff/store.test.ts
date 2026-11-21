@@ -108,4 +108,34 @@ describe("phone handoff mailbox", () => {
     fresh.subscribe(freshDesktop);
     expect(freshDesktop.send).not.toHaveBeenCalled();
   });
+
+  it("frees an unscanned code after two minutes even if the desktop reconnects", () => {
+    const store = createHandoffStore(HANDOFF_TTL_MS, 1);
+    expect(store.register("ABCD23", "key").status).toBe("ready");
+    vi.advanceTimersByTime(119_999);
+    const session = store.register("ABCD23", "key");
+    if (session.status !== "ready") throw new Error("Could not reconnect fixture.");
+    const desktop = receiver();
+    session.subscribe(desktop);
+    expect(store.register("BCDE34", "other").status).toBe("full");
+
+    vi.advanceTimersByTime(1);
+    expect(desktop.close).toHaveBeenCalledWith("expired");
+    expect(store.markScanned("ABCD23")).toBe(false);
+    expect(store.register("ABCD23", "key").status).toBe("conflict");
+    expect(store.register("BCDE34", "other").status).toBe("ready");
+  });
+
+  it("keeps a scanned code until the original ten-minute deadline without an upload", () => {
+    const store = createHandoffStore();
+    const session = store.register("ABCD23", "key");
+    if (session.status !== "ready") throw new Error("Could not register fixture.");
+    vi.advanceTimersByTime(119_999);
+    expect(store.markScanned("ABCD23")).toBe(true);
+    vi.advanceTimersByTime(480_000);
+    expect(store.owns("ABCD23", "key")).toBe(true);
+    expect(store.register("ABCD23", "key")).toMatchObject({ expiresAt: session.expiresAt, created: false });
+    vi.advanceTimersByTime(1);
+    expect(store.has("ABCD23")).toBe(false);
+  });
 });

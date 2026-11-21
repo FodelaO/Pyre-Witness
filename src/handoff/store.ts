@@ -17,6 +17,7 @@ interface Subscriber {
 interface Session {
   key: string;
   expiresAt: number;
+  unscannedUntil: number | null;
   timer: ReturnType<typeof setTimeout>;
   latest: HandoffPacket | null;
   subscriber: Subscriber | null;
@@ -24,25 +25,45 @@ interface Session {
 }
 
 const MAX_SESSIONS = 12;
+const UNSCANNED_TTL_MS = 2 * 60_000;
 
 export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIONS) {
   const sessions = new Map<string, Session>();
+  const retired = new Map<string, number>();
+
+  function expiryTimer(code: string, deadline: number) {
+    const timer = setTimeout(() => expire(code), deadline - Date.now());
+    timer.unref?.();
+    return timer;
+  }
 
   function expire(code: string) {
     const session = sessions.get(code);
     if (!session) return;
     sessions.delete(code);
     clearTimeout(session.timer);
+    if (session.expiresAt > Date.now()) retired.set(code, session.expiresAt);
     session.subscriber?.close("expired");
   }
 
   function active(code: string) {
     const session = sessions.get(code);
-    if (session && session.expiresAt <= Date.now()) {
+    if (session && (session.unscannedUntil ?? session.expiresAt) <= Date.now()) {
       expire(code);
       return undefined;
     }
     return session;
+  }
+
+  function markScanned(code: string) {
+    const session = active(code);
+    if (!session) return false;
+    if (session.unscannedUntil !== null) {
+      session.unscannedUntil = null;
+      clearTimeout(session.timer);
+      session.timer = expiryTimer(code, session.expiresAt);
+    }
+    return true;
   }
 
   function register(code: string, key: string) {
@@ -51,10 +72,17 @@ export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIO
     if (session) {
       if (!sameKey(session.key, key)) return { status: "conflict" } as const;
     } else {
+      const now = Date.now();
+      // Keep an expired QR closed even if a desktop reconnects with cached credentials.
+      for (const [retiredCode, expiresAt] of retired) {
+        if (expiresAt <= now) retired.delete(retiredCode);
+      }
+      if (retired.has(code)) return { status: "conflict" } as const;
       if (sessions.size >= capacity) return { status: "full" } as const;
-      const timer = setTimeout(() => expire(code), ttlMs);
-      timer.unref?.();
-      session = { key, expiresAt: Date.now() + ttlMs, timer, latest: null, subscriber: null, uploads: 0 };
+      const expiresAt = now + ttlMs;
+      const unscannedUntil = Math.min(expiresAt, now + UNSCANNED_TTL_MS);
+      const timer = expiryTimer(code, unscannedUntil);
+      session = { key, expiresAt, unscannedUntil, timer, latest: null, subscriber: null, uploads: 0 };
       sessions.set(code, session);
     }
 
@@ -78,6 +106,7 @@ export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIO
 
   return {
     register,
+    markScanned,
     has: (code: string) => !!active(code),
     /** True only for the desktop that opened this live session. */
     owns(code: string, key: string) {
@@ -92,6 +121,7 @@ export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIO
         expire(code);
         return false;
       }
+      if (!markScanned(code)) return false;
       session.uploads += 1;
       const packet = { ...payload, id: randomUUID() };
       session.latest = packet;
@@ -102,5 +132,5 @@ export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIO
 }
 
 // The key carries a version so a hot reload never reuses a store built from an older shape.
-const memory = globalThis as typeof globalThis & { pyreHandoffStoreV2?: ReturnType<typeof createHandoffStore> };
-export const handoffStore = (memory.pyreHandoffStoreV2 ??= createHandoffStore());
+const memory = globalThis as typeof globalThis & { pyreHandoffStoreV3?: ReturnType<typeof createHandoffStore> };
+export const handoffStore = (memory.pyreHandoffStoreV3 ??= createHandoffStore());

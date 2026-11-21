@@ -1,8 +1,15 @@
 /** Availability tabletop for enterprise, site operations and separated production cells. */
 import { applyEffect } from "@/twin/effects";
-import type { AreaId } from "@/twin/types";
+import { assetById } from "@/twin/geometry";
+import type { AreaId, Twin } from "@/twin/types";
 import type { ScenarioDefinition, StageDefinition } from "../types";
-import { enforceBoundary, inspect, proposal, reachFrom, reportArea, withoutBoundary } from "./evidence";
+import { available, enforceBoundary, hasProtection, inspect, proposal, reachFrom, reportArea, withoutBoundary, withoutProtection } from "./evidence";
+
+const ENDPOINT_ISOLATION = "endpoint-auto-isolation";
+
+function enterpriseEndpoint(twin: Twin) {
+  return assetById(twin, "IT-WS1") ?? twin.assets.find((asset) => asset.network.level === 4);
+}
 
 const CELLS: ReadonlyArray<{ area: AreaId; controller: string; equipment: string; conduit: string }> = [
   { area: "water_treatment", controller: "PLC-WT", equipment: "RO-101", conduit: "C-OPS-WATER" },
@@ -21,7 +28,7 @@ export const ransomware: ScenarioDefinition = {
     const portable = twin.assets.filter((asset) =>
       asset.physical.kind === "laptop" && asset.network.level <= 3 && context.isNetworked(asset),
     );
-    const enterprise = context.assetById.get("IT-WS1") ?? twin.assets.find((asset) => asset.network.level === 4);
+    const enterprise = enterpriseEndpoint(twin);
     const entries = portable.filter((asset) => asset.cyber?.managed === false);
     const origin = [...entries, ...(enterprise ? [enterprise] : [])].map((asset) => {
       const routes = reachFrom(graph, asset.id);
@@ -57,6 +64,8 @@ export const ransomware: ScenarioDefinition = {
     }
     const activeBoundary = origin?.asset === enterprise ? boundary : undefined;
     const defense = activeBoundary?.enforcedBy;
+    const endpoint = origin?.asset;
+    const autoIsolation = available(endpoint) && hasProtection(endpoint, ENDPOINT_ISOLATION);
     const stages: StageDefinition[] = [
       {
         t: 0, title: "Endpoint outage reported", where: [origin?.asset.id ?? "corporate_office"],
@@ -64,8 +73,13 @@ export const ransomware: ScenarioDefinition = {
         effects: origin ? { assets: { [origin.asset.id]: { status: "alarm" } } } : reportArea(twin, "corporate_office"),
       },
       {
-        t: 4, title: "Endpoint route checked", where: [origin?.asset.id ?? "corporate_office"],
-        control: { label: "No modeled entry endpoint", holds: () => !origin },
+        t: 4, title: autoIsolation ? "Flagged endpoint isolated" : "Endpoint route checked",
+        where: [endpoint?.id ?? "corporate_office"],
+        control: {
+          label: autoIsolation ? "Endpoint auto-isolation" : "No modeled entry endpoint",
+          holds: () => autoIsolation || !origin,
+          ...(autoIsolation ? { without: (current: Twin) => withoutProtection(current, endpoint.id, ENDPOINT_ISOLATION) } : {}),
+        },
       },
       {
         t: 8, title: hasViewLoss ? "Site supervision unavailable"
@@ -125,6 +139,12 @@ export const ransomware: ScenarioDefinition = {
   },
   mitigations(twin) {
     const { context } = inspect(twin);
+    const enterprise = enterpriseEndpoint(twin);
+    const isolation = available(enterprise) && !hasProtection(enterprise, ENDPOINT_ISOLATION) ? [proposal(
+      "sim-ransomware-endpoint-isolate", "Auto-isolate flagged workstation", "software",
+      "Model automatic isolation of the flagged workstation before site access is checked.",
+      [enterprise.id], [{ type: "add_protection", assetId: enterprise.id, protection: ENDPOINT_ISOLATION }],
+    )] : [];
     const portables = twin.assets.filter((asset) => asset.physical.kind === "laptop" && asset.network.level <= 3 &&
       asset.cyber?.managed === false && context.isNetworked(asset));
     const admission = portables.length ? [proposal(
@@ -140,6 +160,7 @@ export const ransomware: ScenarioDefinition = {
       addedPortables.map((asset) => asset.id), addedPortables.map((asset) => ({ type: "remove_asset", assetId: asset.id })),
     )] : [];
     return [
+      ...isolation,
       ...admission,
       ...removal,
       ...["C-ENT-DMZ", "C-DMZ-OPS"].flatMap((id) => enforceBoundary(twin, `sim-ransomware-${id}`, id, "FW-DMZ")),

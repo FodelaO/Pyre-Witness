@@ -6,7 +6,11 @@ export interface HandoffCredentials {
   key: string;
 }
 
-export class HandoffConnectionError extends Error {}
+export class HandoffConnectionError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
 
 export async function readHandoffStream(
   { code, key }: HandoffCredentials,
@@ -20,7 +24,7 @@ export async function readHandoffStream(
   });
   if (!response.ok || !response.body || !response.headers.get("content-type")?.startsWith("text/event-stream")) {
     const message = response.status === 503 ? "Phone pairing is busy. Try again shortly." : "Could not open phone pairing.";
-    throw new HandoffConnectionError(message);
+    throw new HandoffConnectionError(message, response.status);
   }
 
   const reader = response.body.getReader();

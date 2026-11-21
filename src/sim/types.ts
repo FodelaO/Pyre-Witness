@@ -50,6 +50,7 @@ export interface ScenarioControl {
   label: string;
   where?: string[];
   holds(twin: Twin): boolean;
+  effectsOnHold?: SimEffects;
   /** Remove exactly the credited safeguard from a replay copy. */
   without?(twin: Twin): Twin;
 }

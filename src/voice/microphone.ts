@@ -89,7 +89,7 @@ export function microphoneError(error: unknown): string {
   if (error instanceof DOMException) {
     switch (error.name) {
       case "NotAllowedError":
-      case "SecurityError": return "Mic blocked. Allow it, then hold again.";
+      case "SecurityError": return "Allow mic access";
       case "NotFoundError": return "No microphone found.";
       case "NotReadableError": return "Mic busy in another app.";
     }
