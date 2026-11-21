@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { crewAvatar, useCrewStore } from "@/crew/crewStore";
 import { CREW_ORDER } from "@/crew/types";
 import { projectTwinFocus } from "@/floor/twinFocus";
@@ -18,6 +18,9 @@ import {
   cameraMatrices, defaultPose, dropOffset, easeInOutCubic, framePose, mixPose, type Pose,
 } from "./camera";
 import { attachControls } from "./controls";
+import CrewWorkBriefing from "./CrewWorkBriefing";
+import { checkedPosition, displayedTrace, readWorkRun } from "./crewWork";
+import { architectureParts, inspectionParts } from "./crewWorkGeometry";
 import { packParts } from "./gl/instances";
 import { PickTable } from "./gl/pickId";
 import { Renderer, type FrameState } from "./gl/renderer";
@@ -27,10 +30,11 @@ import { DEFAULT_PALETTE, readPalette, type Palette } from "./palette";
 import { sceneFromTwin, type Scene } from "./scene";
 import { useView3DStore } from "./view3dStore";
 import "./view3d.css";
+import "./crewWork.css";
 
 const DROP_MS = 950;
 const FRAME_MS = 850;
-/** CSS pixels kept free at the bottom of the stage for the caption and the tools row. */
+/** CSS pixels kept free at the bottom of the stage for the tools row. */
 const BOTTOM_STRIP = 50;
 const FOCUSABLE = new Set(["area", "zone", "asset", "entry"]);
 
@@ -64,6 +68,7 @@ interface Engine {
   t0: number;
   /** Shader time until which attack arcs are still drawing in. */
   arcUntil: number;
+  workUntil: number;
   drop: { id: string; start: number } | null;
   hoverRequest: { x: number; y: number } | null;
   selectedId: string | null;
@@ -81,7 +86,14 @@ export default function Plant3D() {
   const host = useRef<HTMLDivElement>(null);
   const canvasHost = useRef<HTMLDivElement>(null);
   const overlay = useRef<OverlayHandle>(null);
+  const tools = useRef<HTMLDivElement>(null);
+  const briefing = useRef<HTMLElement>(null);
   const engine = useRef<Engine | null>(null);
+  const invalidate = useCallback(() => { if (engine.current) engine.current.dirty = true; }, []);
+  const placeBriefing = useCallback((element: HTMLElement | null) => {
+    briefing.current = element;
+    invalidate();
+  }, [invalidate]);
   const births = useRef(new Map<string, number>());
   const emphasisKey = useRef("");
   const [palette, setPalette] = useState<Palette>(() =>
@@ -97,6 +109,23 @@ export default function Plant3D() {
   const placedAssetId = useRunStore((state) => state.placedAssetId);
   const selfCheckPaths = useRunStore((state) => state.selfCheck?.paths);
   const thumbnail = useRunStore((state) => state.captureThumbnail);
+  const events = useRunStore((state) => state.events);
+  const assessment = useRunStore((state) => state.assessment);
+  const objectClass = useRunStore((state) => state.profile?.object_class);
+  const scout = useCrewStore((state) => state.visuals.scout?.effect);
+  const architect = useCrewStore((state) => state.visuals.architect?.effect);
+  const inspection = useCrewStore((state) => state.phase === "idle" ? null : state.visuals.inspector);
+  const inspector = inspection?.effect;
+  const tracing = inspector?.kind === "trace";
+  const work = useMemo(() => readWorkRun(events), [events]);
+  const trace = displayedTrace(work, inspector);
+  const tracePath = trace?.path;
+  const traceAssessment = trace?.assessment ?? null;
+  const checkedAssessment = inspector?.kind === "check" ? work.checks.get(inspector.phase)?.assessment ?? null : null;
+  const proposalPoint = useMemo(() => checkedPosition(twin, placedAssetId, assessment, objectClass), [twin, placedAssetId, assessment, objectClass]);
+  const proposalHeld = work.proposalCheck !== null && (!work.proposalCheck.event.result.passed || !proposalPoint);
+  const tracePoint = useMemo(() => checkedPosition(twin, placedAssetId, traceAssessment, objectClass), [twin, placedAssetId, traceAssessment, objectClass]);
+  const checkPoint = useMemo(() => checkedPosition(twin, placedAssetId, checkedAssessment, objectClass), [twin, placedAssetId, checkedAssessment, objectClass]);
   const droppedId = useRef(placedAssetId);
 
   const scene = useMemo(() => sceneFromTwin(twin, lens, { palette, findings: risk.findings }), [twin, lens, palette, risk.findings]);
@@ -160,6 +189,7 @@ export default function Plant3D() {
       },
       t0: performance.now(),
       arcUntil: 0,
+      workUntil: 0,
       drop: null,
       hoverRequest: null,
       selectedId: useTwinStore.getState().selectedId,
@@ -246,7 +276,7 @@ export default function Plant3D() {
       }
       const time = (nowMs - e.t0) / 1000;
       const crewMoving = CREW_ORDER.some((id) => crewAvatar(id).walking);
-      const animating = (e.hasMotion && !e.reduced) || crewMoving || e.drop !== null || time < e.arcUntil;
+      const animating = (e.hasMotion && !e.reduced) || crewMoving || e.drop !== null || time < Math.max(e.arcUntil, e.workUntil);
       if (!e.dirty && !animating && !e.hoverRequest) {
         lastDraw = 0;
         return;
@@ -295,6 +325,7 @@ export default function Plant3D() {
       e.reduced = motionQuery.matches || renderer.isSoftware() || tooSlow;
       e.noMotion = motionQuery.matches;
       e.dirty = true;
+      setEpoch((value) => value + 1);
     };
     const measure = () => {
       const rect = container.getBoundingClientRect();
@@ -422,10 +453,24 @@ export default function Plant3D() {
       }
     }
     if (lastHop > 0 && !e.reduced) e.arcUntil = Math.max(e.arcUntil, now + lastHop / 3.2 + 0.4);
-    const parts = arcParts(segments, scene, emphasised, (key) => known.get(key) ?? -1000, palette);
+    const parts = arcParts(segments, scene, emphasised, (key) => known.get(key) ?? -1000, palette, tracing ? 0.25 : 1);
     e.renderer.setBatches("arcs", packParts([{ pickNumber: 0, parts }]));
     e.dirty = true;
-  }, [segments, emphasised, scene, palette, epoch]);
+  }, [segments, emphasised, scene, palette, tracing, epoch]);
+
+  // Work cues share the plant depth buffer and only upload when their source state changes.
+  useEffect(() => {
+    const e = engine.current;
+    if (!e) return;
+    const parts = architectureParts(architect, twin, palette, proposalPoint, proposalHeld);
+    const traced = tracePath && inspection
+      ? inspectionParts(tracePath, inspection, scene, palette, e.t0, !e.noMotion, tracePoint, placedAssetId)
+      : undefined;
+    if (traced) parts.push(...traced.parts);
+    e.workUntil = traced?.until ?? 0;
+    e.renderer.setBatches("crew-work", packParts([{ pickNumber: 0, parts }]));
+    e.dirty = true;
+  }, [architect, inspection, tracePath, scene, twin, palette, proposalPoint, proposalHeld, tracePoint, placedAssetId, epoch]);
 
   // Linked selection: a selection made anywhere else (2D floor, Purdue map, side panel) frames here.
   useEffect(() => {
@@ -451,9 +496,9 @@ export default function Plant3D() {
     if (droppedId.current === placedAssetId || !scene.byId.has(placedAssetId)) return;
     droppedId.current = placedAssetId;
     // One short drop, also in still mode (software GPU); skipped only for prefers-reduced-motion.
-    if (!e.noMotion) e.drop = { id: placedAssetId, start: performance.now() };
+    if (!e.noMotion && work.start?.mode !== "reassess") e.drop = { id: placedAssetId, start: performance.now() };
     e.dirty = true;
-  }, [placedAssetId, scene]);
+  }, [placedAssetId, scene, work.start]);
 
   return (
     <div ref={host} className="pw3d-root" data-lens={lens} role="application" aria-label="3D plant view">
@@ -466,8 +511,13 @@ export default function Plant3D() {
         highlighted={focus.highlighted}
         placedAssetId={placedAssetId}
         thumbnail={thumbnail}
+        workLabels={{ work, twin, scout, architect, inspector, proposalPoint, proposalHeld, checkPoint }}
+        tools={tools}
+        briefing={briefing}
+        invalidate={invalidate}
       />
-      <div className="pw3d-tools" data-pw3d-ui>
+      <CrewWorkBriefing ref={placeBriefing} briefing={work.briefing} />
+      <div ref={tools} className="pw3d-tools" data-pw3d-ui>
         <span className="pw3d-hint pw-mono" aria-hidden="true">drag orbit · right-drag pan · scroll zoom · F frame</span>
         <button type="button" className="pw3d-button pw-mono" onClick={() => engine.current?.resetView()}>reset view</button>
       </div>

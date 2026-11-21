@@ -69,6 +69,7 @@ export function arcParts(
   emphasised: ReadonlySet<string>,
   birthOf: (key: string) => number,
   pal: Palette,
+  prominence = 1,
 ): Part[] {
   const parts: Part[] = [];
   for (const segment of segments) {
@@ -79,7 +80,7 @@ export function arcParts(
     const span = Math.hypot(b[0] - a[0], b[2] - a[2]);
     const points = arcPoints(a, b, Math.min(13, 2.2 + span * 0.14), ARC_STEPS);
     const radius = strong ? 0.15 : 0.05;
-    const alpha = strong ? 1 : 0.5;
+    const alpha = prominence * (strong ? 1 : 0.5);
     const birth = birthOf(segment.key);
     for (let i = 1; i < points.length; i++) {
       const part = tube(points[i - 1], points[i], radius, {
@@ -89,7 +90,7 @@ export function arcParts(
       parts.push(part);
       if (strong) {
         const halo = tube(points[i - 1], points[i], radius * 2.6, {
-          color: pal.alarm, alpha: 0.16, emissive: 1, pattern: PATTERN.arc, param: segment.hop + (i - 1) / ARC_STEPS, layer: "glow",
+          color: pal.alarm, alpha: 0.16 * prominence, emissive: 1, pattern: PATTERN.arc, param: segment.hop + (i - 1) / ARC_STEPS, layer: "glow",
         });
         halo.pivot = [birth, 0];
         parts.push(halo);
@@ -105,7 +106,7 @@ export function arcParts(
         tip[1] + ((before[1] - tip[1]) / length) * 1.1,
         tip[2] + ((before[2] - tip[2]) / length) * 1.1,
       ];
-      const head = tube(back, tip, 0.36, { color: pal.alarm, alpha: 1, emissive: 1, pattern: PATTERN.arc, param: segment.hop + 0.95, layer: "glow" });
+      const head = tube(back, tip, 0.36, { color: pal.alarm, alpha: prominence, emissive: 1, pattern: PATTERN.arc, param: segment.hop + 0.95, layer: "glow" });
       head.prim = "cone";
       head.m = segmentMatrix(back, tip, 0.36);
       head.pivot = [birth, 0];

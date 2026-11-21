@@ -262,3 +262,25 @@ Honest gaps of this pass:
 Light-theme render samples also cleared 3:1 for the water and syrup pipes (4.60:1 and 4.21:1) and both placement rings (alarm 6.19:1, recommended 6.27:1). Text and chip measurements used computed colors. Outline, pipe and ring samples used rendered pixels, with a temporary QA device for the placement states.
 
 The installed Chrome channel aborted in the restricted shell, so Playwright used the cached Chrome Headless Shell with in-process SwiftShader. The shared light tokens changed in parallel between the before and after captures. Crowded angles can still hide some room names to keep crew markers and equipment tags legible.
+
+## Crew work in the main 3D twin
+
+The 3D view follows the shared crew walks and projects their foot trails and handoffs with the plant camera. Active portraits grow and inactive plates compact. The label layout measures the plates, keeps room and equipment tags clear of work cues, and reserves the actual tools and briefing bounds. The removed caption no longer reserves space.
+
+| Stage | 3D cue | Evidence |
+| --- | --- | --- |
+| Scout | The photo floats above the exact drop point during perception. The profile supplies the observed label, ports, and radios for the evidence chips. The captured device lands at the same point. | [Photo preview QA](shots/crew-work-3d-photo-preview-qa.png), [evidence replay](shots/crew-work-3d-replay-light-evidence.png), [live landed device](shots/crew-work-3d-live-06s.png) |
+| Inspector | Each recorded rules-engine path draws in hop by hop with the shared walk. The active review path is emphasized. Rule stamps identify findings, and a tick reflects a passed verdict. | [Trace replay](shots/crew-work-3d-replay-light-trace.png), [recorded stamps](shots/crew-work-3d-live-40s.png), [pass replay](shots/crew-work-3d-replay-light-cleared.png) |
+| Architect | Ranked rooms use the deterministic rules-engine order. The recommendation arrow starts at the drop and points to the placement. A held recommendation uses an amber floor highlight. The latest provider thought summary occupies one line in the active plate. | [Ranking replay](shots/crew-work-3d-replay-light-ranking.png), [live arrow](shots/crew-work-3d-live-20s.png) |
+| Chief | The writing state and walk to the results edge begin with `summary.started`. The recorded `summary.done` briefing pins in the 3D overlay and uses the shared dismissal action. | [Live writing and placement](shots/crew-work-3d-live-20s.png), [live briefing](shots/crew-work-3d-briefing-light.png) |
+
+### Verification
+
+- `npm run typecheck` passed. `npx vitest run src/view3d --maxWorkers=1` passed 57 tests across six files.
+- A fresh browser opened in light 3D. The escalation rehearsal placed `TEST-901 · TEST SCENARIO` with five deterministic findings and zero analysis requests, then **Clear test** removed it. The rehearsal used a fictional browser-local number with call consent off. [Test alert](shots/crew-work-3d-test-alert.png)
+- A single live **Describe device** request completed with HTTP 200. The as-dropped check emitted 18 path events, the recommendation passed with one advisory finding, and Chief's briefing arrived about 24 seconds after the run started. The pinned card dismissed successfully. Captured and inspected 21 frames on a two-second schedule from [00s](shots/crew-work-3d-live-00s.png) through [40s](shots/crew-work-3d-live-40s.png). Software rendering added variation to capture timing.
+- Verified [dark 3D](shots/crew-work-3d-dark-3d.png), [light 2D](shots/crew-work-3d-light-2d.png) and [dark 2D](shots/crew-work-3d-dark-2d.png) after reload. Installed Chrome aborted at launch. The cached Chrome Headless Shell rendered with SwiftShader.
+- The final replay used recorded pipeline events. Ten sampled light and dark layouts showed zero intersecting plates, and the briefing dismissed. The sample photo exercised thumbnail rendering locally. The live description produced no thought events, so the one-line thought bubble was checked with excerpts from an earlier Carbon stream. The replay sent zero analysis requests. [Light rule stamps](shots/crew-work-3d-replay-light-stamps.png), [dark evidence](shots/crew-work-3d-replay-dark-evidence.png), [archived thought](shots/crew-work-3d-replay-dark-archived-thought.png), [dark briefing](shots/crew-work-3d-replay-dark-briefing.png)
+- The final patrol showed the `idle patrol` label with zero work plates and trails. Keys `1`, `2` and `3` switched Material, Both and Data in 3D. [Idle patrol](shots/crew-work-3d-after-idle-patrol.png)
+
+The integration is in `Plant3D.tsx`, `Overlay.tsx`, `attackArcs.ts` and `view3d.css`. The focused work modules are `CrewWorkLabels.tsx`, `CrewWorkMotion.tsx`, `CrewWorkBriefing.tsx`, `crewWork.ts`, `crewWorkGeometry.ts`, `crewWork.css` and `crewWork.test.ts` under `src/view3d`. No shared-contract requests.
