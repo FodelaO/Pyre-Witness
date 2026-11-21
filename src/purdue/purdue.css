@@ -1,0 +1,617 @@
+/* Purdue topology layers, compact sizing, and shared twin status styling. */
+.pw-purdue {
+  --purdue-steel: #9eb0c3;
+  --purdue-muted: #8093a8;
+  --purdue-rail: #0e161e;
+  --purdue-boundary: #34475a;
+  --purdue-mono: var(--font-geist-mono, ui-monospace), monospace;
+  display: flex;
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--pw-floor);
+}
+
+.pw-purdue-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-height: 41px;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 7px 13px;
+  border-bottom: 1px solid var(--pw-line);
+  background: var(--pw-panel);
+}
+
+.pw-purdue-header h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--pw-text);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.pw-purdue-header h2 svg {
+  color: var(--purdue-steel);
+}
+
+.pw-purdue-legend,
+.pw-purdue-legend > li {
+  display: flex;
+  align-items: center;
+}
+
+.pw-purdue-legend {
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  color: var(--purdue-steel);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.pw-purdue-legend > li {
+  gap: 4px;
+}
+
+.pw-purdue-legend svg,
+.pw-purdue-gate svg {
+  flex: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+}
+
+.pw-purdue-legend [data-open="true"] svg {
+  color: var(--pw-alarm);
+}
+
+.pw-purdue-legend-path {
+  width: 14px;
+  border-top: 1px dashed var(--pw-alarm);
+}
+
+.pw-purdue-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.pw-purdue-scroll:focus-visible {
+  outline: 1px solid var(--purdue-steel);
+  outline-offset: -1px;
+}
+
+.pw-purdue-canvas {
+  position: relative;
+  isolation: isolate;
+  background-image: radial-gradient(circle, var(--pw-grid) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+.pw-purdue-band-layer,
+.pw-purdue-links,
+.pw-purdue-conduits,
+.pw-purdue-attacks,
+.pw-purdue-attack-marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pw-purdue-band {
+  position: absolute;
+  width: 100%;
+  border-bottom: 1px solid var(--pw-line);
+}
+
+.pw-purdue-band[data-dmz="true"] {
+  border-top: 1px solid #496279;
+  border-bottom: 1px solid #496279;
+  background: repeating-linear-gradient(135deg, rgb(129 161 188 / 4%) 0 1px, transparent 1px 7px), #14202b;
+}
+
+.pw-purdue-rail {
+  position: sticky;
+  z-index: 8;
+  left: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.pw-purdue-rail > li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 9px 5px 12px;
+  border-right: 1px solid var(--pw-line);
+  border-bottom: 1px solid var(--pw-line);
+  background: var(--purdue-rail);
+}
+
+.pw-purdue-rail > li[data-dmz="true"] {
+  border-block-color: #496279;
+  background: #192733;
+}
+
+.pw-purdue-level {
+  padding: 1px 5px;
+  border: 1px solid var(--purdue-boundary);
+  border-radius: 3px;
+  color: var(--purdue-steel);
+  font: 550 10px/1.2 var(--purdue-mono);
+}
+
+[data-dmz="true"] > .pw-purdue-level {
+  border-color: #6a859d;
+  color: var(--pw-text);
+}
+
+.pw-purdue-name {
+  color: var(--pw-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.pw-purdue-blurb {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--purdue-muted);
+  font-size: 9px;
+  line-height: 1.22;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pw-purdue-zone-box {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  fill: rgb(43 61 81 / 10%);
+  stroke: var(--purdue-boundary);
+  stroke-width: 1;
+  stroke-dasharray: 3 2.5;
+}
+
+.pw-purdue-zone-box[data-active="true"] {
+  stroke: var(--purdue-steel);
+  fill: rgb(116 151 181 / 13%);
+}
+
+.pw-purdue-zone-label {
+  position: absolute;
+  z-index: 5;
+  padding: 2px 5px;
+  border-radius: 3px;
+  color: var(--purdue-steel);
+  background: var(--pw-floor);
+  font: 560 10px/1.1 var(--purdue-mono);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pw-purdue-zone-label:hover,
+.pw-purdue-zone-label[aria-pressed="true"] {
+  background: var(--pw-panel-2);
+  color: var(--pw-text);
+}
+
+.pw-purdue-links {
+  z-index: 2;
+  overflow: visible;
+  fill: none;
+  stroke: #71849a;
+  stroke-width: 1;
+  stroke-linejoin: round;
+  opacity: .68;
+}
+
+.pw-purdue-links [data-active="false"] {
+  opacity: .46;
+  stroke-dasharray: 2 3;
+}
+
+.pw-purdue-links [data-focused="true"] {
+  stroke: var(--pw-eq-accent);
+  stroke-width: 1.45;
+}
+
+.pw-purdue-conduits,
+.pw-purdue-attacks {
+  z-index: 2;
+  overflow: visible;
+  fill: none;
+  stroke-linejoin: round;
+}
+
+.pw-purdue-conduits {
+  stroke: #8095aa;
+  stroke-width: 1.35;
+}
+
+.pw-purdue-conduits [data-open="true"] {
+  stroke: var(--pw-alarm);
+  stroke-dasharray: 3 4;
+}
+
+.pw-purdue-conduits [data-inspected="true"] {
+  stroke-width: 2;
+}
+
+.pw-purdue-gate {
+  position: absolute;
+  z-index: 5;
+  display: inline-flex;
+  height: 18px;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px;
+  transform: translate(-50%, -50%);
+  border: 1px solid #71879c;
+  border-radius: 4px;
+  background: #1b2836;
+  color: var(--pw-eq-accent);
+  font: 560 8.5px/1 var(--purdue-mono);
+  white-space: nowrap;
+  cursor: help;
+}
+
+.pw-purdue-gate[data-open="true"] {
+  border-color: var(--pw-alarm);
+  border-style: dashed;
+  background: #291622;
+  color: var(--pw-alarm);
+}
+
+.pw-purdue-gate[data-inspected="true"],
+.pw-purdue-gate:focus-visible {
+  z-index: 7;
+  outline: 1px solid var(--pw-eq-accent);
+  outline-offset: 2px;
+}
+
+.pw-purdue-conduit-details,
+.pw-purdue-reassessment {
+  position: absolute;
+  z-index: 10;
+  right: 11px;
+  width: max-content;
+  max-width: min(340px, calc(100% - 22px));
+  padding: 9px 11px;
+  pointer-events: none;
+  border: 1px solid var(--purdue-boundary);
+  border-radius: 6px;
+  background: #172331;
+  box-shadow: 0 6px 16px rgb(0 0 0 / 24%);
+  color: var(--pw-text);
+  font-size: 11px;
+}
+
+.pw-purdue-conduit-details {
+  top: calc(100% + 7px);
+}
+
+.pw-purdue-reassessment {
+  bottom: 11px;
+  border-color: var(--pw-alarm);
+}
+
+.pw-purdue-detail-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.pw-purdue-detail-heading > span {
+  color: var(--purdue-steel);
+  font: 550 9.5px/1 var(--purdue-mono);
+}
+
+.pw-purdue-detail-heading > span[data-open="true"] {
+  color: #ff899c;
+}
+
+.pw-purdue-conduit-details > ul {
+  margin: 6px 0 0;
+  padding-left: 13px;
+  list-style: disc;
+}
+
+.pw-purdue-conduit-details li + li {
+  margin-top: 3px;
+}
+
+.pw-purdue-conduit-details > p {
+  margin: 6px 0 0;
+  color: var(--purdue-steel);
+}
+
+.pw-purdue-attacks {
+  z-index: 3;
+  stroke: var(--pw-alarm);
+  stroke-width: 1.65;
+  stroke-dasharray: 5 4;
+}
+
+.pw-purdue-attacks > path {
+  animation: pw-purdue-flow 950ms linear infinite;
+}
+
+.pw-purdue-attacks > path[data-emphasis="selected"] {
+  stroke-width: 2.4;
+}
+
+.pw-purdue-attack-marks {
+  z-index: 6;
+  overflow: visible;
+}
+
+.pw-purdue-canvas [data-emphasis="normal"] {
+  opacity: .52;
+}
+
+.pw-purdue-canvas [data-emphasis="muted"] {
+  opacity: .17;
+}
+
+.pw-purdue-breach {
+  fill: none;
+  stroke: var(--pw-alarm);
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pw-purdue-breach > circle {
+  stroke-dasharray: 3 2;
+}
+
+.pw-purdue-breach > path {
+  paint-order: stroke;
+  stroke: #ff8297;
+}
+
+.pw-purdue-technique > rect {
+  fill: #2b1420;
+  stroke: var(--pw-alarm);
+  stroke-width: .65;
+}
+
+.pw-purdue-technique > text {
+  fill: #ffbdc7;
+  font: 600 8.5px/1 var(--purdue-mono);
+}
+
+.pw-purdue-entry,
+.pw-purdue-node,
+.pw-purdue-group {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--pw-line-strong);
+  border-radius: 5px;
+  background: var(--pw-panel);
+  color: var(--purdue-steel);
+}
+
+.pw-purdue-entry {
+  padding: 0 5px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.pw-purdue-entry > svg {
+  flex: none;
+}
+
+.pw-purdue-entry > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pw-purdue-entry[data-external="false"] {
+  padding: 0;
+  border-radius: 50%;
+}
+
+.pw-purdue-node {
+  flex-direction: column;
+  gap: 0;
+  padding: 1px 2px 2px;
+  color: var(--pw-text);
+  cursor: pointer;
+}
+
+.pw-purdue-node[data-added="true"] {
+  z-index: 5;
+  animation: pw-purdue-arrival 300ms ease-out backwards;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.pw-purdue-node[data-placement="recommended"] {
+  border-color: var(--pw-ok);
+}
+
+.pw-purdue-node[data-placement="unsafe"] {
+  border-color: var(--pw-alarm);
+}
+
+.pw-purdue-canvas[data-dragging="true"],
+.pw-purdue-node[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.pw-purdue-node[data-dragging="true"] {
+  opacity: .35;
+}
+
+.pw-purdue-drop {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  border: 1px solid var(--purdue-steel);
+  border-radius: 6px;
+  background: rgb(157 183 205 / 13%);
+}
+
+.pw-purdue-drag-ghost {
+  position: absolute;
+  z-index: 7;
+  display: grid;
+  width: max-content;
+  max-width: 111px;
+  gap: 3px;
+  padding: 5px 7px;
+  pointer-events: none;
+  border: 1px solid var(--purdue-steel);
+  border-radius: 4px;
+  background: var(--pw-panel-2);
+  color: var(--pw-text);
+  font: 550 10px/1.1 var(--purdue-mono);
+  overflow-wrap: anywhere;
+}
+
+.pw-purdue-drag-ghost > small {
+  color: var(--purdue-steel);
+  font: 500 9px/1.15 system-ui, sans-serif;
+}
+
+.pw-purdue-node[data-zone-active="true"],
+.pw-purdue-group[data-zone-active="true"] {
+  background: #1c2a39;
+  box-shadow: inset 0 0 0 1px rgb(151 178 203 / 24%);
+}
+
+.pw-purdue-node[data-hovered="true"],
+.pw-purdue-node[aria-pressed="true"],
+.pw-purdue-group:hover {
+  z-index: 6;
+  background: var(--pw-panel-2);
+  outline: 1px solid var(--purdue-steel);
+  outline-offset: 2px;
+}
+
+.pw-purdue-node[aria-pressed="true"] {
+  outline-color: var(--pw-eq-accent);
+}
+
+.pw-purdue-symbol {
+  display: block;
+  width: 30px;
+  height: 23px;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.pw-purdue-tag {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  font: 540 10px/1.1 var(--purdue-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pw-purdue-node[data-mini="true"] {
+  flex-direction: row;
+  gap: 3px;
+}
+
+.pw-purdue-node[data-mini="true"] > .pw-purdue-symbol {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.pw-purdue-group {
+  font: 560 10px/1 var(--purdue-mono);
+  cursor: pointer;
+}
+
+.pw-purdue-group[aria-expanded="true"] > .pw-purdue-group-chevron {
+  transform: rotate(180deg);
+}
+
+.pw-purdue-zone-label:focus-visible,
+.pw-purdue-node:focus-visible,
+.pw-purdue-group:focus-visible {
+  outline: 2px solid var(--pw-eq-accent);
+  outline-offset: 2px;
+}
+
+.pw-purdue-canvas[data-compact="true"] .pw-purdue-rail > li {
+  padding-inline: 7px 5px;
+}
+
+.pw-purdue-canvas[data-compact="true"] .pw-purdue-name {
+  font-size: 10px;
+}
+
+.pw-purdue-canvas[data-compact="true"] .pw-purdue-blurb {
+  font-size: 8.5px;
+}
+
+.pw-purdue-canvas[data-compact="true"] .pw-purdue-zone-label[data-lower="true"] {
+  padding-inline: 2px;
+  font: 620 9px/1.1 var(--font-geist-sans), system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.pw-purdue-canvas[data-compact="true"] .pw-purdue-symbol {
+  width: 23px;
+  height: 18px;
+}
+
+.pw-purdue-canvas[data-compact="true"] .pw-purdue-node {
+  padding-inline: 0;
+}
+
+.pw-purdue-canvas[data-compact="true"] .pw-purdue-tag {
+  font-size: 8.5px;
+}
+
+.pw-purdue-canvas[data-compact="true"] .pw-purdue-gate {
+  height: 15px;
+  gap: 2px;
+  padding-inline: 2px;
+  font-size: 7.6px;
+}
+
+.pw-purdue-canvas[data-compact="true"] .pw-purdue-gate svg {
+  width: 10px;
+}
+
+@keyframes pw-purdue-arrival {
+  from { opacity: 0; transform: translateY(-5px) scale(.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes pw-purdue-flow {
+  to { stroke-dashoffset: -9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pw-purdue-node[data-added="true"],
+  .pw-purdue-attacks > path { animation: none; }
+}

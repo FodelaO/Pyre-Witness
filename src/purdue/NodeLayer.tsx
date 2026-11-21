@@ -1,0 +1,119 @@
+/** Renders accessible equipment cards, collapsed field groups, and entry points. */
+import { Boxes, ChevronDown, Globe, Laptop, Radio, Truck, UserRound } from "lucide-react";
+import type { PointerEvent } from "react";
+import { Equipment, FOOTPRINT } from "@/equipment";
+import type { Asset, EntryPoint } from "@/twin/types";
+import type { Box, PurdueLayout } from "./layout";
+
+function position({ x, y, w, h }: Box) {
+  return { left: x, top: y, width: w, height: h };
+}
+
+const ENTRY_ICONS = {
+  internet: Globe,
+  remote: Laptop,
+  rf: Radio,
+  physical: UserRound,
+  supply: Truck,
+} satisfies Record<EntryPoint["kind"], typeof Globe>;
+
+interface NodeLayerProps {
+  layout: PurdueLayout;
+  selectedId: string | null;
+  hoveredId: string | null;
+  activeZone: string | null;
+  draggedId?: string;
+  onSelect: (id: string) => void;
+  onHover: (id: string, entered: boolean) => void;
+  onToggleFields: (area: string) => void;
+  onDragStart?: (event: PointerEvent<HTMLButtonElement>, asset: Asset) => void;
+}
+
+export function NodeLayer({
+  layout,
+  selectedId,
+  hoveredId,
+  activeZone,
+  draggedId,
+  onSelect,
+  onHover,
+  onToggleFields,
+  onDragStart,
+}: NodeLayerProps) {
+  return (
+    <>
+      {layout.entries.map(({ entry, external, ...box }) => {
+        const Icon = ENTRY_ICONS[entry.kind];
+        return (
+          <div
+            key={entry.id}
+            className="pw-purdue-entry"
+            data-external={external}
+            data-entry={entry.id}
+            role="img"
+            aria-label={entry.name}
+            title={entry.name}
+            style={position(box)}
+          >
+            <Icon size={13} strokeWidth={1.5} aria-hidden="true" />
+            {external && <span>{entry.name}</span>}
+          </div>
+        );
+      })}
+      {layout.fieldGroups.map(({ zone, count, expanded, ...box }) => (
+        <button
+          key={zone}
+          type="button"
+          className="pw-purdue-group"
+          aria-expanded={expanded}
+          aria-label={`${zone}, ${count} field devices`}
+          title={`${count} field devices`}
+          data-zone-active={activeZone === zone}
+          style={position(box)}
+          onClick={() => onToggleFields(zone)}
+        >
+          <Boxes size={12} strokeWidth={1.6} aria-hidden="true" />
+          <span>{count}</span>
+          <ChevronDown size={9} strokeWidth={1.8} className="pw-purdue-group-chevron" aria-hidden="true" />
+        </button>
+      ))}
+      {layout.cards.map(({ asset, mini, ...box }) => {
+        const { id, name, origin, placement, physical, status, network } = asset;
+        const footprint = FOOTPRINT[physical.kind];
+        return (
+          <button
+            key={id}
+            type="button"
+            className="pw-purdue-node"
+            data-asset={id}
+            data-mini={mini}
+            data-added={origin === "added"}
+            data-dragging={id === draggedId}
+            data-placement={placement}
+            data-hovered={id === hoveredId}
+            data-zone-active={network.area === activeZone}
+            aria-pressed={id === selectedId}
+            aria-label={`${id} · ${name}`}
+            title={`${id} · ${name}`}
+            onClick={() => onSelect(id)}
+            onPointerEnter={(event) => { if (event.pointerType !== "touch") onHover(id, true); }}
+            onPointerLeave={() => onHover(id, false)}
+            onPointerDown={origin === "added" && onDragStart ? (event) => onDragStart(event, asset) : undefined}
+            style={position(box)}
+          >
+            {(!mini || !layout.compact) && (
+              <svg
+                className="pw-purdue-symbol"
+                viewBox={`${-footprint.w / 2 - 8} ${-footprint.h / 2 - 8} ${footprint.w + 16} ${footprint.h + 16}`}
+                aria-hidden="true"
+              >
+                <Equipment kind={physical.kind} status={status} compact />
+              </svg>
+            )}
+            <span className="pw-purdue-tag">{id}</span>
+          </button>
+        );
+      })}
+    </>
+  );
+}
