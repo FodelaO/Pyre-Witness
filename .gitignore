@@ -48,3 +48,6 @@ next-env.d.ts
 .claude/
 *.log
 /demo/raw/
+/demo/out/
+/watch/reports/
+/eval/runs/
