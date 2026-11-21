@@ -1,8 +1,8 @@
-/** Shows ranked actions and their projected impact when the to-do engine is available. */
+/** Shows ranked actions and their projected impact. */
 "use client";
 
 import { Check, ListChecks, MapPin, ShoppingCart } from "lucide-react";
-import { lazy, useState } from "react";
+import { useState } from "react";
 import { formatUsd } from "@/econ/format";
 import { LossGlyph } from "@/econ/LossGlyph";
 import { useTwinStore } from "@/twin/store";
@@ -29,8 +29,6 @@ interface Todo {
   apply(): unknown;
 }
 
-type TodoEngine = { useTodos?: () => readonly Todo[] };
-declare const require: { context: (root: string, recursive: boolean, file: RegExp) => { keys(): string[]; (file: string): TodoEngine } };
 const VISIBLE_ACTIONS = 3;
 
 function AssetDetails({ item }: { item: TodoAsset }) {
@@ -99,8 +97,7 @@ function TodoCard({ item }: { item: Todo }) {
   );
 }
 
-function TodoSection({ useTodos }: { useTodos: NonNullable<TodoEngine["useTodos"]> }) {
-  const items = useTodos();
+export function TodoSection({ items }: { items: readonly Todo[] }) {
   const mitigations = useTwinStore((state) => state.mitigations);
   const decided = mitigations.filter(({ status }) => status !== "proposed");
   const more = items.length - VISIBLE_ACTIONS;
@@ -123,11 +120,3 @@ function TodoSection({ useTodos }: { useTodos: NonNullable<TodoEngine["useTodos"
     </section>
   );
 }
-
-export const OptionalTodos = lazy(async () => {
-  // A context with an empty match compiles while the engine is being built in parallel.
-  const files = require.context("..", true, /^\.\/todo\/useTodos\.tsx?$/);
-  const file = files.keys()[0];
-  const useTodos = file ? files(file).useTodos : undefined;
-  return { default: useTodos ? function RankedTodos() { return <TodoSection useTodos={useTodos} />; } : () => null };
-});

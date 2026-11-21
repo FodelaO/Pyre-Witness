@@ -1,101 +1,72 @@
-/** Sticky plant risk arc and a bounded, session-only score history. */
+/** Shows the live plant risk and opens the rail's review sections. */
 "use client";
 
-import { ArrowDownRight, ArrowUpRight, Gauge, Minus } from "lucide-react";
-import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
+import { ChevronDown } from "lucide-react";
+import { animate, motion, useMotionValue, useTransform } from "motion/react";
 import { useEffect, type ReactNode } from "react";
-import { create } from "zustand";
-import { PlantLossExposure } from "@/econ/mountsPlant";
+import { formatUsd, plantExposure } from "@/econ/model";
+import { useEconomicTwin } from "@/econ/useEconomicTwin";
 import { useTwinStore } from "@/twin/store";
-import { displayedRiskChange, riskDelta, riskScore } from "./riskNumber";
+import { riskScore } from "./riskNumber";
+import "./riskHero.css";
 
-const HISTORY_SIZE = 24;
-const ARC = "M8 61 A53 53 0 0 1 114 61";
+const ARC = "M31 133 A70 70 0 1 1 129 133";
+const layoutTransition = { duration: 0.36, ease: "easeOut" } as const;
 
-const useRiskHistory = create<{ scores: number[]; record: (score: number) => void }>((set) => ({
-  scores: [],
-  record: (score) => set((state) => state.scores.at(-1) === score
-    ? state
-    : { scores: [...state.scores.slice(1 - HISTORY_SIZE), score] }),
-}));
-
-function RiskHistory({ score }: { score: number }) {
-  const history = useRiskHistory((state) => state.scores);
-  const scores = history.length ? history : [score];
-  const low = Math.min(...scores);
-  const high = Math.max(...scores);
-  const span = Math.max(1, high - low);
-  const mid = (low + high) / 2;
-  const points = scores.map((value, index) => ({
-    x: 3 + 98 * index / Math.max(1, scores.length - 1),
-    y: 14 - 20 * (value - mid) / span,
-  }));
-  const last = points[points.length - 1];
-  return (
-    <figure className="pw-panel-sparkline" aria-label={`Session risk history, ${scores.length} ${scores.length === 1 ? "reading" : "readings"}`}>
-      <svg viewBox="0 0 104 28" aria-hidden="true">
-        <path d="M3 14h98" stroke="var(--pw-line-strong)" strokeDasharray="2 4" />
-        {points.length > 1 && <polyline points={points.map(({ x, y }) => `${x},${y}`).join(" ")} />}
-        <circle cx={last.x} cy={last.y} r="2.4" />
-      </svg>
-      <figcaption>Session trend</figcaption>
-    </figure>
-  );
-}
-
-export function RiskDial({ action }: { action?: ReactNode }) {
-  const score = useTwinStore((state) => state.risk.score);
-  const band = useTwinStore((state) => state.risk.band);
-  const baseline = useTwinStore((state) => state.baselineScore);
-  const delta = displayedRiskChange(score, baseline);
-  const DeltaIcon = delta > 0 ? ArrowUpRight : delta < 0 ? ArrowDownRight : Minus;
-  const reducedMotion = useReducedMotion();
+export function RiskDial({ expanded, composing, reducedMotion, onToggle, action }: {
+  expanded: boolean;
+  composing: boolean;
+  reducedMotion: boolean;
+  onToggle: () => void;
+  action?: ReactNode;
+}) {
+  const risk = useTwinStore((state) => state.risk);
+  const { score } = risk;
+  const band = risk.band === "guarded" ? "low" : risk.band;
+  const twin = useEconomicTwin();
+  const loss = plantExposure(twin, risk).totalAnnualised;
+  const compact = expanded || composing;
+  const showLoss = !compact && Number.isFinite(loss);
+  const layout = !reducedMotion;
   const dialValue = useMotionValue(score);
   const display = useTransform(dialValue, riskScore);
-
-  useEffect(() => {
-    const { record } = useRiskHistory.getState();
-    record(useTwinStore.getState().risk.score);
-    return useTwinStore.subscribe((state, previous) => {
-      if (state.risk.score !== previous.risk.score) record(state.risk.score);
-    });
-  }, []);
+  const sweep = useTransform(dialValue, (value) => `${value} 100`);
+  const fillOpacity = useTransform(dialValue, (value) => Math.min(1, value));
 
   useEffect(() => {
     if (reducedMotion) {
       dialValue.set(score);
       return;
     }
-    const animation = animate(dialValue, score, { duration: 0.18, ease: "easeOut" });
+    const animation = animate(dialValue, score, { duration: 0.48, ease: "easeOut" });
     return () => animation.stop();
   }, [score, dialValue, reducedMotion]);
 
   return (
-    <section className="pw-panel-dial" data-band={band} aria-labelledby="pw-panel-risk-title">
-      <div className="pw-panel-dial-head">
-        <h2 id="pw-panel-risk-title"><Gauge size={16} aria-hidden />Plant risk</h2>
-        {action}
-      </div>
-      <div className="pw-panel-dial-body">
-        <div className="pw-panel-gauge" role="meter" aria-label="Plant risk score" aria-valuemin={0} aria-valuemax={100}
-          aria-valuenow={riskScore(score)} aria-valuetext={`${riskScore(score)} of 100, ${band}`}>
-          <svg viewBox="0 0 122 70" aria-hidden="true">
-            <path className="pw-panel-gauge-track" d={ARC} />
-            <path className="pw-panel-gauge-fill" d={ARC} pathLength="100" strokeDasharray={`${score} 100`} />
+    <section className="pw-risk-hero" data-band={band} data-compact={compact} aria-label="Plant risk assessment">
+      <motion.button className="pw-risk-toggle" type="button" disabled={composing}
+        layout={layout} transition={layoutTransition} onClick={onToggle}
+        aria-label={`Plant risk, ${riskScore(score)} out of 100, ${band}`}
+        aria-describedby={showLoss ? "pw-risk-loss" : undefined}
+        aria-expanded={expanded && !composing} aria-controls="pw-risk-reviews">
+        <motion.span className="pw-risk-title" layout={layout} transition={layoutTransition}>Plant risk</motion.span>
+        <motion.span className="pw-risk-ring" layout={layout} transition={layoutTransition} aria-hidden="true">
+          <svg viewBox="0 0 160 160">
+            <path className="pw-risk-track" d={ARC} />
+            <motion.path className="pw-risk-fill" d={ARC} pathLength="100"
+              strokeDasharray={reducedMotion ? `${score} 100` : sweep} opacity={reducedMotion ? Math.min(1, score) : fillOpacity} />
           </svg>
-          <span className="pw-panel-gauge-value pw-mono" aria-hidden="true">
-            <motion.span>{display}</motion.span><span>/100</span>
+          <span className="pw-risk-value pw-mono">
+            <motion.span className="pw-risk-score">{reducedMotion ? riskScore(score) : display}</motion.span><span className="pw-risk-total">/100</span>
           </span>
-        </div>
-        <div className="pw-panel-dial-band">
-          <strong>{band}</strong>
-          <span className="pw-panel-delta pw-mono" data-direction={Math.sign(delta)} title={`Baseline ${riskScore(baseline)}`}>
-            <DeltaIcon size={13} aria-hidden />{riskDelta(delta)} <span>vs baseline</span>
-          </span>
-        </div>
-        <RiskHistory score={score} />
-      </div>
-      <PlantLossExposure />
+        </motion.span>
+        <motion.span className="pw-risk-band" layout={layout} transition={layoutTransition}>{band}</motion.span>
+        {showLoss && (
+          <span className="pw-risk-loss" id="pw-risk-loss"><strong className="pw-mono">{formatUsd(loss)}</strong> est. annual loss</span>
+        )}
+        {!composing && <ChevronDown className="pw-risk-caret" size={16} aria-hidden />}
+      </motion.button>
+      {action && <div className="pw-risk-action">{action}</div>}
     </section>
   );
 }

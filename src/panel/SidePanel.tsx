@@ -2,6 +2,7 @@
 "use client";
 
 import { AudioLines, Crosshair, ImagePlus, List, Radio } from "lucide-react";
+import { useReducedMotion } from "motion/react";
 import { lazy, useEffect, useRef, useState } from "react";
 import { useLensStore } from "@/layers/lensStore";
 import ModelerPanel from "@/modeler/ModelerPanel";
@@ -9,6 +10,7 @@ import { useModelerStore } from "@/modeler/modelerStore";
 import SourcesStrip from "@/modeler/SourcesStrip";
 import { useRunStore, type RunState } from "@/pipeline/runStore";
 import { Slot } from "@/shell/Slot";
+import { useTodos } from "@/todo/useTodos";
 import { useTwinStore } from "@/twin/store";
 import { AssetInspector } from "./AssetInspector";
 import { DeviceCard } from "./DeviceCard";
@@ -16,11 +18,13 @@ import { Disclosure, PanelHeading, PanelSection, TextPreview } from "./PanelPart
 import { PanelWorkspace } from "./PanelWorkspace";
 import { RailUpdates } from "./RailUpdates";
 import { RiskDial } from "./RiskDial";
+import { RiskReviewTabs, type RiskReviewTab } from "./RiskReviewTabs";
 import { RunAnswers } from "./RunAnswers";
 import { placementChecks } from "./runEvidence";
 import { RunError, RunProgress } from "./RunProgress";
 import { SimulationComparison } from "./SimulationComparison";
-import { OptionalTodos } from "./TodoSection";
+import { TodoSection } from "./TodoSection";
+import { useWatchAdvisoryCount } from "./useWatchAdvisoryCount";
 import "./fitPreviewPanel.css";
 import "./rightPane.css";
 
@@ -60,6 +64,13 @@ export default function SidePanel({ captureOpen, setCaptureEditor, modelerOpen, 
   const run = useRunStore();
   const { runId, status, stage, events, gate, error, summary, profile, assessment, placedAssetId } = run;
   const selectedId = useTwinStore((state) => state.selectedId);
+  const todos = useTodos();
+  const { panel: watchPanel, count: watchCount } = useWatchAdvisoryCount();
+  const reducedMotion = useReducedMotion() === true;
+  const [reviewsOpen, setReviewsOpen] = useState(false);
+  const [reviewTab, setReviewTab] = useState<RiskReviewTab>("todo");
+  const firstReview = useRef<HTMLDivElement>(null);
+  const lastWatchReveal = useRef(0);
   const [dismissedRun, setDismissedRun] = useState<string | null | undefined>(undefined);
   const results = useRef<HTMLDivElement>(null);
   const inspector = useRef<HTMLElement>(null);
@@ -80,6 +91,28 @@ export default function SidePanel({ captureOpen, setCaptureEditor, modelerOpen, 
     const modeler = useModelerStore.getState();
     if (!previewModel && modeler.previewId) modeler.preview(null);
   }, [previewModel]);
+  useEffect(() => {
+    if (watchReveal !== lastWatchReveal.current) {
+      lastWatchReveal.current = watchReveal;
+      setReviewsOpen(true);
+      setReviewTab("watch");
+      firstReview.current?.parentElement?.scrollTo({ top: 0 });
+    } else if (watchOpen && (!reviewsOpen || reviewTab !== "watch")) {
+      onWatchOpen(false);
+    }
+  }, [watchReveal, watchOpen, reviewsOpen, reviewTab, onWatchOpen]);
+
+  function selectReview(tab: RiskReviewTab) {
+    setReviewTab(tab);
+    onWatchOpen(tab === "watch");
+    firstReview.current?.parentElement?.scrollTo({ top: 0 });
+  }
+
+  function toggleReviews() {
+    setReviewsOpen(!reviewsOpen);
+    if (reviewsOpen) onWatchOpen(false);
+    else selectReview(reviewTab);
+  }
 
   function toggleResults() {
     setDismissedRun(focused ? runId : undefined);
@@ -88,15 +121,27 @@ export default function SidePanel({ captureOpen, setCaptureEditor, modelerOpen, 
 
   return (
     <div className="pw-panel" role="region" aria-label="Plant results">
-      <RiskDial action={hasRun && !running && !captureOpen && (
-        <button className="pw-panel-link pw-panel-run-toggle" type="button" onClick={toggleResults}>
-          {focused ? <><Crosshair size={14} aria-hidden />Inspect</> : <><List size={14} aria-hidden />Results</>}
-        </button>
-      )} />
+      <RiskDial expanded={reviewsOpen} composing={captureOpen} reducedMotion={reducedMotion} onToggle={toggleReviews}
+        action={hasRun && !running && !captureOpen && (
+          <button className="pw-panel-link pw-panel-run-toggle" type="button" onClick={toggleResults}>
+            {focused ? <><Crosshair size={14} aria-hidden />Inspect</> : <><List size={14} aria-hidden />Results</>}
+          </button>
+        )} />
+      <RiskReviewTabs open={reviewsOpen && !captureOpen} active={reviewTab} reducedMotion={reducedMotion}
+        todoCount={todos.length} watchCount={watchCount} onSelect={selectReview} />
       <PanelWorkspace captureOpen={captureOpen} setCaptureEditor={setCaptureEditor}>
-        <Slot name="To-do" quiet><OptionalTodos /></Slot>
-        <Slot name="Threat watch" quiet><WatchPanel open={watchOpen} reveal={watchReveal} onOpenChange={onWatchOpen} /></Slot>
-        <Slot name="Updates" quiet><RailUpdates /></Slot>
+        <div ref={firstReview} className="pw-risk-tabpanel" role="tabpanel" id="pw-risk-panel-todo"
+          aria-labelledby="pw-risk-tab-todo" tabIndex={0} hidden={!reviewsOpen || reviewTab !== "todo"}>
+          <Slot name="To-do" quiet><TodoSection items={todos} /></Slot>
+        </div>
+        <div ref={watchPanel} className="pw-risk-tabpanel" role="tabpanel" id="pw-risk-panel-watch" aria-labelledby="pw-risk-tab-watch"
+          tabIndex={0} hidden={!reviewsOpen || reviewTab !== "watch"}>
+          <Slot name="Threat watch" quiet><WatchPanel open={watchOpen} reveal={watchReveal} onOpenChange={onWatchOpen} /></Slot>
+        </div>
+        <div className="pw-risk-tabpanel" role="tabpanel" id="pw-risk-panel-updates" aria-labelledby="pw-risk-tab-updates"
+          tabIndex={0} hidden={!reviewsOpen || reviewTab !== "updates"}>
+          <Slot name="Updates" quiet><RailUpdates /></Slot>
+        </div>
         <section className="pw-panel-section pw-rail-section" data-pane="asset" ref={inspector}><AssetInspector mode={mode} /></section>
         <div className="pw-panel-modeler" hidden={mode === "data"}>
           <Slot name="Twin modeler">
