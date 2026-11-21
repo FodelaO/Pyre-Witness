@@ -1,0 +1,67 @@
+/* Compact, theme-aware history for the agents pane. */
+.ticker {
+  --ticker-row: 26px;
+  min-inline-size: 0;
+  margin-block-start: 6px;
+  border-block-start: 1px solid var(--pw-line);
+  padding-block-start: 5px;
+  color: var(--pw-text);
+}
+
+.heading {
+  margin: 0 0 2px;
+  padding-inline: 5px;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--pw-text-dim);
+}
+
+.viewport {
+  max-block-size: calc(var(--ticker-row) * 5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pw-line-strong) transparent;
+}
+
+.list { margin: 0; padding: 0; list-style: none; }
+
+.row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  inline-size: 100%;
+  block-size: var(--ticker-row);
+  padding: 0 5px;
+  border-radius: 4px;
+  background: transparent;
+  text-align: start;
+  font-size: 11px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.row:is(:hover, :focus-visible) { background: var(--pw-panel-2); }
+.row:focus-visible { outline: 1px solid var(--pw-info); outline-offset: -1px; }
+
+.row[data-tone="alert"] .icon { color: var(--pw-alarm); }
+.row[data-tone="warn"] .icon { color: var(--pw-attention); }
+.row[data-tone="ok"] .icon { color: var(--pw-ok); }
+
+.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row time { color: var(--pw-text-dim); font: 500 10px/1 var(--font-geist-mono), ui-monospace, monospace; }
+.empty { margin: 3px 5px 5px; color: var(--pw-text-dim); font-size: 11px; }
+
+.srOnly { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .newest { animation: slide-in 220ms ease-out both; }
+}
+
+@keyframes slide-in {
+  from { transform: translateY(-9px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
