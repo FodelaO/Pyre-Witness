@@ -7,6 +7,7 @@
 
 import { useImperativeHandle, useLayoutEffect, useMemo, useRef, type CSSProperties, type Ref, type RefObject } from "react";
 import { PenLine } from "lucide-react";
+import { useCrewHoverId } from "@/crew/crewHover";
 import { crewPosition, useCrewStore } from "@/crew/crewStore";
 import { CREW, CREW_ORDER, type CrewId } from "@/crew/types";
 import { useCrewReadout } from "@/crew/useCrewReadout";
@@ -61,6 +62,7 @@ function CrewBillboard({ id, register, sizes, writing, invalidate }: {
   invalidate: () => void;
 }) {
   const member = CREW[id];
+  const emphasized = useCrewHoverId() === id;
   const { status, message, active, walking, resting, patrol } = useCrewReadout(id);
   const speech = useCrewStore((state) => state.avatars?.[id]?.speech);
   // Recorded traces keep playing after selfcheck.done; stay active through the short stops between paths.
@@ -82,12 +84,14 @@ function CrewBillboard({ id, register, sizes, writing, invalidate }: {
     const resize = new ResizeObserver(measure);
     resize.observe(element);
     return () => { resize.disconnect(); sizes.delete(id); };
-  }, [id, sizes, text, compact, working, writing, invalidate]);
+  }, [id, sizes, text, compact, working, writing, emphasized, invalidate]);
 
   return (
     <div
       ref={(element) => register("crew:" + id, element)}
       className="pw3d-crew"
+      data-crew={id}
+      data-emphasized={emphasized || undefined}
       data-status={status}
       data-active={working || undefined}
       data-thought={speech?.kind === "thought" || undefined}
@@ -154,8 +158,11 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
 
       // Crew stand on their real floor position; plates that would overlap are lifted on longer stems.
       const crewBoxes: CrewBox[] = [...reserved];
-      const active = (id: CrewId) => Number(!!elements.current.get("crew:" + id)?.dataset.active);
-      const crewOrder = [...CREW_ORDER].sort((a, b) => active(b) - active(a));
+      const crewPriority = (id: CrewId) => {
+        const data = elements.current.get("crew:" + id)?.dataset;
+        return 2 * Number(!!data?.emphasized) + Number(!!data?.active);
+      };
+      const crewOrder = [...CREW_ORDER].sort((a, b) => crewPriority(b) - crewPriority(a));
       for (const id of crewOrder) {
         const key = "crew:" + id;
         const element = elements.current.get(key);

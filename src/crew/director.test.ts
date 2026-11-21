@@ -46,13 +46,15 @@ describe("crew director", () => {
       answers: { is_device: { type: "noul", value: 0.97, confidence: 0.94 } }, proceed: true, reason: null,
     } })).toMatchObject({ cue: { status: "done", activity: { text: "Device? 0.97 · Gate passed", latencyMs: 87 } } });
     expect(next({ ...run, type: "perception.started", model: MODEL_IDS.perception }))
-      .toMatchObject({ cue: { stops: [{ point: DEFAULT_DROP, area: DEFAULT_DROP.area }] } });
+      .toMatchObject({ cue: { stops: [{ point: DEFAULT_DROP, area: DEFAULT_DROP.area }], target: { fallbackArea: DEFAULT_DROP.area } } });
     expect(next({ ...run, type: "perception.done", model: MODEL_IDS.perception, latencyMs: 1250, profile }))
-      .toMatchObject({ cue: { activity: { text: "Pressure gauge · Label reads 0–10 bar", latencyMs: 1250 } } });
+      .toMatchObject({ cue: { activity: { text: "Pressure gauge · Label reads 0–10 bar", latencyMs: 1250 },
+        target: { ids: [expect.stringMatching(/^INST-\d+$/)], label: "Pressure gauge" } } });
     expect(next({ ...run, type: "reasoning.started", model: MODEL_IDS.reasoning, candidateArea: null }))
       .toMatchObject({ cue: { stops: [{ point: areaCenter(areaById(twin, "filler3")!), area: "filler3" }] } });
     expect(next({ ...run, type: "reasoning.done", model: MODEL_IDS.reasoning, latencyMs: 780, assessment }))
       .toMatchObject({ cue: { stops: [{ point: areaCenter(areaById(twin, "packaging")!), area: "packaging" }],
+        target: { ids: expect.arrayContaining(["packaging", ...twin.assets.filter(({ physical }) => physical.area === "packaging").map(({ id }) => id)]) },
         activity: { crew: "architect", text: "Packaging · Purdue L2" } } });
   });
 
@@ -85,6 +87,7 @@ describe("crew director", () => {
       inspection: "recommendation", activity: { text: `Recommendation path · ${path.title}`, engine: "rules engine" },
       stops: ["parking_rf", "HMI-F3", "SW-OT", "SCADA-03"].map((id) => ({ point: nodePosition(twin, id) })),
       inspect: nodePosition(twin, "SCADA-03"),
+      target: { ids: ["parking_rf", "HMI-F3", "SW-OT", "SCADA-03"], label: "SCADA-03" },
       visual: { kind: "trace", id: "path-fixture", phase: "recommendation" },
     } });
     expect(next({ ...run, type: "selfcheck.done", latencyMs: 10, result }))

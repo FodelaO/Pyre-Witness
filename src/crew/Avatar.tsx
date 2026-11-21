@@ -6,7 +6,7 @@ import type { CrewMember } from "./types";
 
 const roles = { scout: ScanLine, architect: Waypoints, inspector: ShieldCheck, chief: FileText };
 
-export default memo(function Avatar({ member, avatar, idPrefix, preview, scale, desk, away }: {
+export default memo(function Avatar({ member, avatar, idPrefix, preview, scale, desk, away, emphasized }: {
   member: CrewMember;
   avatar?: AvatarState;
   idPrefix: string;
@@ -14,6 +14,7 @@ export default memo(function Avatar({ member, avatar, idPrefix, preview, scale, 
   scale: number;
   desk?: boolean;
   away?: boolean;
+  emphasized?: boolean;
 }) {
   const walk = avatar?.walk;
   const position = useRef<SVGGElement>(null);
@@ -46,6 +47,7 @@ export default memo(function Avatar({ member, avatar, idPrefix, preview, scale, 
 
   return (
     <g className={away ? "pw-crew-away-portrait" : "pw-crew-avatar"} data-crew={member.id} data-state={state} data-status={status} data-desk={desk || undefined}
+      data-emphasized={emphasized || undefined}
       style={{ "--crew-color": `var(${member.colorVar})` } as CSSProperties}>
       <defs><clipPath id={clip}><circle r={22} /></clipPath></defs>
       {!!inspect && !walking && (
@@ -64,6 +66,7 @@ export default memo(function Avatar({ member, avatar, idPrefix, preview, scale, 
           </g>}
           <g ref={body} className="pw-crew-body">
             <circle className="pw-crew-halo" r={30} />
+            {emphasized && <circle className="pw-crew-emphasis" r={33} aria-hidden />}
             <circle className="pw-crew-ring" r={28} pathLength={100} />
             <g className={away ? undefined : "pw-crew-hit"} role="img" tabIndex={away ? undefined : 0}
               aria-label={`${member.name}, ${member.engine}, ${away ? "away" : desk && state === "idle" ? "at desk" : state}`}>

@@ -21,14 +21,14 @@ function telemetryText({ tag, value, unit, lo, hi }: TelemetryPoint): string {
 export function observePatrol(twin: Twin, crew: CrewId, round: number, at: number): CrewCue | undefined {
   const withinFloor = (asset: Asset) => !isOutdoors(twin, asset.physical.x, asset.physical.y);
   const assets = twin.assets.filter(withinFloor);
-  const cue = (text: string, stops: WalkStop[], inspect?: CrewCue["inspect"], engine?: string): CrewCue => ({
-    status: "idle", stops: stops.map((stop) => ({ ...stop, avoidTitleBands: true })), inspect,
+  const cue = (text: string, stops: WalkStop[], target: CrewCue["target"], inspect?: CrewCue["inspect"], engine?: string): CrewCue => ({
+    status: "idle", stops: stops.map((stop) => ({ ...stop, avoidTitleBands: true })), inspect, target,
     activity: { crew, at, text, engine, kind: "patrol" },
   });
   const visitAsset = (asset: Asset, text: string, engine?: string) => {
     const { x, y, area } = asset.physical;
     const point = { x, y };
-    return cue(text, [{ point, area, beside: true }], point, engine);
+    return cue(text, [{ point, area, beside: true }], { ids: [asset.id] }, point, engine);
   };
 
   if (crew === "scout") {
@@ -54,7 +54,7 @@ export function observePatrol(twin: Twin, crew: CrewId, round: number, at: numbe
   const local = assets.filter(({ physical }) => physical.area === area.id);
   const running = local.filter(({ process }) => process?.running === true).length;
   const count = crew === "chief" && running ? `${running} running` : `${local.length} ${local.length === 1 ? "asset" : "assets"}`;
-  return cue(`${area.name} · ${count}`, [{ point: areaCenter(area), area: area.id }]);
+  return cue(`${area.name} · ${count}`, [{ point: areaCenter(area), area: area.id }], { ids: [area.id], label: area.name });
 }
 
 export function useIdlePatrol(): void {

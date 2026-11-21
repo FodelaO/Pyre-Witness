@@ -1,15 +1,17 @@
 /** Keeps one browser session's updates from the existing plant stores. */
 import { create } from "zustand";
+import { startingConfiguration } from "@/econ/mountsSimulationSnapshot";
 import { useEscalationStore } from "@/escalation/store";
 import { useRunStore } from "@/pipeline/runStore";
 import { useSimStore, type SimState } from "@/sim/simStore";
 import type { SimRun } from "@/sim/types";
+import { assetById } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import type { Mitigation } from "@/twin/types";
 import type { LiveCheck } from "@/watch/liveTypes";
 import { useWatchStore } from "@/watch/watchStore";
 import {
-  approvedMitigation, escalationTickerItems, mitigationTickerItem, newestTickerItems,
+  approvedMitigation, distinctTickerItems, escalationTickerItems, mitigationTickerItem,
   pipelineTickerItems, simulationTickerItem, type TickerItem,
 } from "./items";
 import { watchTickerItems } from "./watchItems";
@@ -18,14 +20,21 @@ export const useTickerStore = create<{ items: TickerItem[] }>(() => ({ items: []
 
 function publish(incoming: TickerItem[]) {
   if (!incoming.length) return;
+  const { twin } = useTwinStore.getState();
   useTickerStore.setState((state) => {
     const prior = new Map(state.items.map((item) => [item.id, item]));
-    const unchanged = (item: TickerItem) => {
+    const withAssetKinds = incoming.map((item) => {
+      if (!item.assetId || item.assetKind) return item;
       const old = prior.get(item.id);
-      return old && old.at === item.at && old.title === item.title && old.tone === item.tone && old.assetId === item.assetId;
-    };
-    const updated = incoming.filter((item) => !unchanged(item));
-    return updated.length ? { items: newestTickerItems([...updated, ...state.items]) } : state;
+      const assetKind = assetById(twin, item.assetId)?.physical.kind ?? (old?.assetId === item.assetId ? old.assetKind : undefined);
+      return { ...item, assetKind };
+    });
+    const items = distinctTickerItems([...withAssetKinds, ...state.items]).map((item) => {
+      const old = prior.get(item.id);
+      return old && old.at === item.at && old.title === item.title && old.tone === item.tone && old.assetId === item.assetId
+        && old.assetKind === item.assetKind && old.loss === item.loss ? old : item;
+    });
+    return items.length === state.items.length && items.every((item, index) => item === state.items[index]) ? state : { items };
   });
 }
 
@@ -38,7 +47,8 @@ let feedCheck: LiveCheck | undefined;
 function recordSimulation({ run, mode }: SimState) {
   if (mode !== "finished" || !run || finishedRuns.has(run)) return;
   finishedRuns.add(run);
-  publish([simulationTickerItem(run, `simulation:${++sequence}`, Date.now(), currentAssets())]);
+  const twin = startingConfiguration(run)?.twin ?? useTwinStore.getState().twin;
+  publish([simulationTickerItem(run, `simulation:${++sequence}`, Date.now(), twin)]);
 }
 
 function recordApprovals(mitigations: readonly Mitigation[]) {
@@ -83,7 +93,7 @@ function observeStores() {
       .catch(() => { /* The next completed check can refresh the ticker. */ });
   }
 
-  publish(pipelineTickerItems(useRunStore.getState()));
+  publish(pipelineTickerItems(useRunStore.getState(), useTwinStore.getState().twin));
   publish(escalationTickerItems(useEscalationStore.getState().records));
   recordSimulation(useSimStore.getState());
   recordApprovals(useTwinStore.getState().mitigations);
@@ -92,7 +102,9 @@ function observeStores() {
 
   const stop = [
     useRunStore.subscribe((state, previous) => {
-      if (state.events !== previous.events || state.placedAssetId !== previous.placedAssetId) publish(pipelineTickerItems(state));
+      if (state.events !== previous.events || state.placedAssetId !== previous.placedAssetId) {
+        publish(pipelineTickerItems(state, useTwinStore.getState().twin));
+      }
     }),
     useSimStore.subscribe((state, previous) => {
       if (state.mode !== previous.mode || state.run !== previous.run) recordSimulation(state);
@@ -103,6 +115,10 @@ function observeStores() {
     }),
     useTwinStore.subscribe((state, previous) => {
       if (state.mitigations !== previous.mitigations) recordApprovals(state.mitigations);
+      if (state.risk !== previous.risk) {
+        const run = useRunStore.getState();
+        if (run.status === "done") publish(pipelineTickerItems(run, state.twin));
+      }
     }),
     useWatchStore.subscribe((state, previous) => {
       if (state.review.report !== previous.review.report || state.managed.report !== previous.managed.report) recordWatch();

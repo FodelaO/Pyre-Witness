@@ -38,7 +38,7 @@ export default function SamplePhotos({ onCapture }: { onCapture: (photo: Capture
   return (
     <div className={styles.tray} role="group" aria-label="Sample photos">
       <div className={styles.heading}>
-        <span>Sample photos</span>
+        <span>Samples</span>
         {loading ? <span role="status">Preparing…</span>
           : <a href="/demo/credits.json" target="_blank" rel="noreferrer">Credits</a>}
       </div>

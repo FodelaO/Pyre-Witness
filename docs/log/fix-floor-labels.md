@@ -24,3 +24,22 @@
 - Floor — `AssetLayer.tsx`, `AttackPathLayer.tsx`, `FloorStage.tsx`, `labelPlacement.ts`, `useFloorCamera.ts`
 - Layers — `DataLayer.tsx`, `NetworkDrawing.tsx`, `NodeAnnotations.tsx`, `annotationGeometry.ts`, `printScale.ts`, `printScale.test.ts`
 - Purdue — `PathOverlay.tsx`, `conduits.ts`, `layout.test.ts`
+
+## Review corrections (Opus reviewer)
+
+The seven QA defects were confirmed fixed in the running app: no label intersections at 1280×720 or 1440×900, the gate clears SW-PK, and each technique appears once per Purdue lane. TT-402 selected from its centre and all four corners. Four regressions introduced by the fix were corrected:
+
+| Regression | Cause | Correction |
+| --- | --- | --- |
+| Every frame of a wheel or pinch zoom re-rendered the floor's label layers and re-measured the DOM for technique labels. A CPU profile of 10 wheel events showed about 680 ms of React element creation and 150 ms of layout reads. | `useFloorCamera` set `pixelsPerUnit` state on every paint. The hook is meant to move the camera without React frames. | `useFloorCamera.ts` now commits the scale immediately for a lone step and once 160 ms after a continuous gesture ends. Placement at rest is unchanged. |
+| The plant's only severity 5 finding (PLC-F3) lost its badge in split view at both widths, while severity 4 badges stayed. | Badges with no clear position were dropped, and every asset's tag box was reserved, including hidden ones. | `NodeAnnotations.tsx`: a severity 5 badge falls back to its default corner. Zone titles and technique labels still avoid it. Lower-severity badges still give way. |
+| "Nearby RF" lost its label in split view. | The marker sits near the canvas bottom, and every candidate position was below it. | `DataLayer.tsx`: added a candidate above the marker. |
+| In split view a technique label sat on the Internet (1280) and Vendor remote (1440) entry markers. | `reserveFloorMarks` reserved entry text but not the marker circles. | `AttackPathLayer.tsx`: reserves `.pw-lens-digital-entry circle` and `.pw-floor-entry circle`. In split 1280, T0883 is now omitted on the floor. It remains in the Purdue pane. |
+
+Screenshots are in `.agents/qa/opus-correct/fix-floor-labels/`. The `s1-*` captures are before the corrections and `s1c-*` after: split 1280 and 1440 with PLC-F3 selected, and Data 1280. The `s2b-*` captures cover the two-step zoom, and `s8-*` covers dark split and default light 3D.
+
+Known gaps, not changed:
+- At 1280×720 in the Data lens, "CELL UTILITIES" has no title. The larger, correctly sized lettering leaves no clear slot. An offline replica of the placement showed that the "nearby" fallback, if extended to cells, would stack the title over "CELL BLEND".
+- In split view, lower-severity badges (SW-F3, SW-PK, FW-DMZ) and the CELL PACK and CELL UTILITIES titles are omitted for legibility. This is the brief's "hide low-priority ones" rule.
+- Pre-existing: in the Both lens at zoom ≥ 1.5, a software chip can cover a protocol chip (EtherNet/IP under "Bottle inspection controller"). The two are placed in separate layer passes that do not share placements.
+- The debounce could not be timed here. Headless software GL needs 2–8 s per wheel event, so each event is a separate step.

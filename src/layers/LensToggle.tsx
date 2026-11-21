@@ -2,15 +2,15 @@
 "use client";
 
 import { Droplet, Link2, Network } from "lucide-react";
-import { useEffect, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
 import { LENS_LABELS, LENS_MODES, lensModeAt, restoreLensMode, useLensStore } from "./lensStore";
 
 const ICONS = { material: Droplet, both: Link2, data: Network };
 
-function positionAtPointer(event: PointerEvent<HTMLDivElement>) {
-  const { left, width } = event.currentTarget.getBoundingClientRect();
-  const firstStop = left + width / 6;
-  return (event.clientX - firstStop) / (2 * width / 3);
+function positionAtPointer(x: number, edges: number[]) {
+  const stop = x < edges[1] ? 0 : x < edges[2] ? 1 : 2;
+  const fraction = (x - edges[stop]) / (edges[stop + 1] - edges[stop]);
+  return (stop + fraction - 0.5) / 2;
 }
 
 export default function LensToggle() {
@@ -20,7 +20,7 @@ export default function LensToggle() {
   const setPosition = useLensStore((state) => state.setPosition);
   const dragging = useLensStore((state) => state.dragging);
   const setDragging = useLensStore((state) => state.setDragging);
-  const pointer = useRef<number | null>(null);
+  const pointer = useRef<{ id: number; edges: number[] } | null>(null);
   const index = LENS_MODES.indexOf(mode);
   const nearest = lensModeAt(position);
   useEffect(restoreLensMode, []);
@@ -45,38 +45,45 @@ export default function LensToggle() {
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (!event.isPrimary || event.button !== 0 || pointer.current !== null) return;
+    const [material, both, data] = Array.from(event.currentTarget.children, (stop) => stop.getBoundingClientRect());
+    // Keep hit ranges stable while the preview label expands its segment.
+    const edges = [material.left, (material.right + both.left) / 2, (both.right + data.left) / 2, data.right];
     event.currentTarget.focus({ preventScroll: true });
     event.currentTarget.setPointerCapture(event.pointerId);
-    pointer.current = event.pointerId;
+    pointer.current = { id: event.pointerId, edges };
     setDragging(true);
-    setPosition(positionAtPointer(event));
+    setPosition(positionAtPointer(event.clientX, edges));
   }
 
   function finish(event: PointerEvent<HTMLDivElement>, commit: boolean) {
-    if (pointer.current !== event.pointerId) return;
+    const drag = pointer.current;
+    if (drag?.id !== event.pointerId) return;
     pointer.current = null;
-    setMode(commit ? lensModeAt(positionAtPointer(event)) : mode);
+    setMode(commit ? lensModeAt(positionAtPointer(event.clientX, drag.edges)) : mode);
     setDragging(false);
   }
 
   return (
     <div className="lens-toggle" role="slider" tabIndex={0} aria-label="Pipeline lens"
+      aria-description="1 for Material, 2 for Both, 3 for Data."
       aria-valuemin={1} aria-valuemax={3} aria-valuenow={LENS_MODES.indexOf(nearest) + 1}
       aria-valuetext={LENS_LABELS[nearest]} data-dragging={dragging || undefined}
-      style={{ "--lens-thumb-position": `${position * 100}%` } as CSSProperties}
       onKeyDown={onKeyDown} onPointerDown={onPointerDown}
       onPointerMove={(event) => {
-        if (pointer.current === event.pointerId) setPosition(positionAtPointer(event));
+        const drag = pointer.current;
+        if (drag?.id === event.pointerId) setPosition(positionAtPointer(event.clientX, drag.edges));
       }}
       onPointerUp={(event) => finish(event, true)} onPointerCancel={(event) => finish(event, false)}
       onLostPointerCapture={(event) => finish(event, false)}>
-      <span className="lens-toggle-rail" aria-hidden="true"><span className="lens-toggle-thumb" /></span>
       {LENS_MODES.map((stop) => {
         const Icon = ICONS[stop];
+        const label = LENS_LABELS[stop];
+        const current = nearest === stop;
         return (
-          <span key={stop} className="lens-toggle-stop" data-stop={stop} data-current={nearest === stop || undefined} aria-hidden="true">
-            <Icon size={16} strokeWidth={1.85} />
-            <span>{LENS_LABELS[stop]}</span>
+          <span key={stop} className="lens-toggle-stop" data-stop={stop} data-current={current || undefined}
+            data-pw-tip={current ? undefined : label}>
+            <Icon size={14} strokeWidth={1.85} role="img" aria-label={label} />
+            {current && <span>{label}</span>}
           </span>
         );
       })}

@@ -86,8 +86,8 @@ interface Segment {
 
 const floorMarks = [
   ".pw-floor-asset-tag", ".pw-floor-asset-reading", ".pw-floor-tank-level",
-  ".pw-floor-zone-label-back", ".pw-floor-zone-chip rect", ".pw-floor-entry text",
-  ".pw-floor-pipe-label", ".pw-lens-zone-label", ".pw-lens-digital-entry text",
+  ".pw-floor-zone-label-back", ".pw-floor-zone-chip rect", ".pw-floor-entry text", ".pw-floor-entry circle",
+  ".pw-floor-pipe-label", ".pw-lens-zone-label", ".pw-lens-digital-entry text", ".pw-lens-digital-entry circle",
   ".pw-lens-protocol rect", ".pw-lens-vuln", ".pw-lens-software rect",
   ".pw-floor-caption", ".pw-floor-tag-anchor",
 ].join(", ");

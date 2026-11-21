@@ -17,3 +17,15 @@ Advisories and recalls reuse Threat Watch’s inventory matching and per-event l
 - The pane mount uses the default export documented in [MOUNTING.md](../../src/agents/ticker/MOUNTING.md).
 
 [Light 3D screenshot](shots/agents-ticker-light.png) · [Dark 3D screenshot](shots/agents-ticker-dark.png)
+
+## Economic-loss triage
+
+The ticker now shows six 22 px rows with hairline separators. Each row puts the short title on the left and the equipment symbol, asset tag, and status on the right. Hover exposes the age and per-event estimate. `+N` opens the remaining ranked updates. Overflow scrolls one row at a time, pauses on hover or keyboard focus, and supports manual scrolling with reduced motion enabled.
+
+Ranking uses the app’s displayed per-event loss. Watch matches carry the estimate for their highest-loss matched asset. Captures use the checked placement figure, replays use the starting twin, and escalations carry the original assessed loss. After 14 days an item’s ranking weight drops by 20%, with recency breaking ties. The alert band starts at $100k and includes blocked captures and crossed thresholds. Resolved items and passed checks are green. The newest update replaces earlier updates of the same asset and kind. Unpriced urgent items rank at the alert cutoff, with the tooltip showing that the estimate is unavailable.
+
+### Triage verification
+
+- `npm run typecheck` and ticker ESLint passed. `npm run test` passed 826 tests with three skipped, including 15 ticker tests covering ranking, tone bands, duplicate collapse, title length, and economic figures.
+- Playwright used the running app with the cached Chromium headless shell, live public Watch results, and the CIP and chiller replays. The `Run test alert` row showed `TEST-901` and $290k per event, matching the escalation card. The isolated session blocked the background Watch model request. Checked the six-row cap, `+2` disclosure, hover pause, reduced motion, row selection, and replacement by the resolved row.
+- Checked all four viewport and theme combinations with the existing crew dock mount. [1440×900 light](shots/ticker-triage-1440x900-light.png) · [1440×900 dark](shots/ticker-triage-1440x900-dark.png) · [1280×720 light](shots/ticker-triage-1280x720-light.png) · [1280×720 dark](shots/ticker-triage-1280x720-dark.png)

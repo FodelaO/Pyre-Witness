@@ -109,7 +109,7 @@ describe("phone handoff mailbox", () => {
     expect(freshDesktop.send).not.toHaveBeenCalled();
   });
 
-  it("frees an unscanned code after two minutes even if the desktop reconnects", () => {
+  it("gives an unscanned code's slot to a new pairing after two minutes even if the desktop reconnects", () => {
     const store = createHandoffStore(HANDOFF_TTL_MS, 1);
     expect(store.register("ABCD23", "key").status).toBe("ready");
     vi.advanceTimersByTime(119_999);
@@ -120,10 +120,28 @@ describe("phone handoff mailbox", () => {
     expect(store.register("BCDE34", "other").status).toBe("full");
 
     vi.advanceTimersByTime(1);
+    expect(desktop.close).not.toHaveBeenCalled();
+    expect(store.register("BCDE34", "other").status).toBe("ready");
     expect(desktop.close).toHaveBeenCalledWith("expired");
     expect(store.markScanned("ABCD23")).toBe(false);
     expect(store.register("ABCD23", "key").status).toBe("conflict");
-    expect(store.register("BCDE34", "other").status).toBe("ready");
+  });
+
+  it("keeps used codes, and unused codes while there is room, past two minutes", () => {
+    const store = createHandoffStore(HANDOFF_TTL_MS, 2);
+    const used = store.register("ABCD23", "key");
+    const waiting = store.register("BCDE34", "other");
+    if (used.status !== "ready" || waiting.status !== "ready") throw new Error("Could not register fixtures.");
+    const desktop = receiver();
+    waiting.subscribe(desktop);
+    expect(store.publish("ABCD23", payload)).toBe(true);
+
+    vi.advanceTimersByTime(5 * 60_000);
+    // A phone that scanned but is still shooting can send while no new pairing needs the slot.
+    expect(store.publish("BCDE34", payload)).toBe(true);
+    expect(desktop.send).toHaveBeenCalledOnce();
+    expect(store.register("CDEF45", "third").status).toBe("full");
+    expect(desktop.close).not.toHaveBeenCalled();
   });
 
   it("keeps a scanned code until the original ten-minute deadline without an upload", () => {

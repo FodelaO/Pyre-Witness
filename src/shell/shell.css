@@ -46,14 +46,29 @@
 }
 .pw-top-disclosure strong { color: var(--pw-text); font-weight: 560; }
 .pw-top-lens {
+  --pw-switch-height: 28px;
+  --pw-switch-active: color-mix(in srgb, var(--pw-text) 10%, var(--pw-panel));
   display: grid;
-  grid-template-columns: 78px clamp(12rem, 17vw, 18rem) 70px;
-  grid-template-rows: auto;
+  grid-template-columns: max-content max-content 70px;
   align-items: center;
   gap: 8px;
 }
-.pw-top-lens .pw3d-toggle { grid-area: 1 / 1; justify-content: center; white-space: nowrap; }
-.pw-top-lens .lens-toggle { grid-area: 1 / 2; width: 100%; min-width: 0; }
+.pw-top-lens .pw3d-toggle {
+  grid-area: 1 / 1;
+  height: var(--pw-switch-height);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  white-space: nowrap;
+}
+.pw-top-lens .pw3d-toggle button {
+  min-width: 30px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+}
+.pw-top-lens .pw3d-toggle button[aria-checked="true"] { background: var(--pw-switch-active); }
+.pw-top-lens .lens-toggle { grid-area: 1 / 2; }
 .pw-top-lens .pw-levels-toggle {
   grid-area: 1 / 3;
   width: 100%;
@@ -317,8 +332,7 @@
   .pw-top { grid-template-columns: max-content minmax(0, 1fr) max-content; row-gap: 6px; min-height: 0; padding: 8px 15px 9px; }
   .pw-top-context { display: contents; }
   .pw-top-context .pw-brand { grid-column: 1; grid-row: 1; }
-  .pw-top-lens { grid-column: 2; grid-row: 1; justify-self: center; grid-template-columns: 60px minmax(116px, 172px) 60px; gap: 5px; }
-  .pw-top-lens .pw3d-toggle button { min-width: 24px; padding-inline: 4px; }
+  .pw-top-lens { grid-column: 2; grid-row: 1; justify-self: center; gap: 5px; }
   .pw-top-actions { grid-column: 3; grid-row: 1; }
   .pw-top-disclosure { grid-column: 1 / -1; grid-row: 2; }
   .pw-stage-dock { grid-template-columns: 246px minmax(0, 1fr) 46px; gap: 8px; padding-inline: 12px; }
@@ -370,3 +384,7 @@
   .pw-top .pw-brand span { max-width: 44px; line-height: 1; white-space: normal; }
 }
 
+
+/* Proof: icon only, quiet. */
+.pw-top-proof-icon { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; opacity: .72; }
+.pw-top-proof-icon:hover, .pw-top-proof-icon:focus-visible { opacity: 1; }

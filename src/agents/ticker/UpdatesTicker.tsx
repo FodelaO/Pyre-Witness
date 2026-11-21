@@ -1,13 +1,16 @@
-/** Shows the plant's latest updates under the crew cards. */
+/** Shows the highest-risk plant updates under the crew cards. */
 "use client";
 
-import { CircleCheck, TriangleAlert } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Check, TriangleAlert } from "lucide-react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { formatUsd } from "@/econ/format";
+import { Equipment, FOOTPRINT } from "@/equipment";
+import { rankTickerItems } from "./items";
 import { openTickerItem } from "./navigation";
 import { connectTicker, useTickerStore } from "./tickerStore";
 import styles from "./UpdatesTicker.module.css";
 
-const VISIBLE_ROWS = 5;
+const VISIBLE_ROWS = 6;
 const DWELL_MS = 4_000;
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 const PAUSED = ":hover, :focus-within";
@@ -15,76 +18,98 @@ const status = { alert: "Alert", warn: "Warning", ok: "OK" } as const;
 
 function timeAgo(at: number, now: number): string {
   const minutes = Math.floor(Math.max(0, now - at) / 60_000);
-  if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}h`;
-  return `${Math.floor(minutes / 1440)}d`;
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1440) return `${Math.floor(minutes / 60)}h ago`;
+  return `${Math.floor(minutes / 1440)}d ago`;
 }
 
 export default function UpdatesTicker() {
   const items = useTickerStore((state) => state.items);
   const [now, setNow] = useState(Date.now);
+  const [showMore, setShowMore] = useState(false);
+  const section = useRef<HTMLElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
-  const first = items[0]?.id;
-  const hasItems = first !== undefined;
+  const listId = useId();
+  const ranked = useMemo(() => rankTickerItems(items, now), [items, now]);
+  const more = Math.max(0, ranked.length - VISIBLE_ROWS);
+  const expanded = showMore && more > 0;
+  const visible = expanded ? ranked : ranked.slice(0, VISIBLE_ROWS);
+  const hasItems = visible.length > 0;
 
   useEffect(connectTicker, []);
   useEffect(() => {
     if (!hasItems) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 15_000);
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, [hasItems]);
 
   useLayoutEffect(() => {
     const element = viewport.current;
-    if (element && !element.matches(PAUSED) && !window.matchMedia(REDUCED_MOTION).matches) {
-      element.scrollTo({ top: 0, behavior: "instant" });
-    }
-  }, [first]);
+    const additional = expanded ? element?.querySelectorAll("li")[VISIBLE_ROWS] : undefined;
+    element?.scrollTo({ top: additional?.offsetTop ?? 0, behavior: "instant" });
+  }, [expanded]);
 
   useEffect(() => {
+    const container = section.current;
     const element = viewport.current;
-    if (!element || items.length <= VISIBLE_ROWS) return;
+    if (!container || !element || !hasItems) return;
     const motion = window.matchMedia(REDUCED_MOTION);
     const stopScroll = () => element.scrollTo({ top: element.scrollTop, behavior: "instant" });
+    let direction = 1;
     const tick = () => {
-      if (motion.matches || element.matches(PAUSED) || document.hidden) return;
-      const rowHeight = element.querySelector("li")?.getBoundingClientRect().height;
+      if (motion.matches || container.matches(PAUSED) || document.hidden) return;
       const end = element.scrollHeight - element.clientHeight;
+      const rowHeight = element.querySelector("li")?.offsetHeight;
       if (!rowHeight || end <= 0) return;
-      const wrapped = element.scrollTop >= end - 1;
-      element.scrollTo({ top: wrapped ? 0 : Math.min(end, element.scrollTop + rowHeight), behavior: wrapped ? "instant" : "smooth" });
+      if (element.scrollTop >= end - 1) direction = -1;
+      else if (element.scrollTop <= 1) direction = 1;
+      element.scrollTo({ top: element.scrollTop + direction * rowHeight, behavior: "smooth" });
     };
     const timer = window.setInterval(tick, DWELL_MS);
-    element.addEventListener("pointerenter", stopScroll);
-    element.addEventListener("focusin", stopScroll);
+    container.addEventListener("pointerenter", stopScroll);
+    container.addEventListener("focusin", stopScroll);
     motion.addEventListener("change", stopScroll);
     return () => {
       window.clearInterval(timer);
-      element.removeEventListener("pointerenter", stopScroll);
-      element.removeEventListener("focusin", stopScroll);
+      container.removeEventListener("pointerenter", stopScroll);
+      container.removeEventListener("focusin", stopScroll);
       motion.removeEventListener("change", stopScroll);
     };
-  }, [first, items.length]);
+  }, [hasItems, expanded]);
 
   return (
-    <section className={styles.ticker} aria-label="Recent updates">
-      <h3 className={styles.heading}>Updates</h3>
-      <div ref={viewport} className={styles.viewport}>
-        {items.length ? (
+    <section ref={section} className={styles.ticker} aria-label="Recent updates" data-filled={hasItems || undefined}>
+      <header className={styles.header}>
+        <span className={styles.heading}>Updates</span>
+        {more > 0 && <button type="button" className={styles.more}
+          aria-controls={listId} aria-expanded={expanded} aria-label={`${expanded ? "Hide" : "Show"} ${more} more updates`}
+          onClick={() => setShowMore(!expanded)}>{expanded ? "−" : "+"}{more}</button>}
+      </header>
+      <div ref={viewport} id={listId} className={styles.viewport}>
+        {hasItems ? (
           <ol className={styles.list} role="list">
-            {items.map((item, index) => {
-              const Icon = item.tone === "ok" ? CircleCheck : TriangleAlert;
-              const date = new Date(item.at);
-              const timestamp = date.toLocaleString();
+            {visible.map((item, index) => {
+              const Icon = item.tone === "ok" ? Check : TriangleAlert;
+              const kind = item.assetKind ?? "generic_device";
+              const { w, h } = FOOTPRINT[kind];
+              const subject = [item.title, item.assetId].filter(Boolean).join(" · ");
+              const details = `${timeAgo(item.at, now)} · ${item.loss === undefined ? "Loss estimate unavailable" : `Est. loss ${formatUsd(item.loss)}/event`}`;
+              const descriptionId = `${listId}-description-${index}`;
               return (
-                <li key={item.id} className={index === 0 ? styles.newest : undefined}>
-                  <button type="button" className={styles.row} data-tone={item.tone} data-source={item.source}
-                    title={item.assetId ? `${item.title} · ${item.assetId}` : item.title} onClick={() => openTickerItem(item)}>
-                    <Icon size={14} strokeWidth={2} aria-hidden="true" className={styles.icon} />
-                    <span className={styles.srOnly}>{status[item.tone]} · </span>
+                <li key={item.id} className={styles.item}>
+                  <button type="button" className={styles.row} data-tone={item.tone}
+                    aria-label={`${subject} · ${status[item.tone]}`} aria-describedby={descriptionId} title={`${subject} · ${details}`}
+                    onClick={() => openTickerItem(item)}>
                     <span className={styles.title}>{item.title}</span>
-                    <time dateTime={date.toISOString()} title={timestamp}>{timeAgo(item.at, now)}</time>
+                    <span className={styles.asset}>
+                      {item.assetId && <svg className={styles.glyph} viewBox={`${-w * 0.62} ${-h * 0.62} ${w * 1.24} ${h * 1.24}`} aria-hidden="true">
+                        <Equipment kind={kind} compact running={false} />
+                      </svg>}
+                      <span className={styles.tag}>{item.assetId ?? "—"}</span>
+                    </span>
+                    <Icon size={14} strokeWidth={2} aria-hidden="true" className={styles.icon} />
+                    <span id={descriptionId} hidden>{details}</span>
                   </button>
                 </li>
               );

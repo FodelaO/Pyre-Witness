@@ -16,6 +16,7 @@ await page.waitForTimeout(5000);
 await page.screenshot({ path: OUT + "01-home.png" });
 const buttons = await page.$$eval("button, a", (els) => els.filter((e) => e.offsetParent).map((e) => (e.getAttribute("aria-label") || e.innerText || "").replace(/\s+/g, " ").trim().slice(0, 50) + " <" + e.className.toString().slice(0, 40) + ">"));
 console.log(buttons.join("\n"));
+await page.getByRole("button", { name: "Add a device", exact: true }).click();
 await page.locator('.pw-capture-toolbar button[aria-label="Describe device"]').click();
 await page.waitForTimeout(800);
 await page.screenshot({ path: OUT + "02-describe.png" });

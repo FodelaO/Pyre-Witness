@@ -18,20 +18,108 @@
 
 .pw-capture-card[data-dragging="true"] { outline: 2px dashed var(--pw-info); }
 
-.pw-tool-rail.pw-capture-toolbar { width: 100%; }
-.pw-capture-toolbar .pw-tool-button { flex: 1 1 0; min-width: 24px; }
-.pw-capture-toolbar .pw-tool-button[data-capture-tool="samples"] { flex: 0 0 28px; }
-.pw-capture-toolbar [data-capture-tool="samples"][aria-expanded="false"]:not(:hover, :focus-visible) { color: var(--pw-text-faint); }
+.pw-capture-root { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pw-capture-launcher { position: relative; flex: none; }
 
-.pw-capture-toolbar .pw-tool-button[data-pinned="true"] { color: var(--pw-ok); }
-.pw-capture-toolbar .pw-tool-button[aria-pressed="true"] { color: var(--pw-attention); }
+.pw-capture-launcher .pw-capture-add {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-color: var(--pw-line-strong);
+  border-radius: 50%;
+  background: var(--pw-panel);
+  color: var(--pw-text);
+}
+
+.pw-capture-launcher .pw-capture-add:disabled { opacity: 1; }
+.pw-capture-add-icon { transition: transform 130ms ease-out; }
+.pw-capture-add[aria-expanded="true"] .pw-capture-add-icon { transform: rotate(45deg); }
+
+.pw-capture-add-ring {
+  position: absolute;
+  inset: -3px;
+  border: 2px solid color-mix(in srgb, var(--pw-info) 30%, transparent);
+  border-top-color: var(--pw-info);
+  border-radius: 50%;
+  animation: pw-capture-spin 850ms linear infinite;
+}
+
+.pw-capture-add-pin {
+  position: absolute;
+  inset: -4px -5px auto auto;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid var(--pw-attention);
+  border-radius: 50%;
+  background: var(--pw-panel);
+  color: var(--pw-attention);
+}
+
+.pw-capture-toolbar {
+  position: absolute;
+  z-index: 2;
+  inset: auto auto calc(100% + 12px) 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(207px, calc(100vw - 28px));
+  gap: 6px;
+  transform-origin: bottom left;
+  animation: pw-capture-fan-in 130ms ease-out;
+}
+
+.pw-capture-toolbar[hidden] { display: none; }
+
+.pw-capture-toolbar .pw-tool-button {
+  display: grid;
+  width: 100%;
+  height: 52px;
+  place-content: center;
+  justify-items: center;
+  gap: 3px;
+  border-color: var(--pw-line);
+  border-radius: 8px;
+  background: var(--pw-panel);
+  box-shadow: 0 3px 10px var(--pw-light-shadow, #0006);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pw-capture-toolbar .pw-tool-button:nth-child(n + 4) { translate: 8px 0; }
+.pw-capture-launcher .pw-capture-add:is(:hover:not(:disabled), [aria-expanded="true"]),
+.pw-capture-toolbar .pw-tool-button:is(:hover, [aria-expanded="true"]) {
+  border-color: var(--pw-line-strong);
+  background: var(--pw-panel-2);
+}
+
+@keyframes pw-capture-fan-in {
+  from { opacity: 0; transform: translateY(7px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pw-capture-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pw-capture-toolbar, .pw-capture-add-ring { animation: none; }
+  .pw-capture-add, .pw-capture-add-icon, .pw-capture-toolbar .pw-tool-button { transition: none; }
+}
+
+/* The capture slot and its adjacent controls use only the space they need. */
+@media (width >= 735px) {
+  .pw-stage-dock:has(> .pw-dock-capture) { grid-template-columns: fit-content(300px) minmax(0, max-content) 138px; }
+}
+
+@media (735px <= width < 920px) {
+  .pw-stage-dock:has(> .pw-dock-capture) { grid-template-columns: fit-content(246px) minmax(0, max-content) 46px; }
+}
 
 .pw-capture-card button,
 .pw-capture-thumbnail button { cursor: pointer; transition: color var(--pw-ease), background var(--pw-ease), border-color var(--pw-ease); }
 .pw-capture-card button:disabled:not(.pw-capture-analyze),
 .pw-capture-thumbnail button:disabled { opacity: 0.52; cursor: default; }
 
-.pw-capture-run { width: 100%; padding-inline-start: 10px; gap: 7px; }
+.pw-capture-run { min-width: 0; padding-inline-start: 10px; gap: 7px; }
 .pw-capture-summary { max-width: 100%; padding-inline-start: 11px; }
 .pw-capture-summary > svg { color: var(--pw-ok); flex: none; }
 .pw-capture-summary[data-failed="true"] > svg { color: var(--pw-attention); }
@@ -40,16 +128,7 @@
 .pw-capture-summary[data-below-desktop="true"] { display: none; }
 
 @media (width < 1280px) {
-  .pw-capture-root:has([data-below-desktop="true"]) .pw-capture-toolbar { display: none; }
   .pw-capture-summary[data-below-desktop="true"] { display: flex; }
-}
-
-@media (width < 920px) {
-  .pw-capture-toolbar .pw-tool-button { width: 36px; }
-}
-
-@media (width < 360px) {
-  .pw-capture-toolbar .pw-tool-button { width: 32px; }
 }
 
 .pw-capture-header,
@@ -87,7 +166,7 @@
 
 .pw-capture-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(min-content, 1fr));
   gap: 3px;
   padding: 3px;
   background: var(--pw-bg);
@@ -99,12 +178,16 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-height: 31px;
   color: var(--pw-text-dim);
   border: 1px solid transparent;
   border-radius: 5px;
+  font-size: 12px;
+  white-space: nowrap;
 }
+
+.pw-capture-tabs button svg { flex: none; }
 
 .pw-capture-tabs button[aria-selected="true"] {
   background: var(--pw-panel-2);
@@ -141,6 +224,25 @@
 .pw-capture-field input[aria-invalid="true"] { border-color: var(--pw-attention); }
 .pw-capture-field-error { color: var(--pw-attention); font-size: 11px; line-height: 1.4; }
 .pw-capture-field .pw-capture-field-error { min-height: 1.4em; }
+
+.pw-capture-file-drop {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px dashed var(--pw-line-strong);
+  border-radius: 9px;
+  background: var(--pw-floor);
+  color: var(--pw-text);
+  text-align: start;
+}
+
+.pw-capture-file-drop span { display: grid; gap: 2px; }
+.pw-capture-file-drop small { color: var(--pw-text-dim); font-size: 11px; }
+.pw-capture-file-drop:hover:not(:disabled),
+.pw-capture-card[data-dragging="true"] .pw-capture-file-drop { border-color: var(--pw-info); background: var(--pw-panel); }
 
 .pw-capture-preview {
   position: relative;
@@ -267,24 +369,25 @@
 .pw-capture-thumbnail button:hover:not(:disabled) { background: var(--pw-panel-2); }
 
 .pw-capture-footer { padding-top: 9px; border-top: 1px solid var(--pw-line); }
-.pw-capture-footer[data-samples="true"] { justify-content: flex-end; }
 
 .pw-capture-pin {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  min-height: 32px;
-  border: 1px solid var(--pw-line-strong);
-  border-radius: 7px;
   color: var(--pw-text-dim);
+  font-size: 11px;
 }
 
-.pw-capture-pin button { display: flex; align-items: center; gap: 5px; min-width: 0; padding: 0 7px; border-radius: 6px; }
-.pw-capture-pin button:hover:not(:disabled) { background: var(--pw-panel-2); color: var(--pw-text); }
-.pw-capture-pin button svg { flex: none; }
-.pw-capture-pin span, .pw-capture-summary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pw-capture-pin[data-pinned="true"] { color: var(--pw-ok); }
-.pw-capture-pin[data-armed="true"] { color: var(--pw-attention); border-color: var(--pw-attention); }
+.pw-capture-pin > svg, .pw-capture-pin button { flex: none; }
+.pw-capture-pin-label, .pw-capture-summary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-capture-pin-value { color: var(--pw-text); font-weight: 650; }
+.pw-capture-pin[data-pinned="true"] .pw-capture-pin-value { color: var(--pw-ok); }
+.pw-capture-pin[data-armed="true"] .pw-capture-pin-value { color: var(--pw-attention); }
+.pw-capture-pick { min-height: 28px; color: var(--pw-info); text-decoration: underline; text-underline-offset: 2px; }
+.pw-capture-pick:hover { color: var(--pw-text); }
+.pw-capture-clear-pin { display: grid; width: 22px; height: 28px; place-items: center; border-radius: 5px; }
+.pw-capture-clear-pin:hover { background: var(--pw-panel); color: var(--pw-text); }
 
 .pw-capture-analyze { min-height: 34px; padding: 0 10px; }
 .pw-capture-analyze { background: var(--pw-eq-accent); color: var(--pw-bg); }

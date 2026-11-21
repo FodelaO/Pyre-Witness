@@ -64,16 +64,22 @@ await step("open-app", async () => {
 let captured = false;
 if (PHOTO) {
   await step("pin-location", async () => {
-    await byName("Pin location").click();
+    await byName("Add a device").click();
+    await page.locator(".pw-capture-toolbar").getByRole("button", { name: "Upload", exact: true }).click();
+    await byName("Pick location on plant").click();
     const hmi = await page.locator('[data-floor-asset="HMI-F3"]').first().boundingBox();
     if (!hmi) throw new Error("HMI-F3 not on the floor");
     await page.mouse.click(hmi.x - 60, hmi.y + hmi.height / 2);
     await page.waitForTimeout(400);
-    return (await page.locator('button[aria-label^="Pin location"]').first().getAttribute("aria-label")) ?? "";
+    const pinned = page.locator('.pw-capture-pin[data-pinned="true"] .pw-capture-pin-value');
+    const location = await pinned.innerText({ timeout: 8000 });
+    await byName("Collapse capture").click();
+    return location;
   });
 
   let phoneUrl = null;
   await step("phone-qr", async () => {
+    await byName("Add a device").click();
     await byName("Phone QR").click();
     const link = page.locator('a[aria-label="Open phone capture link"]');
     await visible(link, 10000);

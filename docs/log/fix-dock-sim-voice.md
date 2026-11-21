@@ -22,3 +22,18 @@ In `src/app/capture/route.ts`, import `handoffStore` from `@/handoff/store` and 
 - `npx vitest run src/sim src/voice src/capture src/handoff --maxWorkers=1` passed all 79 tests.
 - `npm run typecheck` passed on the second run after a concurrent crew type error cleared.
 - `git diff --check` passed for the assigned source folders.
+
+## Opus review corrections
+
+| Defect | Cause | Fix |
+| --- | --- | --- |
+| A phone that scanned the QR but took more than two minutes to send got "This link expired" | No route reports a page open, so `markScanned` only ran on upload. The two-minute timer closed every code without an upload, including codes a phone was still using. | `src/handoff/store.ts`: a code keeps its ten-minute life. After two minutes without an upload it gives its slot to a new pairing only when the store is full, oldest first. The store key moved to `pyreHandoffStoreV4` so the running server uses the new logic. Tests cover the slot release and a send at five minutes. |
+| Longer Chief errors still covered the legend's lower row | The bubble wrapped. Errors such as "Gemini Live is taking too long to connect. Hold to try again." took three lines at 1280×720 and covered the legend. Below 920 px the column is one button wide, so even "Allow mic access" took three lines over the legend. | `src/voice/voice.css`: the bubble stays on one line with an ellipsis. The Chief button tooltip carries the full text. Below 920 px the line extends left from the column and sits 3 px higher, clear of the legend and the simulation box. |
+| An uncontained Rogue Wireless summary read "parking_lot reached HMI-F3" | Pre-existing. The summary took its endpoint from the report stage instead of the RF-reach stage. This text is now the full outcome in the tooltip and the Simulation comparison. | `src/sim/scenarios/wireless.ts` reads stage 1, so the summary now reads "EXERCISE-RADIO reached HMI-F3". |
+
+Verified in the running app with Playwright and the installed Chrome. The checks made no model calls: voice, watch, and escalation requests were blocked. At 1280×720 in light and dark, 2D and 3D, all six outcomes fit at 135 px. Every scenario offers a `SIMULATION ·` card. Approval and rerun moved CO₂ Upset from 00:04 to 00:00, Site Ransomware from 00:08 to 00:04, and Rogue Wireless from 00:04 to 00:00. "Allow mic access" measures 91×18 inside the Chief column, clear of the legend. It fades to opacity 0 after four seconds and returns on retry. A blocked microphone was stubbed as `NotAllowedError`, because headless Chrome leaves the prompt pending. The same QR code survived two reopens and a reload. After 130 seconds without a scan, the server still held the code: an invalid upload probe returned 400, not 410. Screenshots are in `.agents/qa/opus-correct/fix-dock-sim-voice/`. The QR images are masked. Another agent then moved the Chief column next to the simulation controls. The bubble was rechecked at 1280 and 900 px and stays on one line above the Chief button (`bubble-now-light-*.png`).
+
+Open items:
+- Between about 1050 and 1200 px, the replay timeline collapses to 0 px and hides the outcome line. This is pre-existing: `.pw-sim-launch[data-replaying] { min-width: 280px }` leaves the replay box about 60 px.
+- On the seeded plant, CO₂ Upset and Rogue Wireless are already contained at their first check. Their new controls can only hold at the 0 s report stage, so the engine no longer rejects a control on stage 0. Each time comes from the re-run. The loss figure reports "$0 avoided".
+- The `src/app/capture/route.ts` request above is still open. Phones no longer need it. It would stop a scanned code from being reclaimed when the store is full.

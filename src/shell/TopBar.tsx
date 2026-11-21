@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { Layers3, Map } from "lucide-react";
+import { BadgeCheck, Layers3, Map } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import LensToggle from "@/layers/LensToggle";
 import type { LensMode } from "@/layers/lensStore";
@@ -68,7 +68,7 @@ export function TopBar({ mode, levels, lensNotice, drawerOpen, watchOpen, onTogg
           onClick={(event) => onToggleWatch(event.currentTarget)}>
           <span className="pw-live-pulse" data-tone={watch.tone} aria-hidden />
         </button>
-        <Link className="pw-top-proof" href="/proof">Proof</Link>
+        <Link className="pw-top-proof pw-top-proof-icon" href="/proof" aria-label="Proof" title="Proof: evaluation against a single Gemini call"><BadgeCheck size={15} aria-hidden /></Link>
         <ThemeToggle />
         <span className="pw-top-risk pw-top-risk-desktop" data-band={risk.band} title={band}>{riskReadout}</span>
         <button className="pw-top-risk pw-top-risk-mobile" type="button" data-band={risk.band}

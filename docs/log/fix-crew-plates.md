@@ -37,7 +37,7 @@ The [Gemini health log](gemini-health.md#crew-dock-integration) links all eight 
 
 | Defect | Cause and fix | Before | After |
 | --- | --- | --- | --- |
-| Crew work was mostly portraits and status text in 3D | The 3D overlay consumed status and position only. It now projects the shared walk and handoff cues, displays capture evidence and checks, draws the placement arrow, and pins Chief's briefing. | [Light baseline](shots/crew-work-3d-before-light.png) | [Scout photo](shots/crew-work-3d-photo-preview-qa.png), [Inspector trace](shots/crew-work-3d-replay-light-trace.png), [briefing](shots/crew-work-3d-briefing-light.png) |
+| Crew work was mostly portraits and status text in 3D | The 3D overlay projected crew status and position. It now projects the shared walk and handoff cues, displays capture evidence and checks, draws the placement arrow, and pins Chief's briefing. | [Light baseline](shots/crew-work-3d-before-light.png) | [Scout photo](shots/crew-work-3d-photo-preview-qa.png), [Inspector trace](shots/crew-work-3d-replay-light-trace.png), [briefing](shots/crew-work-3d-briefing-light.png) |
 | Full inactive plates and an obsolete caption reservation crowded work labels | Compact inactive portraits, measured label bounds, priority, and alternate anchors make room for the evidence beside the dropped device. The layout reserves the actual controls and briefing. | [First live pass](shots/crew-work-3d-live-06s.png) | [Evidence and ranking](shots/crew-work-3d-replay-light-evidence.png), [checked placement](shots/crew-work-3d-replay-light-cleared.png) |
 
 See the [3D work log](view3d.md#crew-work-in-the-main-3d-twin) for live and replay verification.

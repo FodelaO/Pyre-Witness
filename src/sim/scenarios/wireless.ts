@@ -122,7 +122,7 @@ export const wireless: ScenarioDefinition = {
     const affectedFlow = stages.at(-1)?.effects?.assets?.["FT-403"]?.telemetry?.["FT-403"];
     const fillerRateBph = Math.round((affectedFlow ?? startFlow) * 2000);
     const rate = `${fillerRateBph.toLocaleString("en-US")} bph`;
-    const endpoint = stages[0]?.where[1];
+    const endpoint = stages[1]?.where[1];
     return {
       summary: affectedFlow !== undefined ? `${rate} · ${endpoint ?? "In-range radio"} reached ${HMI}` : `${rate} · filling rate held`,
       metrics: { fillerRateBph },

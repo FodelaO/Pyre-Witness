@@ -98,8 +98,16 @@
   border-radius: 4px;
   font-size: 10px;
   line-height: 1.15;
+  /* One line keeps longer errors off the legend; the Chief button's tooltip carries the full text. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   pointer-events: none;
   animation: pw-chief-error-fade 200ms ease 4s forwards;
+}
+/* The narrow dock leaves the Chief column one button wide, so the line extends left above the dock boxes. */
+@media (width < 920px) {
+  .pw-dock-voice .pw-chief-talk > .pw-chief-error { bottom: calc(100% + 1px); max-width: min(200px, calc(100vw - 32px)); }
 }
 .pw-chief-transcript,
 .pw-chief-path span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

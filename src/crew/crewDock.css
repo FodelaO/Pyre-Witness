@@ -1,4 +1,4 @@
-/* Crew presence instruments for the floor-stage rail. */
+/* Portraits, conversation controls, and updates on the floor-stage rail. */
 .pw-crew-stage {
   display: grid;
   block-size: 100%;
@@ -14,7 +14,7 @@
   min-inline-size: 0;
   padding: 5px;
   border: 1px solid var(--pw-line-strong);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--pw-panel);
   color: var(--pw-text);
   box-shadow: 0 8px 24px #0004;
@@ -64,14 +64,15 @@
   text-align: center;
 }
 
-.pw-crew-dock-cards { display: grid; gap: 3px; }
+.pw-crew-dock-cards { display: grid; gap: 4px; }
 
 .pw-crew-dock-card {
+  --crew-status: var(--crew-color);
   position: relative;
   display: grid;
   min-inline-size: 0;
   min-block-size: 58px;
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   padding: 5px 7px;
@@ -83,8 +84,8 @@
   transition: background var(--pw-ease, 175ms ease-out), border-color var(--pw-ease, 175ms ease-out);
 }
 
-.pw-crew-dock-card:is(:hover, :focus-visible) {
-  border-color: var(--pw-line-strong);
+.pw-crew-dock-card:is(:hover, :focus-visible, [aria-expanded="true"]) {
+  border-color: color-mix(in srgb, var(--crew-color) 52%, var(--pw-line-strong));
   background: var(--pw-panel-2);
 }
 
@@ -96,14 +97,14 @@
   box-shadow: inset 2px 0 var(--crew-color);
 }
 
-.pw-crew-dock-face { position: relative; inline-size: 38px; block-size: 38px; }
+.pw-crew-dock-face { position: relative; inline-size: 40px; block-size: 40px; }
 
 .pw-crew-dock-face img {
   display: block;
   inline-size: 100%;
   block-size: 100%;
   padding: 2px;
-  border: 1px solid color-mix(in srgb, var(--crew-color), var(--pw-line) 50%);
+  border: 1px solid var(--pw-line);
   border-radius: 50%;
   object-fit: cover;
 }
@@ -111,11 +112,13 @@
 .pw-crew-dock-ring {
   position: absolute;
   inset: 0;
-  border: 1.5px solid transparent;
+  border: 1.5px solid color-mix(in srgb, var(--crew-status) 62%, var(--pw-line));
   border-radius: 50%;
 }
 
 .pw-crew-dock-card[data-state="walking"] .pw-crew-dock-ring { border: 1px dashed var(--crew-color); }
+.pw-crew-dock-card[data-state="done"] { --crew-status: var(--pw-ok); }
+.pw-crew-dock-card[data-state="error"] { --crew-status: var(--pw-alarm); }
 
 .pw-crew-dock-card[data-active] .pw-crew-dock-ring {
   border-block-start-color: var(--crew-color);
@@ -130,8 +133,8 @@
   right: -2px;
   bottom: -1px;
   display: grid;
-  inline-size: 13px;
-  block-size: 13px;
+  inline-size: 14px;
+  block-size: 14px;
   place-items: center;
   border: 1px solid var(--pw-line-strong);
   border-radius: 50%;
@@ -170,14 +173,77 @@
 }
 
 .pw-crew-dock-card[data-state="idle"] .pw-crew-dock-message { color: var(--pw-text-dim); }
-.pw-crew-dock-latency { color: var(--pw-text-dim); font-size: 9px; white-space: nowrap; }
 .pw-crew-dock-card[data-attention] :is(.pw-crew-dock-message, .pw-crew-dock-state) { color: var(--pw-attention); }
+
+.pw-crew-dock-group {
+  display: flex;
+  inline-size: 100%;
+  min-block-size: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-block-start: 5px;
+  border: 1px solid var(--pw-line);
+  border-radius: 6px;
+  color: var(--pw-text);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.pw-crew-dock-group:is(:hover, :focus-visible, [aria-expanded="true"]) {
+  border-color: var(--pw-line-strong);
+  background: var(--pw-panel-2);
+}
+
+.pw-crew-dock-group-portraits { display: flex; padding-inline-start: 3px; }
+.pw-crew-dock-group-portraits img {
+  inline-size: 17px;
+  block-size: 17px;
+  margin-inline-start: -3px;
+  border: 1px solid var(--pw-panel);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+@media (760px <= width < 1366px) {
+  .pw-crew-stage-dock .pw-crew-dock-group-label { display: none; }
+  .pw-crew-stage-dock .pw-crew-dock-group-portraits img { inline-size: 12px; block-size: 12px; }
+  .pw-crew-stage-dock .pw-crew-dock-updates { position: relative; z-index: 5; }
+  .pw-crew-stage-dock .pw-crew-dock-updates:is(:hover, :focus-within) > section {
+    inline-size: 172px;
+    border-radius: 5px;
+    background: var(--pw-panel);
+    box-shadow: 0 0 0 1px var(--pw-line-strong), 0 5px 18px var(--pw-light-shadow, #0004);
+  }
+  .pw-crew-stage-dock .pw-crew-dock-updates:not(:is(:hover, :focus-within)) h3 {
+    padding-inline: 0;
+    font-size: 7.5px;
+    letter-spacing: .035em;
+    text-align: center;
+  }
+  .pw-crew-stage-dock .pw-crew-dock-updates:not(:is(:hover, :focus-within)) [data-source] {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+  .pw-crew-stage-dock .pw-crew-dock-updates:not(:is(:hover, :focus-within)) :is([data-source] span, [data-source] time, p) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 
 @media (width < 760px) {
   .pw-crew-stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .pw-crew-stage-dock { padding: 5px 8px 0; }
-  .pw-crew-stage-dock .pw-crew-dock { inline-size: 100%; }
+  .pw-crew-stage-dock .pw-crew-dock { inline-size: 100%; flex-wrap: wrap; align-items: center; }
   .pw-crew-stage-dock .pw-crew-dock-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pw-crew-stage-dock .pw-crew-dock-group { inline-size: auto; padding-inline: 5px; margin-block-start: 0; }
+  .pw-crew-stage-dock .pw-crew-dock-group-label { display: none; }
+  .pw-crew-stage-dock .pw-crew-dock-updates:has(section) { flex-basis: 100%; }
 }
 
 @media (width < 590px) {

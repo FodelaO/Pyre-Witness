@@ -17,8 +17,6 @@
   gap: 12px;
 }
 
-.pwl-review-header > .lens-toggle { width: 272px; }
-
 .pwl-review-brand .pw-brand {
   color: #e6edf6;
   font-size: 17px;
@@ -292,7 +290,6 @@
   .pwl-review { padding: 0 10px 12px; }
   .pwl-review-stage { min-height: 460px; }
   .pwl-review-header { flex-basis: 71px; }
-  .pwl-review-header > .lens-toggle { width: 220px; }
   .pwl-review-status { font-size: 9px; gap: 5px; }
   .pwl-review-brand .pw-brand { font-size: 13px; }
   .pwl-review-plant { align-items: start; padding: 11px 12px 12px; }

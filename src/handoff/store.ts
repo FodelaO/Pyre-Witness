@@ -48,7 +48,7 @@ export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIO
 
   function active(code: string) {
     const session = sessions.get(code);
-    if (session && (session.unscannedUntil ?? session.expiresAt) <= Date.now()) {
+    if (session && session.expiresAt <= Date.now()) {
       expire(code);
       return undefined;
     }
@@ -58,12 +58,21 @@ export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIO
   function markScanned(code: string) {
     const session = active(code);
     if (!session) return false;
-    if (session.unscannedUntil !== null) {
-      session.unscannedUntil = null;
-      clearTimeout(session.timer);
-      session.timer = expiryTimer(code, session.expiresAt);
-    }
+    session.unscannedUntil = null;
     return true;
+  }
+
+  // No route reports a page open yet, so a phone may still be shooting: free an unused code only for a new pairing.
+  function reclaimUnscanned(now: number) {
+    let stale: string | undefined;
+    let oldest = now;
+    for (const [code, session] of sessions) {
+      if (session.unscannedUntil !== null && session.unscannedUntil <= oldest) {
+        stale = code;
+        oldest = session.unscannedUntil;
+      }
+    }
+    if (stale) expire(stale);
   }
 
   function register(code: string, key: string) {
@@ -78,10 +87,11 @@ export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIO
         if (expiresAt <= now) retired.delete(retiredCode);
       }
       if (retired.has(code)) return { status: "conflict" } as const;
+      if (sessions.size >= capacity) reclaimUnscanned(now);
       if (sessions.size >= capacity) return { status: "full" } as const;
       const expiresAt = now + ttlMs;
       const unscannedUntil = Math.min(expiresAt, now + UNSCANNED_TTL_MS);
-      const timer = expiryTimer(code, unscannedUntil);
+      const timer = expiryTimer(code, expiresAt);
       session = { key, expiresAt, unscannedUntil, timer, latest: null, subscriber: null, uploads: 0 };
       sessions.set(code, session);
     }
@@ -132,5 +142,5 @@ export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIO
 }
 
 // The key carries a version so a hot reload never reuses a store built from an older shape.
-const memory = globalThis as typeof globalThis & { pyreHandoffStoreV3?: ReturnType<typeof createHandoffStore> };
-export const handoffStore = (memory.pyreHandoffStoreV3 ??= createHandoffStore());
+const memory = globalThis as typeof globalThis & { pyreHandoffStoreV4?: ReturnType<typeof createHandoffStore> };
+export const handoffStore = (memory.pyreHandoffStoreV4 ??= createHandoffStore());

@@ -1,6 +1,7 @@
 /** Builds the compact, read-only snapshot shared by the chat and the twin. */
 import { crewLive, useCrewStore } from "@/crew/crewStore";
 import { CREW_ORDER, type CrewId } from "@/crew/types";
+import { roundUsd } from "@/econ/format";
 import { plantExposure } from "@/econ/model";
 import { useRunStore } from "@/pipeline/runStore";
 import { areaById, assetById } from "@/twin/geometry";
@@ -36,7 +37,8 @@ export function buildAgentContext(): AgentContext {
   // The risk object changes when the configuration is evaluated, not on telemetry ticks.
   let lossPerYear = annualLoss.get(risk);
   if (lossPerYear === undefined) {
-    lossPerYear = plantExposure(twin, risk).totalAnnualised;
+    // Same two-significant-figure rounding as the panel's "est. / yr" figure, so agents quote it.
+    lossPerYear = roundUsd(plantExposure(twin, risk).totalAnnualised);
     annualLoss.set(risk, lossPerYear);
   }
 

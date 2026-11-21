@@ -8,7 +8,7 @@ import { useRunStore } from "@/pipeline/runStore";
 import type { PipelineEvent, SelfCheckPhase } from "@/pipeline/types";
 import { areaById, type Point } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
-import { directCrew, INITIAL_DIRECTOR, type CrewCue, type CrewStatus, type CrewVisual } from "./director";
+import { directCrew, INITIAL_DIRECTOR, type CrewCue, type CrewStatus, type CrewTarget, type CrewVisual } from "./director";
 import { appendActivity } from "./feedStore";
 import { deskPosition } from "./officeLayout";
 import { CREW, CREW_ORDER, type CrewId } from "./types";
@@ -19,6 +19,11 @@ export interface Speech {
   text: string;
   kind: "step" | "inspection" | "thought" | "briefing" | "patrol";
   attention?: true;
+}
+
+interface CrewWork {
+  at: number;
+  target?: CrewTarget;
 }
 
 export interface AvatarState {
@@ -32,6 +37,7 @@ export interface AvatarState {
   speechLatencyMs?: number;
   speechInspection?: SelfCheckPhase;
   inspect?: Point;
+  work?: CrewWork;
 }
 
 type Phase = "idle" | "running" | "finishing" | "returning" | "error";
@@ -44,6 +50,7 @@ interface LiveStatus {
   latencyMs?: number;
   status: CrewStatus;
   attention?: true;
+  work?: CrewWork;
 }
 export interface DisplayedVisual {
   effect: CrewVisual;
@@ -258,7 +265,7 @@ function cueJob(cue: CrewCue, kind: Speech["kind"] = cue.briefing ? "briefing" :
   return {
     stops: cue.stops, holdMs: cue.holdMs, visual: cue.visual,
     appearance: {
-      status: cue.status, inspect: cue.inspect,
+      status: cue.status, inspect: cue.inspect, work: { at: activity.at, target: cue.target },
       speech: { text: cue.bubbleText ?? activity.text, kind, ...(activity.attention && { attention: activity.attention }) },
       speechEngine: activity.engine ?? (activity.eventType?.startsWith("link.") ? "product page fetch" : undefined),
       speechStartedAt: cue.status === "working" && !activity.attention ? current.startedAt : null,
@@ -298,14 +305,14 @@ function updateLive(cue: CrewCue, event: PipelineEvent): void {
         status: cue.status,
         startedAt: cue.status !== "working" ? null : event.type.endsWith(".started") ? event.at : current.startedAt,
         latencyMs: latencyMs ?? current.latencyMs,
-        attention,
+        attention, work: { at: event.at, target: cue.target },
       } },
     };
   });
 }
 
 function queueOffice(crew: CrewId): void {
-  queue[crew].push({ stops: [toOffice(crew)], appearance: { status: "idle", speech: null, inspect: undefined } });
+  queue[crew].push({ stops: [toOffice(crew)], appearance: { status: "idle", speech: null, inspect: undefined, work: undefined } });
 }
 
 function onEvent(event: PipelineEvent, replay = false): void {
@@ -321,7 +328,9 @@ function onEvent(event: PipelineEvent, replay = false): void {
     useCrewStore.setState(({ live }) => ({
       phase: "running",
       live: perCrew((crew) => ({ ...atRest(crew), latencyMs: crewLive(crew, live).latencyMs,
-        message: crew === intent.activity.crew ? intent.activity.text : "Standing by" })),
+        ...(crew === intent.activity.crew
+          ? { message: intent.activity.text, work: { at: intent.activity.at, target: intent.target } }
+          : { message: "Standing by" }) })),
     }));
   } else if (intent.kind === "complete") {
     useCrewStore.setState({ phase: "finishing" });
@@ -401,7 +410,7 @@ export function startPatrolVisit(cue: CrewCue): boolean {
   const { activity } = cue;
   useCrewStore.setState(({ live }) => ({ live: { ...live, [crew]: {
     ...crewLive(crew, live), status: "idle", message: `idle patrol · ${activity.text}`, attention: undefined,
-    engine: activity.engine ?? "twin observation", startedAt: null,
+    engine: activity.engine ?? "twin observation", startedAt: null, work: { at: activity.at, target: cue.target },
   } } }));
   appendActivity(activity);
   play(now);

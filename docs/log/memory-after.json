@@ -1,0 +1,442 @@
+{
+  "label": "after",
+  "url": "http://localhost:4119/",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "browser": "Chrome 158.0.8127.36 (headless, SwiftShader)",
+  "startedAt": "2026-11-21T20:17:18.897Z",
+  "totalSeconds": 88.3,
+  "method": "HeapProfiler.collectGarbage x2, then Performance.getMetrics (JSHeapUsedSize, Nodes, JSEventListeners)",
+  "startView": "2d",
+  "openedIn3D": false,
+  "warmUp": "3D opened and closed once",
+  "samples": [
+    {
+      "step": "load",
+      "status": "ok",
+      "heapUsedMB": 31.08,
+      "heapTotalMB": 32.16,
+      "domNodes": 6815,
+      "jsEventListeners": 803,
+      "documents": 1,
+      "backingStoreMB": 12.52,
+      "canvases": 0,
+      "storageChars": 23699,
+      "attached": {
+        "document": 6619,
+        "stage": 5422,
+        "rail": 1022,
+        "activityFeed": 7,
+        "activityRows": 0
+      },
+      "atSeconds": 13.4,
+      "stepSeconds": 13.2
+    },
+    {
+      "step": "idle 10 s",
+      "status": "ok",
+      "heapUsedMB": 31.43,
+      "heapTotalMB": 32.41,
+      "domNodes": 6807,
+      "jsEventListeners": 803,
+      "documents": 1,
+      "backingStoreMB": 11.68,
+      "canvases": 0,
+      "storageChars": 23699,
+      "attached": {
+        "document": 6621,
+        "stage": 5424,
+        "rail": 1022,
+        "activityFeed": 7,
+        "activityRows": 0
+      },
+      "atSeconds": 23.6,
+      "stepSeconds": 10
+    },
+    {
+      "step": "lens keys 1/2/3 x10",
+      "status": "ok",
+      "heapUsedMB": 28.64,
+      "heapTotalMB": 29.66,
+      "domNodes": 6806,
+      "jsEventListeners": 803,
+      "documents": 1,
+      "backingStoreMB": 11.69,
+      "canvases": 0,
+      "storageChars": 23733,
+      "attached": {
+        "document": 6616,
+        "stage": 5419,
+        "rail": 1022,
+        "activityFeed": 7,
+        "activityRows": 0
+      },
+      "atSeconds": 29.6,
+      "stepSeconds": 5.7,
+      "detail": {
+        "presses": 30,
+        "lensChanges": 29,
+        "endLens": "material"
+      }
+    },
+    {
+      "step": "select 30 floor assets",
+      "status": "ok",
+      "heapUsedMB": 29.81,
+      "heapTotalMB": 31.16,
+      "domNodes": 7296,
+      "jsEventListeners": 804,
+      "documents": 1,
+      "backingStoreMB": 11.69,
+      "canvases": 0,
+      "storageChars": 23731,
+      "attached": {
+        "document": 6658,
+        "stage": 5444,
+        "rail": 1039,
+        "activityFeed": 7,
+        "activityRows": 0
+      },
+      "atSeconds": 34.4,
+      "stepSeconds": 4.6,
+      "detail": {
+        "available": 92,
+        "attempted": 30,
+        "forceClicked": 20,
+        "viaKeyboard": 10,
+        "failed": 0,
+        "selected": 30,
+        "lastSelected": "SW-IT"
+      }
+    },
+    {
+      "step": "transcript T / Escape x10",
+      "status": "ok",
+      "heapUsedMB": 31.96,
+      "heapTotalMB": 32.91,
+      "domNodes": 7292,
+      "jsEventListeners": 804,
+      "documents": 1,
+      "backingStoreMB": 11.69,
+      "canvases": 0,
+      "storageChars": 23731,
+      "attached": {
+        "document": 6647,
+        "stage": 5433,
+        "rail": 1039,
+        "activityFeed": 7,
+        "activityRows": 0
+      },
+      "atSeconds": 37.4,
+      "stepSeconds": 2.8,
+      "detail": {
+        "opened": 10
+      }
+    },
+    {
+      "step": "Show more x2",
+      "status": "ok",
+      "heapUsedMB": 32.87,
+      "heapTotalMB": 34.16,
+      "domNodes": 8606,
+      "jsEventListeners": 952,
+      "documents": 1,
+      "backingStoreMB": 11.69,
+      "canvases": 0,
+      "storageChars": 23731,
+      "attached": {
+        "document": 6772,
+        "stage": 5475,
+        "rail": 1122,
+        "activityFeed": 7,
+        "activityRows": 0
+      },
+      "atSeconds": 39.8,
+      "stepSeconds": 2.1,
+      "detail": {
+        "controls": 1,
+        "expanded": 2,
+        "collapsed": 2,
+        "failed": 0,
+        "leftOpen": 0,
+        "selectedForLossFigure": "HMI-F3"
+      }
+    },
+    {
+      "step": "2D | 3D switch x5",
+      "status": "ok",
+      "heapUsedMB": 33.72,
+      "heapTotalMB": 34.66,
+      "domNodes": 7434,
+      "jsEventListeners": 806,
+      "documents": 1,
+      "backingStoreMB": 11.69,
+      "canvases": 0,
+      "storageChars": 23731,
+      "attached": {
+        "document": 6774,
+        "stage": 5477,
+        "rail": 1122,
+        "activityFeed": 7,
+        "activityRows": 0
+      },
+      "atSeconds": 52.1,
+      "stepSeconds": 12.1,
+      "detail": {
+        "switches": 5,
+        "rendered3d": 5,
+        "maxCanvases": 1
+      }
+    },
+    {
+      "step": "simulate 2 scenarios + reset",
+      "status": "ok",
+      "heapUsedMB": 35.49,
+      "heapTotalMB": 36.91,
+      "domNodes": 7441,
+      "jsEventListeners": 806,
+      "documents": 1,
+      "backingStoreMB": 11.69,
+      "canvases": 0,
+      "storageChars": 23731,
+      "attached": {
+        "document": 6769,
+        "stage": 5472,
+        "rail": 1122,
+        "activityFeed": 7,
+        "activityRows": 0
+      },
+      "atSeconds": 63.5,
+      "stepSeconds": 11.1,
+      "detail": {
+        "speed": "4x",
+        "runs": [
+          {
+            "scenario": "CIP Crossover",
+            "finished": true
+          },
+          {
+            "scenario": "Ammonia Release",
+            "finished": true
+          }
+        ]
+      }
+    },
+    {
+      "step": "idle 20 s",
+      "status": "ok",
+      "heapUsedMB": 35.64,
+      "heapTotalMB": 37.16,
+      "domNodes": 7446,
+      "jsEventListeners": 806,
+      "documents": 1,
+      "backingStoreMB": 11.69,
+      "canvases": 0,
+      "storageChars": 23731,
+      "attached": {
+        "document": 6743,
+        "stage": 5446,
+        "rail": 1122,
+        "activityFeed": 7,
+        "activityRows": 0
+      },
+      "atSeconds": 83.7,
+      "stepSeconds": 20
+    }
+  ],
+  "growth": {
+    "from": "idle 10 s",
+    "to": "idle 20 s",
+    "heapUsedMB": 4.21,
+    "domNodes": 639,
+    "jsEventListeners": 3
+  },
+  "skipped": [],
+  "valid": true,
+  "noise": {
+    "hotReloadHeld": true,
+    "heldDevServerMessages": 80,
+    "pageLoadsAtSeconds": [
+      0.6
+    ],
+    "buildErrors": 0,
+    "devServerMessages": {
+      "isrManifest": 17,
+      "turbopack-connected": 1,
+      "binary": 2,
+      "sync": 1,
+      "built": 71,
+      "building": 10,
+      "turbopack-message": 2
+    },
+    "problemCount": 0,
+    "problems": []
+  },
+  "retainedAllocationsSinceIdle": {
+    "sampledLiveKB": 15720,
+    "top": [
+      {
+        "kb": 1371,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  AssetSymbol <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 1149,
+        "site": "exports.createElement @ de_modules_next_dist_compiled_1amofcmz--cdp._.js:1825  <-  map <- renderWithHooks <- updateForwardRef"
+      },
+      {
+        "kb": 1040,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- NetworkDrawing <- renderWithHooks"
+      },
+      {
+        "kb": 637,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- PipeLayer <- renderWithHooks"
+      },
+      {
+        "kb": 602,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- OtherItems <- renderWithHooks"
+      },
+      {
+        "kb": 344,
+        "site": "(anonymous) @ src_floor_0veexcjbgjjq1._.js:322  <-  map <- AssetLayer <- renderWithHooks"
+      },
+      {
+        "kb": 340,
+        "site": "updateElement @ js_react-dom-client_development_0mp0cp_t-ezj9.js:3818  <-  updateSlot <- reconcileChildrenArray <- reconcileChildFibersImpl"
+      },
+      {
+        "kb": 338,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  ZoneLabel <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 337,
+        "site": "(V8 API) @ :0  <-  (root)"
+      },
+      {
+        "kb": 306,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  Pump <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 305,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  AgitatedTank <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 289,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  VesselShell <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 263,
+        "site": "(anonymous) @ src_crew_1gfnla2-nrkvm._.js:1040  <-  map <- CrewLayer <- renderWithHooks"
+      },
+      {
+        "kb": 262,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  Avatar <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 254,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  Firewall <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 219,
+        "site": "jsxDEVImpl @ _1cjy5v944oa-i._.js:161  <-  map <- AssetLayer <- renderWithHooks"
+      },
+      {
+        "kb": 219,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- ConnectorLayer <- renderWithHooks"
+      },
+      {
+        "kb": 178,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- AttackPathLayer <- renderWithHooks"
+      },
+      {
+        "kb": 145,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  LossFigure <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 142,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- EntryPoints <- renderWithHooks"
+      },
+      {
+        "kb": 135,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  VerticalTank <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 128,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- ZoneLayer <- renderWithHooks"
+      },
+      {
+        "kb": 121,
+        "site": "jsxDEVImpl @ _1cjy5v944oa-i._.js:161  <-  exports.jsxDEV <- map <- NetworkDrawing"
+      },
+      {
+        "kb": 120,
+        "site": "jsxDEVImpl @ _1cjy5v944oa-i._.js:161  <-  exports.jsxDEV <- AssetSymbol <- renderWithHooks"
+      },
+      {
+        "kb": 112,
+        "site": "AssetSymbol @ src_floor_0veexcjbgjjq1._.js:79  <-  renderWithHooks <- updateFunctionComponent <- updateSimpleMemoComponent"
+      },
+      {
+        "kb": 111,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  SignalRow <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 97,
+        "site": "(anonymous) @ src_equipment_1hmdrrffh8je4._.js:6118  <-  map <- map <- ServerRack"
+      },
+      {
+        "kb": 94,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  TopBar <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 93,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- NodeAnnotations <- renderWithHooks"
+      },
+      {
+        "kb": 88,
+        "site": "jsxDEVImpl @ _1cjy5v944oa-i._.js:161  <-  exports.jsxDEV <- PlcCabinet <- renderWithHooks"
+      },
+      {
+        "kb": 85,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  AppShell <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 80,
+        "site": "jsxDEVImpl @ _1cjy5v944oa-i._.js:161  <-  exports.jsxDEV <- map <- ConnectorLayer"
+      },
+      {
+        "kb": 80,
+        "site": "jsxDEVImpl @ _1cjy5v944oa-i._.js:161  <-  exports.jsxDEV <- map <- PipeLayer"
+      },
+      {
+        "kb": 78,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  FloorStage <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 78,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- NetworkSwitch <- renderWithHooks"
+      },
+      {
+        "kb": 76,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  CrewCard <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 76,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  AssetInspector <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 76,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- ReverseOsmosisSkid <- renderWithHooks"
+      },
+      {
+        "kb": 76,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  FindingRow <- renderWithHooks <- updateFunctionComponent"
+      },
+      {
+        "kb": 75,
+        "site": "exports.jsxDEV @ _1cjy5v944oa-i._.js:206  <-  map <- Firewall <- renderWithHooks"
+      }
+    ]
+  }
+}

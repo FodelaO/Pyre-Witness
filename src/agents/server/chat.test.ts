@@ -14,7 +14,7 @@ vi.mock("@/gemini/transport", async (importOriginal) => ({
 }));
 
 const context: AgentContext = {
-  plant: "Bebidas del Norte, Line 3",
+  plant: "North Beverage Facility, Line 3",
   risk: { score: 42, band: "elevated" },
   selected: { id: "PLC-F3", name: "Filler PLC", kind: "plc", area: "Filling" },
   findings: [
@@ -125,34 +125,53 @@ describe("chat turns", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("puts each group reply into the next agent's prompt and closes with Chief", async () => {
-    create.mockResolvedValueOnce(reply("Capture identified."))
-      .mockResolvedValueOnce(reply("Review the zone."))
-      .mockResolvedValueOnce(reply("Review placement.\nCheck the rule findings."));
+  it("runs Scout and Architect in parallel, keeps the room order and closes with Chief", async () => {
+    let scoutAnswered = false;
+    let architectStartedFirst = false;
+    create.mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      scoutAnswered = true;
+      return reply("Capture identified.");
+    }).mockImplementationOnce(async () => {
+      architectStartedFirst = !scoutAnswered;
+      return reply("Review the zone.");
+    }).mockResolvedValueOnce(reply("Review placement.\nCheck the rule findings."));
     const events = await chat(body);
     expect(rows(events)).toEqual([
       ["scout", "group", "reply"], ["architect", "group", "reply"],
       ["inspector", "group", "reply"], ["chief", "group", "summary"],
     ]);
+    expect(architectStartedFirst).toBe(true);
     expect(create.mock.calls.map(([options]) => options.model)).toEqual([MODEL_IDS.perception, MODEL_IDS.reasoning, MODEL_IDS.chief]);
-    expect(prompt(1).turn).toMatchObject([{ from: "scout", to: "group", text: "Capture identified." }]);
+    expect(prompt(1).turn).toEqual([]);
     expect(prompt(2).turn.map(({ from }: { from: string }) => from)).toEqual(["scout", "architect", "inspector"]);
   });
 
-  it("routes at most two one-hop exchanges, ignores a recursive mention and caps group rows at six", async () => {
-    create.mockResolvedValueOnce(reply("@inspector: List findings for PLC-F3."))
-      .mockResolvedValueOnce(reply("@chief: What should the operator review?"))
+  it("routes one first-round hop, ignores a consulted agent's mention and a recursive mention", async () => {
+    create.mockResolvedValueOnce(reply("@architect: Is PLC-F3 in the right zone?"))
+      .mockResolvedValueOnce(reply("@inspector: List findings for PLC-F3."))
       .mockResolvedValueOnce(reply("@scout: More context would help."))
       .mockResolvedValueOnce(reply("Review PLC-F3.\nConfirm the placement."));
     const events = await chat(body);
     expect(rows(events)).toEqual([
-      ["scout", "inspector", "handoff"], ["inspector", "scout", "reply"],
-      ["architect", "chief", "handoff"], ["chief", "architect", "reply"],
+      ["scout", "architect", "handoff"], ["architect", "scout", "reply"], ["architect", "group", "reply"],
       ["inspector", "group", "reply"], ["chief", "group", "summary"],
     ]);
-    expect(messages(events)[1]).toMatchObject({ engine: "rules engine", text: expect.stringContaining("PLC-F3 · SAFE-01") });
+    expect(messages(events)[1]).toMatchObject({ engine: MODEL_IDS.reasoning, text: "@scout: More context would help." });
     expect(create).toHaveBeenCalledTimes(4);
-    expect(prompt(3).turn).toHaveLength(5);
+    expect(prompt(2)).toMatchObject({ task: "@architect: Is PLC-F3 in the right zone?" });
+    expect(prompt(3).turn).toHaveLength(4);
+    expect(create.mock.calls[3][0].system_instruction).not.toContain("@agente: pregunta");
+  });
+
+  it("does not let first-round agents consult Chief", async () => {
+    create.mockResolvedValueOnce(reply("@chief: What should the operator review?"))
+      .mockResolvedValueOnce(reply("Review the zone."))
+      .mockResolvedValueOnce(reply("Review PLC-F3.\nConfirm the placement."));
+    const events = await chat(body);
+    expect(rows(events)[0]).toEqual(["scout", "group", "reply"]);
+    expect(create.mock.calls[0][0].system_instruction).toContain("a uno de: @architect, @inspector.");
+    expect(create).toHaveBeenCalledTimes(3);
   });
 
   it("declines a second group hop involving an already consulted agent", async () => {
@@ -205,16 +224,16 @@ describe("chat turns", () => {
     expect(prompt(2).unavailable).toEqual(["architect"]);
   });
 
-  it("leaves ten seconds for the Group summary after slower first calls", async () => {
+  it("gives the parallel first round all but the Group summary reserve", async () => {
     let elapsed = 0;
     const clock = vi.spyOn(performance, "now").mockImplementation(() => elapsed);
     const timeouts = vi.spyOn(AbortSignal, "timeout");
     create.mockImplementationOnce(async () => { elapsed = 5_800; return reply("Capture identified."); })
-      .mockImplementationOnce(async () => { elapsed = 15_000; throw new Error("Provider failure"); })
+      .mockImplementationOnce(async () => { elapsed = 11_000; throw new Error("Provider failure"); })
       .mockResolvedValueOnce(reply("Placement remains unconfirmed.\nReview the rule findings."));
     try {
       expect(rows(await chat(body)).at(-1)).toEqual(["chief", "group", "summary"]);
-      expect(timeouts.mock.calls.flat()).toEqual([7_500, 9_200, 10_000]);
+      expect(timeouts.mock.calls.flat()).toEqual([15_000, 15_000, 14_000]);
     } finally {
       clock.mockRestore();
       timeouts.mockRestore();
@@ -234,11 +253,50 @@ describe("chat turns", () => {
       expect(rows(await chat({ ...body, mode: "chief" }))).toEqual([
         ["chief", "scout", "delegation"], ["scout", "chief", "reply"], ["chief", "user", "summary"],
       ]);
-      expect(timeouts.mock.calls.flat()).toEqual([10_000, 7_200, 11_400]);
+      expect(timeouts.mock.calls.flat()).toEqual([9_000, 7_200, 11_400]);
     } finally {
       clock.mockRestore();
       timeouts.mockRestore();
     }
+  });
+
+  it("lets delegated staff answer Chief in parallel and keeps crew order", async () => {
+    let scoutAnswered = false;
+    let architectStartedFirst = false;
+    create.mockResolvedValueOnce(reply(JSON.stringify({ delegations: [
+      { to: "architect", text: "Check the PLC-F3 zone" }, { to: "scout", text: "Identify the selected device" },
+    ] }))).mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      scoutAnswered = true;
+      return reply("PLC-F3 is the filler PLC.");
+    }).mockImplementationOnce(async () => {
+      architectStartedFirst = !scoutAnswered;
+      return reply("The zone needs segmentation review.");
+    }).mockResolvedValueOnce(reply("Scout identified PLC-F3; Architect asks for segmentation review."));
+    const events = await chat({ ...body, mode: "chief" });
+    expect(rows(events)).toEqual([
+      ["chief", "scout", "delegation"], ["chief", "architect", "delegation"],
+      ["scout", "chief", "reply"], ["architect", "chief", "reply"], ["chief", "user", "summary"],
+    ]);
+    expect(architectStartedFirst).toBe(true);
+  });
+
+  it("removes Markdown emphasis that the plain-text chat would show literally", async () => {
+    create.mockResolvedValueOnce(reply("Revisa **PLC-F3** (`plc_cabinet`) y *SAFE-01* (5/5)."));
+    const events = await chat({ ...body, mode: "direct", to: "scout" });
+    expect(messages(events)[0].text).toBe("Revisa PLC-F3 (plc_cabinet) y SAFE-01 (5/5).");
+  });
+
+  it("keeps prompt history compact and marks a reply clipped at 60 words", async () => {
+    create.mockResolvedValueOnce(reply(Array.from({ length: 70 }, (_, index) => `w${index}`).join(" ")));
+    const history = Array.from({ length: 12 }, (_, index) => ({ from: "user", to: "group", text: `${index}${"x".repeat(900)}` }));
+    const events = await chat({ ...body, history });
+    expect(prompt(0).history).toHaveLength(8);
+    expect(prompt(0).history[0].text).toMatch(/^4x+$/);
+    expect(prompt(0).history.every(({ text }: { text: string }) => text.length <= 600)).toBe(true);
+    const text = messages(events)[0].text;
+    expect(text.split(" ")).toHaveLength(60);
+    expect(text.endsWith("w59…")).toBe(true);
   });
 
   it("aborts the in-flight Gemini request when the stream is cancelled", async () => {

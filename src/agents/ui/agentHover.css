@@ -1,0 +1,28 @@
+/* Two-line task readout beside the portrait that raised it. */
+.pw-agent-activity {
+  position: fixed;
+  z-index: 49;
+  display: grid;
+  gap: 3px;
+  inline-size: min(300px, calc(100vw - 24px));
+  padding: 7px 9px;
+  border: 1px solid var(--pw-line-strong);
+  border-inline-start: 3px solid var(--crew-color);
+  border-radius: 7px;
+  background: var(--pw-panel);
+  color: var(--pw-text);
+  box-shadow: 0 8px 20px var(--pw-light-shadow, rgb(0 0 0 / 34%));
+  pointer-events: none;
+}
+
+.pw-agent-activity strong { display: grid; min-inline-size: 0; font-weight: 650; }
+.pw-agent-activity .pw-crew-dock-message { font-size: 12px; line-height: 16px; }
+.pw-agent-activity-meta { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; color: var(--pw-text-dim); }
+.pw-agent-activity-meta .pw-crew-dock-message,
+.pw-agent-activity-meta time { font-size: 11px; line-height: 14px; white-space: nowrap; }
+
+@media (width >= 920px) {
+  body:has(.pw-agent-chat):has(.pw-crew-dock-card[aria-describedby="pw-agent-activity"]) .pw-agent-activity {
+    translate: calc(var(--pw-agent-chat-width) + 18px) 0;
+  }
+}

@@ -1,5 +1,5 @@
 /** Applies the camera to SVG and positions the selected equipment card without React frames. */
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CREW_FOCUS_EVENT, type CrewFocusPoint } from "@/crew/focusCrew";
 import { FOOTPRINT } from "@/equipment/types";
 import type { Point } from "@/twin/geometry";
@@ -38,6 +38,7 @@ export default function useFloorCamera(
   const previousSelection = useRef<string | null>(null);
   const [fitPixelsPerUnit, setFitPixelsPerUnit] = useState(0.5);
   const [pixelsPerUnit, setPixelsPerUnit] = useState(0.5);
+  const scaleCommit = useRef<{ timer?: number; at: number }>({ at: -Infinity });
   const [lensDetail, setLensDetail] = useState(false);
   const lensDetailRef = useRef(false);
   const [instrumentDetail, setInstrumentDetail] = useState(false);
@@ -87,6 +88,21 @@ export default function useFloorCamera(
     tag.style.transform = `translate3d(${x}px, ${y}px, 0)`;
   }, [viewMode]);
 
+  // Label placement re-renders at the start and end of a wheel or pinch zoom, not on every frame.
+  const commitScale = useCallback((absolute: number) => {
+    const commit = scaleCommit.current;
+    window.clearTimeout(commit.timer);
+    const now = performance.now();
+    if (now - commit.at > 250) setPixelsPerUnit(absolute);
+    else commit.timer = window.setTimeout(() => setPixelsPerUnit(absolute), 160);
+    commit.at = now;
+  }, []);
+
+  useEffect(() => {
+    const commit = scaleCommit.current;
+    return () => window.clearTimeout(commit.timer);
+  }, []);
+
   const paint = useCallback((smooth: boolean) => {
     const world = worldRef.current;
     if (!world) return;
@@ -107,7 +123,7 @@ export default function useFloorCamera(
         setInstrumentDetail(readableInstruments);
       }
       if (absolute !== visualScale.current.absolute || relative !== visualScale.current.relative) {
-        if (absolute !== visualScale.current.absolute) setPixelsPerUnit(absolute);
+        if (absolute !== visualScale.current.absolute) commitScale(absolute);
         world.style.setProperty("--pw-floor-inverse-scale", String(1 / absolute));
         world.style.setProperty("--pw-floor-detail", String(coverage((relative - 1.12) / 0.64)));
         world.style.setProperty("--pw-floor-telemetry", String(coverage((relative - 1.55) / 0.65)));
@@ -118,7 +134,7 @@ export default function useFloorCamera(
     world.toggleAttribute("data-easing", smooth);
     tagRef.current?.toggleAttribute("data-easing", smooth);
     world.style.transform = `translate(${next.x}px, ${next.y}px) scale(${next.scale})`;
-  }, [measure, placeTag]);
+  }, [measure, placeTag, commitScale]);
 
   const setCamera = useCallback((next: Camera, smooth = false) => {
     pose.current = next;

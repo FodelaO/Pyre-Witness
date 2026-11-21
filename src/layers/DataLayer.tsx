@@ -32,7 +32,8 @@ function placeEntryLabels(entries: readonly EntryPoint[], canvas: Twin["plant"][
     const h = 16 * print;
     const x = entry.x - w / 2;
     const y = entry.y + 19;
-    const candidates = [[x, y], [x - w * 0.32, y], [x + w * 0.32, y], [x, y + h + 4]];
+    // Above the marker when the canvas edge leaves no room below it (Nearby RF in a short split pane).
+    const candidates = [[x, y], [x - w * 0.32, y], [x + w * 0.32, y], [x, y + h + 4], [x, entry.y - 19 - h]];
     const box = candidates.map(([x, y]) => ({ x, y, w, h })).find((box) => annotationFits(box, canvas, occupied));
     if (!box) continue;
     labels.set(entry.id, box);

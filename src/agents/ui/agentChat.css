@@ -1,0 +1,184 @@
+/* Anchored conversation panel and its participant message rows. */
+:root { --pw-agent-chat-width: 360px; }
+
+.pw-agent-chat {
+  position: fixed;
+  z-index: 48;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  inline-size: min(var(--pw-agent-chat-width), calc(100vw - 24px));
+  block-size: min(422px, calc(100dvh - 24px));
+  border: 1px solid var(--pw-line-strong);
+  border-radius: 11px;
+  background: var(--pw-panel);
+  color: var(--pw-text);
+  box-shadow: 0 14px 38px var(--pw-light-shadow, rgb(0 0 0 / 34%));
+}
+
+.pw-agent-chat-header,
+.pw-agent-chat-room,
+.pw-agent-chat-participants,
+.pw-agent-chat-byline,
+.pw-agent-chat-typing {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.pw-agent-chat-header { justify-content: space-between; padding: 9px 9px 8px 11px; }
+.pw-agent-chat-room { gap: 7px; }
+.pw-agent-chat-room h3 { margin: 0; font-size: 14px; font-weight: 680; white-space: nowrap; }
+.pw-agent-chat-room small,
+.pw-agent-chat-byline small { color: var(--pw-text-dim); font-size: 9px; white-space: nowrap; }
+.pw-agent-chat-participants { flex: none; gap: 3px; }
+
+.pw-agent-chat-portrait {
+  display: inline-flex;
+  flex: none;
+  overflow: hidden;
+  inline-size: 23px;
+  block-size: 23px;
+  border: 1px solid color-mix(in srgb, var(--crew-color), var(--pw-line) 30%);
+  border-radius: 50%;
+  background: var(--pw-floor);
+}
+
+.pw-agent-chat-portrait img { inline-size: 100%; block-size: 100%; object-fit: cover; }
+.pw-agent-chat-portrait:is(:focus-visible, :hover) { outline: 2px solid var(--crew-color); outline-offset: 1px; }
+.pw-agent-chat-room .pw-agent-chat-portrait { inline-size: 29px; block-size: 29px; }
+.pw-agent-chat[data-mode="group"] .pw-agent-chat-room .pw-agent-chat-portrait { inline-size: 24px; block-size: 24px; }
+.pw-agent-chat-staff {
+  padding: 1px 4px;
+  border: 1px solid color-mix(in srgb, var(--pw-crew-chief) 52%, var(--pw-line));
+  border-radius: 4px;
+  color: var(--pw-text-dim);
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.pw-agent-chat-close,
+.pw-agent-chat-compose button {
+  display: grid;
+  flex: none;
+  inline-size: 28px;
+  block-size: 28px;
+  place-items: center;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.pw-agent-chat-close { color: var(--pw-text-dim); }
+.pw-agent-chat-close:hover { background: var(--pw-panel-2); color: var(--pw-text); }
+
+.pw-agent-chat-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  margin: 0 9px 8px;
+  padding: 3px;
+  border: 1px solid var(--pw-line);
+  border-radius: 7px;
+  background: var(--pw-floor);
+}
+
+.pw-agent-chat-modes button {
+  display: flex;
+  min-block-size: 31px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--pw-text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pw-agent-chat-modes button:is(:hover, [aria-pressed="true"]) {
+  background: var(--pw-panel-2);
+  color: var(--pw-text);
+}
+.pw-agent-chat-modes button[aria-pressed="true"] { border-color: var(--pw-line-strong); }
+
+.pw-agent-chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 9px 10px 12px;
+  border-block: 1px solid var(--pw-line);
+  background: color-mix(in srgb, var(--pw-floor) 70%, var(--pw-panel));
+}
+
+.pw-agent-chat-message {
+  flex: none;
+  padding: 7px 8px;
+  border: 1px solid var(--pw-line);
+  border-radius: 7px;
+  background: var(--pw-panel);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pw-agent-chat-message[data-channel="user"] {
+  align-self: flex-end;
+  max-inline-size: 88%;
+  border-color: color-mix(in srgb, var(--pw-info) 34%, var(--pw-line));
+  background: color-mix(in srgb, var(--pw-info) 8%, var(--pw-panel));
+}
+
+.pw-agent-chat-message[data-channel="peer"] {
+  margin-inline-start: 17px;
+  border-inline-start: 2px solid var(--pw-line-strong);
+  background: var(--pw-panel-2);
+}
+
+.pw-agent-chat-message[data-kind="summary"] { border-color: color-mix(in srgb, var(--pw-crew-chief) 55%, var(--pw-line)); }
+.pw-agent-chat-byline { column-gap: 5px; row-gap: 3px; flex-wrap: wrap; }
+.pw-agent-chat-byline strong { font-size: 11px; font-weight: 670; }
+.pw-agent-chat-byline strong span { color: var(--pw-text-dim); font-weight: 500; }
+.pw-agent-chat-byline svg { color: var(--pw-text-dim); }
+.pw-agent-chat-message p { margin: 5px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pw-agent-chat-message p strong { font-weight: 650; }
+.pw-agent-chat-message p code { font-family: var(--font-mono), ui-monospace, monospace; font-size: .92em; }
+.pw-agent-chat-error,
+.pw-agent-chat-typing { margin: 2px 0; color: var(--pw-text-dim); font-size: 11px; }
+.pw-agent-chat-typing { flex: none; }
+.pw-agent-chat-hint { margin: auto; color: var(--pw-text-dim); font-size: 11px; text-align: center; }
+
+.pw-agent-chat-compose { display: flex; gap: 5px; padding: 8px 9px; }
+.pw-agent-chat-compose input {
+  min-inline-size: 0;
+  min-block-size: 34px;
+  flex: 1;
+  padding-inline: 9px;
+  border: 1px solid var(--pw-line-strong);
+  border-radius: 5px;
+  background: var(--pw-floor);
+  color: var(--pw-text);
+  font-size: 13px;
+}
+.pw-agent-chat-compose input::placeholder { color: var(--pw-text-dim); }
+.pw-agent-chat-compose button {
+  inline-size: 34px;
+  block-size: 34px;
+  border: 1px solid color-mix(in srgb, var(--pw-info) 52%, var(--pw-line));
+  background: color-mix(in srgb, var(--pw-info) 13%, var(--pw-panel));
+  color: var(--pw-text);
+}
+.pw-agent-chat-compose button:hover:enabled { background: color-mix(in srgb, var(--pw-info) 24%, var(--pw-panel)); }
+.pw-agent-chat-compose button:disabled { opacity: .55; cursor: default; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .pw-agent-chat-spinner { animation: pw-agent-chat-spin .8s linear infinite; }
+  .pw-agent-chat-typing > svg { animation: pw-agent-chat-typing 1s ease-in-out alternate infinite; }
+}
+@keyframes pw-agent-chat-spin { to { transform: rotate(1turn); } }
+@keyframes pw-agent-chat-typing { to { opacity: .35; } }

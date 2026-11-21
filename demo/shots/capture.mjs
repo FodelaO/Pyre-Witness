@@ -16,16 +16,23 @@ const cues = {
   chief: ".pw3d-work-briefing",
 };
 
+async function openUpload(page, cursor) {
+  await cursor.click(sel.addDevice(page), { ms: 280, label: "Add a device" });
+  await cursor.click(sel.dock(page, "Upload"), { ms: 280, label: "Upload" });
+}
+
 async function pinByPackaging(page, cursor) {
-  await cursor.click(sel.dock(page, "Pin location"), { ms: 280, label: "Pin location" });
+  await openUpload(page, cursor);
+  await cursor.click(sel.pinButton(page), { ms: 280, label: "Pick on plant" });
   const world = await require(page.locator('.pw-floor-svg[data-armed="true"] .pw-floor-world'), "armed floor pin");
   const { x, y } = await world.evaluate((group, pin) => {
     const screen = new DOMPoint(pin.x, pin.y).matrixTransform(group.getScreenCTM());
     return { x: screen.x, y: screen.y };
   }, PIN);
   await page.mouse.click(x, y);
-  await require(page.locator('.pw-capture-toolbar [data-capture-tool="pin"][data-pinned="true"]'), "retained floor pin");
+  await require(page.locator('.pw-capture-pin[data-pinned="true"]'), "retained floor pin");
   await require(sel.plant3d(page), "automatic return to 3D after pinning", 15000);
+  await page.getByRole("button", { name: "Collapse capture", exact: true }).click();
 }
 
 function riskCaption(checked, risks, path) {
@@ -46,7 +53,8 @@ export default {
   },
   async run({ page, cursor, mark, log, dir }) {
     await page.waitForTimeout(1600);
-    const upload = sel.dock(page, "Upload");
+    await openUpload(page, cursor);
+    const upload = page.getByRole("button", { name: "Add files", exact: true });
     await cursor.to(upload, 550);
     const [chooser] = await Promise.all([
       page.waitForEvent("filechooser", { timeout: 30000 }),
@@ -55,7 +63,7 @@ export default {
     await chooser.setFiles(PHOTO);
     const analyze = await require(sel.analyze(page), "Analyze button after photo upload");
     await page.waitForFunction(() => document.querySelector("form.pw-capture-card button[type=submit]:enabled"), null, { timeout: 12000 });
-    const pinned = page.locator('.pw-capture-pin[data-pinned="true"] button').first();
+    const pinned = page.locator('.pw-capture-pin[data-pinned="true"] .pw-capture-pin-value');
     const area = compact(await pinned.innerText({ timeout: 5000 }));
     if (area !== "Filler 3") throw new Error(`Pin landed in ${area}`);
     mark("photo", { name: "photo-032.jpg", area, credit: CREDIT });
@@ -170,7 +178,7 @@ export default {
     const placed = at("placed");
     const check = at("inspector") ?? at("architect") ?? placed + 0.8;
     const uploaded = at("photo");
-    const uploadCaption = "We upload a photo of a PLC";
+    const uploadCaption = "New equipment: a photo of a PLC";
     const evidence = "AI crew reads the photo";
     const waitFrom = Math.max(start, read - 4);
     const waitDuration = (read - waitFrom) / 4;

@@ -64,8 +64,10 @@ export function useNodeAnnotations(model: Model, washdown: Area["bounds"] | unde
         w: (w + (watch ? 5 : 2)) * print, h: (h + (watch ? 4 : 2)) * print,
       });
       const obstacles = [...occupied, ...nodes.filter((node) => node.id !== id).map((node) => node.symbol)];
+      // Lower-severity badges give way in a crowded small pane; a severity 5 finding is never hidden.
       const box = options.find((option) => annotationFits(painted(option), model.canvas, obstacles))
-        ?? options.find((option) => annotationFits(painted(option), model.canvas, occupied));
+        ?? options.find((option) => annotationFits(painted(option), model.canvas, occupied))
+        ?? (vulnerability.worst === 5 ? preferred : undefined);
       if (!box) return [];
       const footprint = painted(box);
       occupied.push(footprint);

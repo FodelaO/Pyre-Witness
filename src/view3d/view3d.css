@@ -192,6 +192,13 @@
   transform: translateX(-50%);
 }
 
+.pw3d-crew[data-emphasized] { z-index: 4; }
+.pw3d-crew[data-emphasized] img { outline: 2px solid var(--pw3d-crew); outline-offset: 2px; }
+.pw3d-crew[data-emphasized]:not([data-compact]) .pw3d-crew-plate {
+  border-color: var(--pw3d-crew);
+  box-shadow: 0 0 0 1px var(--pw3d-crew), 0 3px 10px var(--pw-light-shadow, #0007);
+}
+
 .pw3d-caption {
   position: absolute;
   bottom: 12px;

@@ -34,8 +34,10 @@ export async function geminiReply(agent: ModelAgent, input: string, assignment: 
       if (!text) throw new Error("Gemini returned an empty reply.");
       return text;
     }, (reply) => ({ text: reply }), undefined, signal);
-  const wordLimit = [...text.matchAll(/\S+/g)][60]?.index;
-  return text.slice(0, wordLimit).trimEnd();
+  // The chat shows plain text, so leftover Markdown emphasis would appear as literal symbols.
+  const plain = text.replace(/\*\*|__|`/g, "").replace(/(^|[\s(])\*(\S[^*\n]*?)\*(?=[\s).,;:!?]|$)/gm, "$1$2");
+  const wordLimit = [...plain.matchAll(/\S+/g)][60]?.index;
+  return wordLimit === undefined ? plain : `${plain.slice(0, wordLimit).trimEnd()}…`;
 }
 
 export async function geminiDelegations(input: string, signal: AbortSignal) {

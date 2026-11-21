@@ -147,6 +147,8 @@
 :root[data-theme="light"] .lens-toggle-stop[data-stop="both"] { --stop-color: var(--pw-text-dim); }
 :root[data-theme="light"] .lens-toggle-stop:not([data-current]) svg { background: var(--pw-panel-2); }
 :root[data-theme="light"] .lens-toggle-stop:is([data-current], :hover) { color: var(--pw-text); }
+:root[data-theme="light"] .lens-toggle[role="slider"],
+:root[data-theme="light"] .lens-toggle-stop[data-pw-tip] svg { background: transparent; }
 :root[data-theme="light"] .lens-legend [data-swatch="signal"] { color: var(--pw-text-dim); }
 
 :root[data-theme="light"] :is(.pw-lens-network, .pw-lens-digital-entries, .pw-lens-node-meta) {

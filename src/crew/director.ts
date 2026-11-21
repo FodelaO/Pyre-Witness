@@ -29,6 +29,12 @@ export type CrewVisual =
   | { kind: "trace"; id: string; phase: SelfCheckPhase }
   | { kind: "check"; at: Point; passed: boolean; stamps: { point: Point; ruleId: string; assetId: string }[]; phase: SelfCheckPhase };
 
+export interface CrewTarget {
+  ids: string[];
+  fallbackArea?: AreaId;
+  label?: string;
+}
+
 export interface CrewCue {
   activity: CrewActivity;
   status: CrewStatus;
@@ -40,10 +46,12 @@ export interface CrewCue {
   visual?: CrewVisual;
   handoffFrom?: CrewId;
   bubbleText?: string;
+  target?: CrewTarget;
 }
 
 export type CrewIntent =
-  | { kind: "stand" | "complete" | "log" | "thought"; activity: CrewActivity }
+  | { kind: "stand"; activity: CrewActivity; target: CrewTarget }
+  | { kind: "complete" | "log" | "thought"; activity: CrewActivity }
   | { kind: "step" | "error"; cue: CrewCue };
 
 interface DirectorState {
@@ -111,6 +119,14 @@ function placementStop(twin: Twin, assessment: Assessment, drop: DropPoint): Wal
   return { point: areaCenter(area), area: id };
 }
 
+function areaTarget(twin: Twin, ids: AreaId[]): CrewTarget {
+  const areas = [...new Set(ids)].flatMap((id) => areaById(twin, id) ?? []);
+  const assets = twin.assets.filter(({ physical }) => areas.some((area) =>
+    physical.area === area.id || containsPoint(area, physical.x, physical.y)));
+  return { ids: [...areas.map(({ id }) => id), ...assets.map(({ id }) => id)],
+    label: areas.map(({ name }) => name).join(" · ") || undefined };
+}
+
 function conduitEnforcer(twin: Twin, step: AttackStep): string | null {
   if (step.via !== "network" && step.via !== "internet" && step.via !== "remote") return null;
   const from = assetById(twin, step.from)?.network;
@@ -147,7 +163,7 @@ function pathVisit(twin: Twin, path: AttackPath, placement: WalkStop) {
   const target = assetById(twin, path.target);
   const inspect = path.causedBy === path.target ? placement.point : target && nodePosition(twin, target.id);
   if (inspect && stops.length) stops[stops.length - 1] = { ...stops[stops.length - 1], beside: true };
-  return { stops, inspect };
+  return { stops, inspect, target: { ids: [...new Set(nodes)], label: path.target } };
 }
 
 export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twin, existingAssetId?: string | null): {
@@ -162,10 +178,12 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
   if (event.type === "run.started") {
     const reassess = event.mode === "reassess";
     const crew = reassess ? "architect" : "scout";
+    const drop = resolveDropPoint(twin, event.dropPoint);
     return {
       state: { ...INITIAL_DIRECTOR, lastCrew: crew, runId: event.runId, active: true, reassess,
-        inputKind: event.input.kind, drop: resolveDropPoint(twin, event.dropPoint) },
-      intent: { kind: "stand", activity: activity(crew, reassess ? "Reassessment started" : "Analysis started") },
+        inputKind: event.input.kind, drop },
+      intent: { kind: "stand", activity: activity(crew, reassess ? "Reassessment started" : "Analysis started"),
+        target: { ids: reassess && existingAssetId ? [existingAssetId] : [], fallbackArea: drop.area } },
     };
   }
   const standaloneError = event.type === "run.error" && !state.active && event.runId !== state.runId
@@ -173,11 +191,15 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
   const lateBriefing = event.type === "summary.done" && state.awaitingBriefing;
   if (!standaloneError && (state.runId !== event.runId || (!state.active && !lateBriefing))) return { state, intent: null };
 
+  const deviceTarget: CrewTarget = {
+    ids: [existingAssetId ?? capturedAssetId(event.runId)], fallbackArea: state.drop.area, label: state.profile?.device_type,
+  };
   const step = (crew: CrewId, status: CrewStatus, text: string, engine?: string,
     { attention, ...options }: Omit<CrewCue, "activity" | "status"> & { attention?: true } = {}) => ({
     state: { ...state, lastCrew: crew, lastEngine: engine,
       lastCompleted: status === "done" ? crew : event.type.endsWith(".started") ? undefined : state.lastCompleted },
-    intent: { kind: "step" as const, cue: { activity: { ...activity(crew, text, engine), ...(attention && { attention }) }, status, ...options,
+    intent: { kind: "step" as const, cue: { activity: { ...activity(crew, text, engine), ...(attention && { attention }) },
+      status, target: deviceTarget, ...options,
       handoffFrom: event.type.endsWith(".started") && state.lastCompleted !== crew ? state.lastCompleted : undefined } },
   });
   const drop: WalkStop = { point: state.drop, area: state.drop.area };
@@ -222,7 +244,8 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
       const claim = evidence?.claim.trim();
       const device = assetFromProfile(event.profile, twin, capturedAssetId(event.runId, event.profile, twin), state.drop);
       const result = step("scout", "done", claim ? `${event.profile.device_type} · ${claim}` : event.profile.device_type,
-        event.model, { stops: [{ ...drop, beside: true, clearance: "device", device }], bubbleText: event.profile.device_type, visual: {
+        event.model, { target: { ...deviceTarget, ids: [existingAssetId ?? device.id], label: event.profile.device_type },
+          stops: [{ ...drop, beside: true, clearance: "device", device }], bubbleText: event.profile.device_type, visual: {
           kind: "evidence", chips: evidenceChips(event.profile), drop: state.drop, device: event.profile.device_type,
         } });
       return { ...result, state: { ...result.state, reading: false, profile: event.profile } };
@@ -235,6 +258,7 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
         ?? (state.profile && assetFromProfile(state.profile, twin, provisionalId, state.drop));
       const areas = candidate ? [...new Set(rankPlacements(twin, candidate).map(({ area }) => area))].slice(0, 3) : [];
       return step("architect", "working", "Checking where this fits…", event.model, { stops: [stop],
+        target: areaTarget(twin, [stop.area ?? state.drop.area, ...areas]),
         ...(areas.length ? { visual: { kind: "ranked", areas } } : {}) });
     }
     case "reasoning.thought": {
@@ -248,13 +272,15 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
       const name = areaById(twin, area)?.name ?? area;
       const revised = event.type === "revision.done" ? "Revised · " : "";
       const result = step("architect", "done", `${revised}${name} · Purdue L${event.assessment.placement.level}`,
-        event.model, { stops: [recommendation], visual: { kind: "proposal", from: state.drop, to: recommendation.point, area } });
+        event.model, { stops: [recommendation], target: areaTarget(twin, [area]),
+          visual: { kind: "proposal", from: state.drop, to: recommendation.point, area } });
       return { ...result, state: { ...result.state, recommendation } };
     }
     case "selfcheck.started":
       return step("inspector", "working", inspection === "as-dropped" ? "Checking as-dropped placement…"
         : inspection === "post-revision" ? "Checking revised placement…" : "Checking the recommendation…",
-        event.engine, { stops: [{ ...inspectedPlacement, beside: true }], inspection });
+        event.engine, { stops: [{ ...inspectedPlacement, beside: true }], inspection,
+          target: { ...deviceTarget, fallbackArea: inspectedPlacement.area } });
     case "selfcheck.path":
       return step("inspector", "working", `${phaseLabel[inspection]} path · ${event.path.title}`,
         CREW.inspector.engine, { ...pathVisit(twin, event.path, inspectedPlacement), inspection,
@@ -270,11 +296,12 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
         return point ? [{ assetId, ruleId, point }] : [];
       });
       return step("inspector", "done", `${phaseLabel[inspection]} · ${verdict}`, CREW.inspector.engine, { inspection, holdMs: 650,
+        target: { ids: [...new Set([provisionalId, ...stamps.map(({ assetId }) => assetId)])], fallbackArea: inspectedPlacement.area },
         visual: { kind: "check", at: inspectedPlacement.point, passed: passed && count === 0, stamps, phase: inspection } });
     }
     case "revision.started":
       return step("architect", "working", event.reason ? `Reconsidering · ${event.reason}` : "Reconsidering placement…", event.model,
-        { holdMs: 800, bubbleText: "Reconsidering placement…" });
+        { holdMs: 800, bubbleText: "Reconsidering placement…", target: areaTarget(twin, [state.recommendation?.area ?? state.drop.area]) });
     case "summary.started": {
       const { x, y, w, h } = twin.plant.building;
       const result = step("chief", "working", "Writing the briefing…", event.model, {
@@ -294,7 +321,8 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
       const text = event.stage === "gate" && state.gateRejection ? `${state.gateRejection} · ${message}` : message;
       return {
         state: { ...state, runId: event.runId, active: false, awaitingBriefing: false },
-        intent: { kind: "error", cue: { activity: activity(crew, text, engine), status: "error" } },
+        intent: { kind: "error", cue: { activity: activity(crew, text, engine), status: "error",
+          target: standaloneError ? undefined : deviceTarget } },
       };
     }
     case "transcript.entry":

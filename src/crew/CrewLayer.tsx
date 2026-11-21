@@ -8,6 +8,7 @@ import { useTwinStore } from "@/twin/store";
 import Avatar from "./Avatar";
 import Bubble from "./Bubble";
 import CrewOffice from "./CrewOffice";
+import { useCrewHoverId } from "./crewHover";
 import { crewAvatar, useCrewStore } from "./crewStore";
 import { avatarBounds, avatarScale, calloutGap, clearLeader, collides, equipmentBounds, placeCallout, placeFloorLabel, placePatrolCallout, roomTitleBands, type Box } from "./floorLayout";
 import { deskPosition, deskScale, isDesk } from "./officeLayout";
@@ -23,6 +24,7 @@ const palette = (id: CrewId): CSSProperties => ({ "--crew-color": `var(${CREW[id
 export default function CrewLayer() {
   useIdlePatrol();
   const idPrefix = useId();
+  const emphasized = useCrewHoverId();
   const twin = useTwinStore((state) => state.twin);
   const selectedId = useTwinStore((state) => state.selectedId);
   const { plant } = twin;
@@ -121,6 +123,7 @@ export default function CrewLayer() {
         {handoffs.map((handoff) => <HandoffPulse key={handoff.id} handoff={handoff} />)}
         {crew.map(({ id, avatar, size, desk }) => (
           <Avatar key={id} member={CREW[id]} avatar={avatar} idPrefix={idPrefix} scale={size} desk={desk}
+            emphasized={id === emphasized}
             preview={id === "scout" && picture ? <CapturePreview thumbnail={picture} /> : undefined} />
         ))}
       </g>

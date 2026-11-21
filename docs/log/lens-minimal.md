@@ -1,0 +1,3 @@
+- Matched the 134 × 28 px lens and 28 px 2D/3D switch with soft selected pills, one visible lens label, and an accent on the active Material or Data icon.
+- Checked all three modes at 1920, 1440, 1280, and 1200 px in both themes, including the stacked disclosure and Levels button at 1200 px. Captures are in `shots/lens-minimal-*.png`.
+- `npx tsc --noEmit` and `npx vitest run src/layers --maxWorkers=1` passed (17 tests). Browser checks covered keyboard input, tooltips, clicks, drag preview, and 2D/3D switching.
