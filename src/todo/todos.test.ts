@@ -10,7 +10,7 @@ import { SEED_TWIN } from "@/twin/seed";
 import { useTwinStore } from "@/twin/store";
 import type { Mitigation } from "@/twin/types";
 import { checkedCapture } from "./captureProposal";
-import { buildTodos } from "./todos";
+import { buildTodos, todoTitle } from "./todos";
 
 const store = useTwinStore.getState;
 const run = useRunStore.getState;
@@ -65,6 +65,7 @@ it("admits the current simulation queue and pending watch proposals once", () =>
   ]);
   store().decideMitigation("rejected", "rejected");
   const rows = pendingTodos();
+  expect(rows[0]).toMatchObject({ id: "watch", description: "From threat watch · Test fixture", predicted: { riskDelta: 0 } });
   expect(rows.filter(({ source }) => source === "simulation")).toMatchObject([{ id: "sim" }]);
   expect(rows.filter(({ source }) => source === "watch")).toMatchObject([{ id: "watch" }]);
   expect(rows.some(({ id }) => id === "rejected")).toBe(false);
@@ -123,4 +124,10 @@ it("projects a checked capture move with its wiring change and removes it after 
     physical: { area: "corporate_office", connections: [] }, placement: "recommended",
   });
   expect(pendingTodos().find(({ kind }) => kind === "move")).toBeUndefined();
+});
+
+it("keeps To-do titles to four words without a dangling connector", () => {
+  expect(todoTitle("Verify FW-DMZ PAN-OS for CVE-2026-1")).toBe("Verify FW-DMZ PAN-OS");
+  expect(todoTitle("Lock exposed ports")).toBe("Lock exposed ports");
+  expect(todoTitle("  ")).toBe("Review proposal");
 });

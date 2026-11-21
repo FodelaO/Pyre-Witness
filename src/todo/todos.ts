@@ -54,9 +54,19 @@ function affectedAssets(twin: Twin, item: Pick<Mitigation, "targets" | "effects"
 }
 
 function rank(a: TodoItem, b: TodoItem): number {
-  return a.predicted.riskDelta - b.predicted.riskDelta
+  return Number(b.source === "watch") - Number(a.source === "watch")
+    || a.predicted.riskDelta - b.predicted.riskDelta
     || a.predicted.lossDeltaPerYear - b.predicted.lossDeltaPerYear
     || compareText(a.id, b.id);
+}
+
+const DANGLING = /^(a|an|and|as|at|by|for|from|in|into|of|on|or|the|to|via|with)$/i;
+
+/** Short card title: at most four words, never ending on a dangling connector ("Verify X for"). */
+export function todoTitle(title: string): string {
+  const words = title.trim().split(/\s+/).filter(Boolean).slice(0, 4);
+  while (words.length > 1 && DANGLING.test(words[words.length - 1])) words.pop();
+  return words.join(" ") || "Review proposal";
 }
 
 export function buildTodos(
@@ -75,8 +85,9 @@ export function buildTodos(
   function row(item: Mitigation, source: TodoItem["source"], apply: () => boolean): TodoItem {
     return {
       id: item.id, source,
-      description: source === "simulation" ? `Simulation proposal. ${item.description}` : item.description,
-      title: item.title.trim().split(/\s+/).slice(0, 4).join(" ") || "Review proposal",
+      description: source === "watch" ? `From threat watch · ${item.description}`
+        : source === "simulation" ? `Simulation proposal. ${item.description}` : item.description,
+      title: todoTitle(item.title),
       kind: kindOf(item.effects), assets: affectedAssets(twin, item),
       predicted: predict(applyEffects(twin, item.effects)), apply,
     };

@@ -14,6 +14,7 @@ import type { WatchReport } from "./types";
 import type { useWatchLive } from "./useWatchLive";
 import { WatchAlertCard, WatchAlertIcon, WatchTypeLabel } from "./WatchAlertCard";
 import { useWatchLiveEstimate } from "./WatchLiveLoss";
+import { WatchResolutionStatus } from "./WatchResolutionStatus";
 import { classifyVuln } from "./vulnType";
 import "./watchSignals.css";
 
@@ -76,7 +77,8 @@ function SignalRow({ row, isNew, twin, highlight }: {
         if (!event.currentTarget.contains(event.relatedTarget) && !event.currentTarget.matches(":hover")) clear(key);
       }}>
       <WatchAlertCard title={item.title} type={classifyVuln(item)} asset={asset} estimate={estimate} comparable={recall}
-        tone={row.knownExploited || (row.cvss ?? 0) >= 9 ? "alert" : "warn"}>
+        tone={row.knownExploited || (row.cvss ?? 0) >= 9 ? "alert" : "warn"}
+        resolution={primary && <WatchResolutionStatus itemKey={key} />}>
         <div className="pw-signal-row-meta">
           <span>{LIVE_SOURCE_LABELS[item.source]}</span><span aria-hidden>·</span><time dateTime={item.published}>{age}</time>
           {item.source === "cisa-ics" && /^ICS[AM]/.test(item.id) && <span>· {item.id}</span>}
@@ -178,7 +180,8 @@ export function WatchSignalDesk({ live, feed, label, report, reviewing, onReview
           isNew={snapshot?.added.has(liveItemKey(row.item)) ?? false} />)}
         {drills.map(({ type, title, asset, estimate }) => (
           <li key={type} className="pw-signal-row">
-            <WatchAlertCard title={title} type={type} asset={asset} estimate={estimate} drill>
+            <WatchAlertCard title={title} type={type} asset={asset} estimate={estimate} drill
+              resolution={<WatchResolutionStatus itemKey={`drill:${type}`} />}>
               <p>{title}</p>
               <p>Simulated scenario · estimated loss per event</p>
             </WatchAlertCard>

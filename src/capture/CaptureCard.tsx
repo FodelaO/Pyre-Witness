@@ -10,6 +10,7 @@ import { analyze, cancelRun } from "@/pipeline/client";
 import { useRunStore } from "@/pipeline/runStore";
 import type { CaptureInput } from "@/pipeline/types";
 import { DEFAULT_DROP, useDropStore } from "@/twin/dropPoint";
+import { useTwinStore } from "@/twin/store";
 import CaptureLocation from "./CaptureLocation";
 import CaptureProgress from "./CaptureProgress";
 import CaptureToolbar, { TECHNOLOGY_CAPTURE, type CaptureTool } from "./CaptureToolbar";
@@ -276,17 +277,28 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
     submittingRun.current = attempt;
     setSubmitting(true);
     setFailed(null);
-    const previousError = useRunStore.getState().error;
+    const { error: previousError, runId: previousRunId } = useRunStore.getState();
     collapse(false);
     requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>(".pw-capture-run button")?.focus());
+    let selectionChanged = false;
+    const stopWatchingSelection = useTwinStore.subscribe((next, previous) => {
+      if (next.selectedId !== previous.selectedId) selectionChanged = true;
+    });
     try {
       await analyze(capture, useDropStore.getState().point ?? DEFAULT_DROP);
+      if (submittingRun.current !== attempt || selectionChanged) return;
+      const { status, runId, events, placedAssetId } = useRunStore.getState();
+      if (status !== "done" || runId === previousRunId || !placedAssetId
+        || events[0]?.type !== "run.started" || events[0].mode === "reassess") return;
+      const store = useTwinStore.getState();
+      if (store.twin.assets.some(({ id }) => id === placedAssetId)) store.select(placedAssetId);
     } catch (cause) {
       if (submittingRun.current !== attempt || (cause instanceof Error && cause.name === "AbortError")) return;
       const { error } = useRunStore.getState();
       if (error && error !== previousError) return;
       setFailed(cause instanceof Error ? captureErrorMessage(cause.message) : "Could not start analysis.");
     } finally {
+      stopWatchingSelection();
       if (submittingRun.current === attempt) {
         submittingRun.current = null;
         setSubmitting(false);

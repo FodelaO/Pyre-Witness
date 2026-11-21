@@ -1,20 +1,13 @@
-/* Escalation instrument clears the lens, crew rail and bottom capture dock. */
+/* Escalation controls and disclosures share the crew dock's width. */
 .pw-es {
   --es-mono: var(--font-geist-mono), ui-monospace, monospace;
-  position: fixed;
-  z-index: 31;
-  inset: 75px auto auto 203px;
+  position: relative;
   display: grid;
-  justify-items: start;
-  gap: 6px;
-  width: min(289px, calc(100vw - 24px));
-  max-height: calc(100dvh - 158px);
-  overflow: auto;
-  padding: 2px;
+  gap: 3px;
+  min-width: 0;
   color: var(--pw-text);
-  pointer-events: none;
 }
-.pw-es > * { pointer-events: auto; }
+.pw-stage-escalation:empty { display: none; }
 .pw-es :focus-visible { outline: 2px solid var(--pw-info); outline-offset: 2px; }
 .pw-es-chip, .pw-es-button, .pw-es-text-button, .pw-es-icon {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer;
@@ -23,18 +16,26 @@
   border: 1px solid var(--pw-line-strong); border-radius: 6px;
   background: var(--pw-panel); color: var(--pw-text);
 }
-.pw-es-chip { min-height: 30px; padding: 0 8px; font-size: 11px; box-shadow: 0 4px 14px #0003; }
-.pw-es-chip-values { color: var(--pw-text-dim); font: 10px var(--es-mono); }
+.pw-es-chip { justify-self: start; min-height: 24px; max-width: 100%; padding: 0 6px; gap: 4px; font-size: 10px; white-space: nowrap; }
+.pw-es-chip svg { flex: none; }
+.pw-es-chip-values { overflow: hidden; text-overflow: ellipsis; color: var(--pw-text-dim); font: 10px var(--es-mono); }
 .pw-es-chip:hover, .pw-es-button:hover, .pw-es-icon:hover { background: var(--pw-panel-2); }
-.pw-es-chip > svg:last-child { color: var(--pw-text-dim); margin-left: 3px; }
+.pw-es-chip > svg:last-child { color: var(--pw-text-dim); }
 .pw-es-alert, .pw-es-popover, .pw-es-error {
   width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--pw-line-strong); border-radius: 7px;
   background: var(--pw-panel); box-shadow: 0 10px 28px #0005;
 }
+.pw-es-popover {
+  position: absolute;
+  z-index: 5;
+  inset: calc(100% + 4px) 0 auto;
+  max-block-size: min(265px, 45dvh);
+  overflow: auto;
+}
 .pw-es-alert { --es-status: var(--pw-attention); border-top: 2px solid var(--es-status); }
 .pw-es-alert[data-approved="true"] { --es-status: var(--pw-ok); }
 .pw-es-alert-head, .pw-es-popup-head {
-  display: flex; align-items: center; gap: 6px; color: var(--es-status, var(--pw-text)); font-size: 11px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--es-status, var(--pw-text)); font-size: 11px;
 }
 .pw-es-alert-head time, .pw-es-popup-head > :last-child { margin-left: auto; }
 .pw-es :is(time, .pw-es-simulation) { color: var(--pw-text-dim); font: 9px var(--es-mono); white-space: nowrap; }
@@ -80,34 +81,43 @@
 .pw-es-text-button { width: fit-content; padding: 4px 0; color: var(--pw-text-dim); font-size: 10px; }
 .pw-es-text-button:hover, .pw-es-link:hover { color: var(--pw-text); }
 .pw-es-popover > .pw-es-text-button { margin-top: 5px; }
-.pw-es-pair { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: start; gap: 9px; margin-top: 7px; }
+.pw-es-pair { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: start; gap: 7px; margin-top: 7px; }
 .pw-es-qr { display: grid; place-items: center; aspect-ratio: 1; border-radius: 5px; background: white; color: #111; }
-.pw-es-qr img { border-radius: 5px; }
+.pw-es-qr img { width: 100%; height: auto; border-radius: 5px; }
 .pw-es-pair-copy { display: grid; gap: 3px; min-width: 0; }
 .pw-es-pair-copy strong { font-size: 10px; }
 .pw-es-pair-copy strong[data-connected="true"] { color: var(--pw-ok); }
 .pw-es-link { color: var(--pw-text-dim); font: 9px/1.25 var(--es-mono); overflow-wrap: anywhere; text-decoration: underline; }
 .pw-es-error { color: var(--pw-attention); font-size: 11px; }
-@media (width <= 1280px) {
-  .pw-es { inset: auto auto 80px 12px; max-height: calc(100dvh - 230px); }
+.pw-es-ladder { min-width: 0; }
+.pw-es-ladder-row { display: flex; align-items: center; gap: 2px; }
+.pw-es-tier {
+  display: inline-flex; align-items: center; gap: 2px; min-width: 0; min-height: 23px; padding-inline: 3px;
+  border-radius: 4px; color: var(--pw-text-dim);
 }
-@media (width < 735px) {
-  .pw-es { bottom: 119px; max-height: calc(100dvh - 340px); }
+.pw-es-tier[data-level] { cursor: pointer; }
+.pw-es-tier[data-level]:is(:hover, [aria-expanded="true"]) { background: var(--pw-panel-2); }
+.pw-es-tier[data-level="1"] { color: var(--es-amber, #ffbd4a); }
+:root[data-theme="light"] .pw-es { --es-amber: #895500; }
+.pw-es-tier[data-level="2"] { color: var(--pw-attention); }
+.pw-es-tier[data-level="3"] { color: var(--pw-alarm); }
+.pw-es-tier > :is(svg, b) { flex: none; }
+.pw-es-tier > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 8px var(--es-mono); }
+.pw-es-ladder-flag {
+  display: grid; place-items: center; inline-size: 13px; block-size: 13px;
+  border: 1px solid currentColor; border-radius: 50%; font: 700 10px/1 var(--es-mono);
 }
-@media (width < 560px) {
-  .pw-es { bottom: 156px; max-height: calc(100dvh - 413px); }
-}
-/* Beside the left crew rail the card and its popovers open to the right of the chip, never over the crew dock. */
-@media (width >= 1100px) {
-  .pw-es { grid-template-columns: 184px 289px; align-items: start; width: max-content; }
-  .pw-es > * { grid-column: 2; }
-  .pw-es > .pw-es-chip { grid-column: 1; grid-row: 1; }
-}
-
-.pw-es-ladder { display: grid; gap: 8px; padding: 10px 12px; }
-.pw-es-ladder-row { display: grid; grid-template-columns: 16px 62px minmax(0, 1fr); gap: 6px; align-items: center; }
-.pw-es-ladder-row + .pw-es-ladder-row { border-top: 1px solid var(--pw-line); padding-top: 7px; }
-.pw-es-ladder-flag { display: grid; place-items: center; border-radius: 50%; background: #ffbd4a; color: #251600; }
-.pw-es-ladder-call { grid-column: 2 / -1; }
+.pw-es-ladder > .pw-es-simulation { display: block; padding: 2px 3px; font-weight: 700; }
+.pw-es-ladder-detail { display: grid; gap: 5px; font-size: 11px; overflow-wrap: anywhere; }
 .pw-es-ladder-decision { display: grid; gap: 3px; }
+.pw-es-ladder-detail .pw-es-text-button { padding-inline: 5px; border: 1px solid var(--pw-line-strong); border-radius: 4px; }
 .pw-es-ladder-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+@media (prefers-reduced-motion: no-preference) {
+  .pw-es-tier[data-level] > :is(svg, b) { animation: pw-es-tier-pulse 2s ease-in-out 3; }
+}
+@keyframes pw-es-tier-pulse { 50% { opacity: .66; } }
+@media (width < 760px) {
+  .pw-es { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; }
+  .pw-es-popover { position: static; flex-basis: 100%; }
+  .pw-es-ladder:has(.pw-es-popover) { flex-basis: 100%; }
+}

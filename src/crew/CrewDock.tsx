@@ -70,12 +70,15 @@ export default function CrewDock() {
 
   return (
     <section className="pw-crew-dock" aria-label="Agents" ref={dock}>
-      <header className="pw-crew-dock-header">
-        <h2 className="pw-mono">Agents</h2>
-        <ServicesChip />
-        <button type="button" className="pw-crew-dock-transcript" title="Open transcript (T)" aria-label="Open transcript"
-          aria-keyshortcuts="T" aria-haspopup="dialog"
-          onClick={() => { setMode(null); useTranscriptStore.getState().open(); }}><FileText size={14} aria-hidden /><kbd>T</kbd></button>
+      <header className="pw-crew-dock-top">
+        <div className="pw-crew-dock-header">
+          <h2 className="pw-mono">Agents</h2>
+          <ServicesChip />
+          <button type="button" className="pw-crew-dock-transcript" title="Open transcript (T)" aria-label="Open transcript"
+            aria-keyshortcuts="T" aria-haspopup="dialog"
+            onClick={() => { setMode(null); useTranscriptStore.getState().open(); }}><FileText size={14} aria-hidden /><kbd>T</kbd></button>
+        </div>
+        <div className="pw-crew-dock-escalation" data-escalation-dock />
       </header>
       <div className="pw-crew-dock-cards">
         {CREW_ORDER.map((id) => <CrewCard key={id} id={id} open={mode === "direct" && direct === id}

@@ -43,6 +43,7 @@
 .pw-watch-card-caret { flex: none; color: var(--pw-text-dim); }
 .pw-watch-card-toggle[aria-expanded="true"] .pw-watch-card-caret { transform: rotate(180deg); }
 .pw-watch-card-body { grid-column: 1 / -1; min-width: 0; }
+.pw-watch-resolution { grid-column: 1 / -1; margin: 0 0 3px; }
 .pw-watch-type { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 650; line-height: 1.15; }
 .pw-watch-type > svg { flex: none; color: var(--pw-text-dim); }
 .pw-watch-alert[data-tone="alert"] .pw-watch-type > svg { color: var(--pw-alarm); }

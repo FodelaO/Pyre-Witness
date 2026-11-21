@@ -31,6 +31,11 @@ export function writeWatchStorage(key: string, value: string): void {
 
 const receiptKey = (id: string) => `pyre-witness:watch:decided:${id}`;
 
+export function watchReceipt(id: string): "applied" | "rejected" | undefined {
+  const receipt = readWatchStorage(receiptKey(id));
+  if (receipt === "applied" || receipt === "rejected") return receipt;
+}
+
 export function watchDecision(item: Mitigation): boolean {
   return item.proposedBy === "threat-watch" && (item.status === "applied" || item.status === "rejected");
 }
@@ -67,8 +72,7 @@ export function restoreWatchReport(date: string, mode: WatchReport["mode"]): Wat
     const parsed = savedProposalSchema.safeParse(value);
     if (!parsed.success) { stale += 1; continue; }
     const item = parsed.data;
-    const receipt = readWatchStorage(receiptKey(item.id));
-    if (seen.has(item.id) || receipt === "applied" || receipt === "rejected") continue;
+    if (seen.has(item.id) || watchReceipt(item.id)) continue;
     seen.add(item.id);
 
     const existing = live.get(item.id);

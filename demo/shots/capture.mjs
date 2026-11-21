@@ -180,17 +180,16 @@ export default {
     const uploaded = at("photo");
     const uploadCaption = "New equipment: a photo of a PLC";
     const evidence = "AI crew reads the photo";
-    const waitFrom = Math.max(start, read - 4);
-    const waitDuration = (read - waitFrom) / 4;
+    const readFrom = Math.max(start, read - 0.65);
+    const dropFrom = Math.max(start, placed - 0.18);
     return [
-      { from: Math.max(0, uploaded - 3.4), to: uploaded, duration: 3.4, caption: uploadCaption, credit: CREDIT },
-      { from: Math.max(uploaded, start - 6.6), to: start, duration: 6.6, caption: uploadCaption, credit: CREDIT, photo: PHOTO },
-      ...(waitDuration > 0.2 ? [{ from: waitFrom, to: read, duration: waitDuration, speed: 4, caption: evidence }] : []),
-      { from: read, to: read + 4 - (waitDuration > 0.2 ? waitDuration : 0), duration: 4 - (waitDuration > 0.2 ? waitDuration : 0), caption: evidence },
-      { from: check, to: check + 4, duration: 4, caption: "Rules engine checks the whole plant" },
-      { from: Math.max(start, placed - 0.18), to: placed + 4, duration: 4, caption: placed < check ? "Replay · Controller drops into the plant" : "Controller drops into the plant" },
-      { from: at("risk"), to: at("loss") - 0.45, duration: 3.33, caption: get("risk").data.caption },
-      { from: at("loss"), to: Math.min(at("end"), seconds), duration: 3.33, caption: `Estimated loss ${get("loss").data.amount} per event` },
+      { from: Math.max(0, uploaded - 3), to: uploaded, duration: 3, caption: uploadCaption, credit: CREDIT },
+      { from: Math.max(uploaded, start - 4), to: start, duration: 4, caption: uploadCaption, credit: CREDIT, photo: PHOTO },
+      { from: readFrom, to: readFrom + 3.16, duration: 3.16, caption: evidence },
+      { from: dropFrom, to: dropFrom + 3.5, duration: 3.5, caption: "Controller drops into the plant" },
+      { from: check, to: check + 3.5, duration: 3.5, caption: "Rules engine checks the whole plant" },
+      { from: at("risk"), to: at("loss") - 0.45, duration: 4, caption: get("risk").data.caption },
+      { from: at("loss"), to: Math.min(at("end"), seconds), duration: 3.5, caption: `Estimated loss ${get("loss").data.amount} per event` },
     ];
   },
 };

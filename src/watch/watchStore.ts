@@ -8,6 +8,7 @@ import { watchFeedFields, watchFeedStatus, type WatchFeedCheck, type WatchFeedSt
 import type { LiveSourceResult } from "./liveTypes";
 import { WATCH_SOURCES } from "./sources";
 import { readWatchStream, WatchRateLimitError } from "./streamClient";
+import { cueWatchMatches, publishReviewedWatchResolutions } from "./watchResolutions";
 import { WATCH_REVIEW_CACHE_MS, type Candidate, type ManagedWatchProgress, type ThreatItem, type WatchEvent, type WatchReport, type WatchRunResult, type WatchStage } from "./types";
 import {
   LAST_WATCH_DAY, rememberWatchDecision, restoreWatchReport, saveWatchReport, watchDecision, writeWatchStorage,
@@ -131,13 +132,20 @@ export const useWatchStore = create<WatchState>((set, get) => ({
         switch (event.type) {
           case "working": update({ working: event.name }); break;
           case "source": update({ sources: [...run.sources, event.result] }); break;
-          case "matches": update({ candidates: event.candidates, unmatchedNews: event.unmatchedNews }); break;
+          case "matches":
+            update({ candidates: event.candidates, unmatchedNews: event.unmatchedNews });
+            cueWatchMatches(event.candidates, event.runId, event.at);
+            break;
           case "managed-progress": update({ managedProgress: event.progress }); break;
           case "stage": update({ stages: [...run.stages, event.stage] }); break;
           case "snapshot": replace({ ...accept(event), status: "running", working: "feeds", sources: [], stages: [] }); break;
         }
       }, force);
-      replace(accept(result));
+      const accepted = accept(result);
+      replace(accepted);
+      if (!result.cached && accepted.report && useTwinStore.getState().risk === risk) {
+        publishReviewedWatchResolutions(accepted.report);
+      }
     } catch (error) {
       update({
         status: error instanceof WatchRateLimitError ? "finished" : "error", working: undefined,

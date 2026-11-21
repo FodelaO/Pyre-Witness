@@ -42,7 +42,7 @@ export function WatchAlertIcon({ tone }: { tone: "alert" | "warn" | "ok" }) {
   </span>;
 }
 
-export function WatchAlertCard({ title, type, tone, asset, estimate, comparable, drill = false, children }: {
+export function WatchAlertCard({ title, type, tone, asset, estimate, comparable, drill = false, resolution, children }: {
   title: string;
   type: VulnType;
   tone?: "alert" | "warn";
@@ -50,6 +50,7 @@ export function WatchAlertCard({ title, type, tone, asset, estimate, comparable,
   estimate?: LossEstimate;
   comparable?: boolean;
   drill?: boolean;
+  resolution?: ReactNode;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -71,6 +72,7 @@ export function WatchAlertCard({ title, type, tone, asset, estimate, comparable,
       {ledger && <span className="pw-watch-amount pw-mono" title={`Estimated loss per ${comparable ? "comparable " : ""}event`}>
         <small>est.</small> {formatUsd(ledger.total)}
       </span>}
+      {resolution}
       <div id={detailsId} className="pw-watch-card-body" hidden={!open}>
         {open && <div className="pw-panel-disclosure-body">
           {children}

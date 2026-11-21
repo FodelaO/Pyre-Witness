@@ -6,6 +6,7 @@ import { WATCH_FEED_STALE_MS, watchFeedStatus } from "./feedStatus";
 import { recordLiveCheck } from "./liveHistory";
 import { LIVE_CHECK_INTERVAL_MS, LIVE_SOURCE_LABELS, type LiveCheck, type LiveSourceResult } from "./liveTypes";
 import { useWatchStore } from "./watchStore";
+import { publishLiveWatchResolutions } from "./watchResolutions";
 
 export async function refreshWatchFeeds(): Promise<{ check: LiveCheck; error?: string }> {
   const startedAt = Date.now();
@@ -44,6 +45,7 @@ export function useWatchLive() {
     setError(undefined);
     try {
       const { check, error } = await refreshWatchFeeds();
+      if (!error) publishLiveWatchResolutions(check, useWatchStore.getState().review.report?.candidates ?? []);
       setError(error);
       setSnapshot({ check, added: error ? new Set() : recordLiveCheck(check) });
       setNextAt(check.checkedAt + LIVE_CHECK_INTERVAL_MS);

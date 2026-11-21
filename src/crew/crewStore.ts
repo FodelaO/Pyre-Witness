@@ -24,6 +24,7 @@ export interface Speech {
 interface CrewWork {
   at: number;
   target?: CrewTarget;
+  watch?: true;
 }
 
 export interface AvatarState {
@@ -42,7 +43,7 @@ export interface AvatarState {
 
 type Phase = "idle" | "running" | "finishing" | "returning" | "error";
 type Appearance = Omit<AvatarState, "point" | "walking" | "walk">;
-type Job = Pick<CrewCue, "stops" | "holdMs" | "visual"> & { appearance?: Appearance; after?: Job; finished?: boolean };
+type Job = Pick<CrewCue, "stops" | "holdMs" | "visual"> & { appearance?: Appearance; after?: Job; finished?: boolean; watch?: boolean };
 interface LiveStatus {
   message: string;
   engine: string;
@@ -127,6 +128,8 @@ const queue = perCrew<Job[]>(() => []);
 const heldUntil = perCrew(() => 0);
 const seen = new WeakSet<PipelineEvent>();
 let director = INITIAL_DIRECTOR;
+let lastWatchJob: Job | undefined;
+let lastWatchScout: { runId?: string; assetId?: string } | undefined;
 let dropReview: Job | undefined;
 let latestProposal: Job | undefined;
 let recommendationReview: Job | undefined;
@@ -163,6 +166,7 @@ function clearMotion(now: number): void {
   motionTimer = null;
   returnTimer = null;
   dropReview = latestProposal = recommendationReview = undefined;
+  lastWatchJob = lastWatchScout = undefined;
   for (const crew of CREW_ORDER) {
     queue[crew].length = 0;
     heldUntil[crew] = 0;
@@ -198,7 +202,7 @@ function startJob(crew: CrewId, job: Job, now: number, instant: boolean, visit =
   else job.finished = true;
   if (job === latestProposal && crewAvatar("inspector", avatars).status === "done") setAvatar("inspector", { speech: null });
   if (job === latestProposal && crewAvatar("scout", avatars).status === "done") setAvatar("scout", { speech: null });
-  if (appearance?.speech?.kind === "briefing") {
+  if (appearance?.speech?.kind === "briefing" && !job.watch) {
     for (const id of CREW_ORDER) {
       if (id !== crew && crewAvatar(id, avatars).speech) setAvatar(id, { speech: null });
     }
@@ -265,7 +269,8 @@ function cueJob(cue: CrewCue, kind: Speech["kind"] = cue.briefing ? "briefing" :
   return {
     stops: cue.stops, holdMs: cue.holdMs, visual: cue.visual,
     appearance: {
-      status: cue.status, inspect: cue.inspect, work: { at: activity.at, target: cue.target },
+      status: cue.status, inspect: cue.inspect,
+      work: { at: activity.at, target: cue.target, ...(activity.kind === "watch" && { watch: true as const }) },
       speech: { text: cue.bubbleText ?? activity.text, kind, ...(activity.attention && { attention: activity.attention }) },
       speechEngine: activity.engine ?? (activity.eventType?.startsWith("link.") ? "product page fetch" : undefined),
       speechStartedAt: cue.status === "working" && !activity.attention ? current.startedAt : null,
@@ -313,6 +318,42 @@ function updateLive(cue: CrewCue, event: PipelineEvent): void {
 
 function queueOffice(crew: CrewId): void {
   queue[crew].push({ stops: [toOffice(crew)], appearance: { status: "idle", speech: null, inspect: undefined, work: undefined } });
+}
+
+export function playWatchCues(cues: readonly CrewCue[]): void {
+  if (!cues.length) return;
+  if (typeof window === "undefined" || director.active || director.awaitingBriefing
+    || useRunStore.getState().status === "running") {
+    for (const { activity } of cues) appendActivity(activity);
+    return;
+  }
+  const now = performance.now();
+  const { phase } = useCrewStore.getState();
+  if (phase === "idle" || phase === "returning" || phase === "error" || !lastWatchJob) clearMotion(now);
+  if (returnTimer !== null) {
+    window.clearTimeout(returnTimer);
+    returnTimer = null;
+  }
+  for (const cue of cues) {
+    const { activity, target } = cue;
+    const { crew, runId, text, engine, at } = activity;
+    if (crew === "scout") {
+      const assetId = target?.ids[0];
+      if (lastWatchScout && lastWatchScout.runId === runId && lastWatchScout.assetId === assetId) continue;
+      lastWatchScout = { runId, assetId };
+    }
+    appendActivity(activity);
+    useCrewStore.setState(({ live }) => ({ live: { ...live, [crew]: {
+      message: text, engine: engine ?? "threat watch", startedAt: null, status: cue.status, work: { at, target },
+    } } }));
+    const job = cueJob(cue, crew === "inspector" ? "inspection" : undefined);
+    job.after = lastWatchJob;
+    job.watch = true;
+    queue[crew].push(job);
+    lastWatchJob = job;
+  }
+  useCrewStore.setState({ phase: "finishing" });
+  play(now);
 }
 
 function onEvent(event: PipelineEvent, replay = false): void {

@@ -1,8 +1,9 @@
-/** Fixed desktop alert instrument with threshold settings, phone pairing and call receipts. */
+/** Hosts the escalation controls in the crew dock while retaining the shell's error boundary. */
 "use client";
 
 import { Bell, Check, ChevronDown, FlaskConical, MessageSquare, Phone, PhoneCall, QrCode, Settings2, X } from "lucide-react";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { formatUsd } from "@/econ/format";
 import { Equipment, FOOTPRINT } from "@/equipment";
 import { AlertLadder } from "./AlertLadder";
@@ -150,8 +151,10 @@ function AlertCard({ record, busy, phoneConnected, telephone, onRing, onDismiss 
 }
 
 export default function EscalationCall() {
-  const [settings, setSettings] = useState(false);
-  const [pairingOpen, setPairingOpen] = useState(false);
+  const [dock, setDock] = useState<HTMLElement | null>(null);
+  const [panel, setPanel] = useState<"settings" | "pairing" | { alertId: string } | null>(null);
+  const controls = useRef<HTMLDivElement>(null);
+  const chip = useRef<HTMLButtonElement>(null);
   const [label, setLabel] = useState("");
   const records = useEscalationStore((state) => state.records);
   const thresholds = useEscalationStore((state) => state.thresholds);
@@ -160,9 +163,20 @@ export default function EscalationCall() {
 
   useEffect(monitorSlackAlerts, []);
   useEffect(monitorEscalations, []);
+  useLayoutEffect(() => {
+    setDock(document.querySelector<HTMLElement>(".pw-crew-stage-dock [data-escalation-dock]"));
+  }, []);
   useEffect(() => {
     try { setLabel(localStorage.getItem(RESPONDER_KEY) ?? ""); } catch { /* The paired browser still has an identifier. */ }
   }, []);
+  useEffect(() => {
+    if (!panel || phone.dialog) return;
+    function closeOutside(event: PointerEvent) {
+      if (event.target instanceof Node && !controls.current?.contains(event.target)) setPanel(null);
+    }
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [panel, phone.dialog]);
 
   const phoneConnected = snapshot?.phoneConnected ?? false;
 
@@ -171,22 +185,35 @@ export default function EscalationCall() {
     try { localStorage.setItem(RESPONDER_KEY, value.trim()); } catch { /* Session label still works. */ }
   }
 
-  return <div className="pw-es" onKeyDown={(event) => {
-    if (event.key === "Escape" && (settings || pairingOpen)) { setSettings(false); setPairingOpen(false); }
+  function closePanel() {
+    (controls.current?.querySelector<HTMLButtonElement>(".pw-es-tier[aria-expanded='true']") ?? chip.current)?.focus();
+    setPanel(null);
+  }
+
+  function openPairing() {
+    chip.current?.focus();
+    setPanel("pairing");
+    void preparePairing();
+  }
+
+  return dock && createPortal(<div className="pw-es" ref={controls} onKeyDown={(event) => {
+    if (event.key === "Escape" && panel && !phone.dialog) {
+      event.preventDefault();
+      closePanel();
+    }
   }}>
-    <button type="button" className="pw-es-chip" aria-label="Escalation thresholds" aria-expanded={settings} onClick={() => {
-      setSettings(!settings);
-      setPairingOpen(false);
+    <button type="button" ref={chip} className="pw-es-chip" aria-label="Escalation thresholds" aria-expanded={panel === "settings"} onClick={() => {
+      setPanel(panel === "settings" ? null : "settings");
     }}>
       <Bell size={14} aria-hidden />
       <span>{record ? "Escalation" : "Armed"}</span>
       <span className="pw-es-chip-values">{formatUsd(thresholds.loss)} / {thresholds.risk}</span>
       <Settings2 size={13} aria-hidden />
     </button>
-    {settings && <section className="pw-es-popover" aria-label="Escalation settings">
+    {panel === "settings" && <section className="pw-es-popover" aria-label="Escalation settings">
       <ThresholdForm thresholds={thresholds} onSave={(value) => {
         useEscalationStore.getState().setThresholds(value);
-        setSettings(false);
+        closePanel();
       }} label={label} onLabel={saveLabel} />
       <div className="pw-es-phone-settings">
         <button className="pw-es-text-button" type="button" onClick={phone.openPhone}>
@@ -195,35 +222,37 @@ export default function EscalationCall() {
         {phone.maskedNumber && <span className="pw-es-phone-mask">{phone.maskedNumber}</span>}
       </div>
       <button className="pw-es-text-button pw-es-test-action" type="button" onClick={() => {
-        if (phone.toggleTest()) setSettings(false);
+        if (phone.toggleTest()) closePanel();
       }}><FlaskConical size={15} aria-hidden /> {phone.testRunning ? "Clear test" : "Run test alert"}</button>
-      <button className="pw-es-text-button" type="button" disabled={busy} onClick={() => {
-        setSettings(false); setPairingOpen(true); void preparePairing();
-      }}><QrCode size={15} aria-hidden /> {phoneConnected ? "Show paired phone" : "Pair phone"}</button>
+      <button className="pw-es-text-button" type="button" disabled={busy} onClick={openPairing}>
+        <QrCode size={15} aria-hidden /> {phoneConnected ? "Show paired phone" : "Pair phone"}
+      </button>
+      {phone.testError && <p className="pw-es-note" role="status">{phone.testError}</p>}
     </section>}
-    <AlertLadder records={records} call={record} phoneConnected={phoneConnected} respond={respond} onRing={(high) => {
+    <AlertLadder records={records} call={record} phoneConnected={phoneConnected} respond={respond}
+      testRunning={phone.testRunning} openId={panel && typeof panel === "object" ? panel.alertId : undefined}
+      onOpen={(id) => setPanel(id ? { alertId: id } : null)} onRing={(high) => {
       if (phoneConnected) void ring(high);
-      else { setSettings(false); setPairingOpen(true); void preparePairing(); }
+      else openPairing();
     }} />
     {record && record.level === undefined && <AlertCard record={record} busy={busy} phoneConnected={phoneConnected}
       telephone={<TelephoneCard mode={phone.mode} maskedNumber={phone.maskedNumber} receipt={record.telephoneCalls?.at(-1)}
         resolved={!!record.resolvedAt} onCall={() => phone.callNow(record.id)}
         onDevice={() => phone.callFromDevice(record.id)} />} onRing={() => {
-      setSettings(false);
-      if (phoneConnected) void ring(record);
-      else { setPairingOpen(true); void preparePairing(); }
+      if (phoneConnected) { setPanel(null); void ring(record); }
+      else openPairing();
     }} onDismiss={() => {
-      useEscalationStore.getState().update(record.id, { dismissedAt: Date.now() }); setPairingOpen(false);
+      useEscalationStore.getState().update(record.id, { dismissedAt: Date.now() }); setPanel(null);
     }} />}
-    {pairingOpen && !settings && <section className="pw-es-popover" aria-label="Phone pairing">
-      <div className="pw-es-popup-head"><span>On-call link</span><button type="button" className="pw-es-icon" aria-label="Close pairing" onClick={() => setPairingOpen(false)}><X size={15} /></button></div>
+    {panel === "pairing" && <section className="pw-es-popover" aria-label="Phone pairing">
+      <div className="pw-es-popup-head"><span>On-call link</span><button type="button" className="pw-es-icon" aria-label="Close pairing" onClick={closePanel}><X size={15} /></button></div>
       {pairing ? <PairingCard pairing={pairing} connected={phoneConnected}
         canRenew={!activeRecord || !!(activeRecord.approved || activeRecord.acknowledged || activeRecord.resolvedAt || activeRecord.humanResponse)}
         onRenew={() => void preparePairing(true)} />
         : busy && <div className="pw-es-note">Opening phone link…</div>}
     </section>}
-    {(error || phone.testError) && <div className="pw-es-error" role="status">{error || phone.testError}</div>}
+    {error && <div className="pw-es-error" role="status">{error}</div>}
     {phone.dialog && <PhoneContactDialog contact={phone.contact} onSave={phone.savePhone}
       onRemove={() => phone.savePhone(null)} onDismiss={phone.closePhone} />}
-  </div>;
+  </div>, dock);
 }
