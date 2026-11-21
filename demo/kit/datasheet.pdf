@@ -1,0 +1,76 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R >> >> /Contents 7 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+7 0 obj
+<< /Length 2329 >>
+stream
+BT /F3 10 Tf 0.24 0.32 0.39 rg 1 0 0 1 48 735 Tm (BEBIDAS DEL NORTE / LINE 3) Tj ET
+BT /F2 27 Tf 0.11 0.16 0.21 rg 1 0 0 1 48 702 Tm (Equipment datasheet) Tj ET
+BT /F3 10 Tf 0.24 0.32 0.39 rg 1 0 0 1 48 679 Tm (ASSUMED \(SIMULATED PLANT\)) Tj ET
+0.11 0.16 0.21 rg 48 596 516 62 re f
+BT /F2 17 Tf 1 1 1 rg 1 0 0 1 64 633 Tm (RIO-F3-07) Tj ET
+BT /F1 11 Tf 1 1 1 rg 1 0 0 1 64 614 Tm (Remote I/O adapter) Tj ET
+0.94 0.96 0.97 rg 48 556 516 37 re f
+0.80 0.84 0.87 RG 0.7 w 48 556 m 564 556 l S
+BT /F1 11 Tf 0.24 0.32 0.39 rg 1 0 0 1 64 570 Tm (Asset tag) Tj ET
+BT /F2 12 Tf 0.11 0.16 0.21 rg 1 0 0 1 230 570 Tm (RIO-F3-07) Tj ET
+0.80 0.84 0.87 RG 0.7 w 48 519 m 564 519 l S
+BT /F1 11 Tf 0.24 0.32 0.39 rg 1 0 0 1 64 533 Tm (Equipment type) Tj ET
+BT /F2 12 Tf 0.11 0.16 0.21 rg 1 0 0 1 230 533 Tm (Remote I/O adapter) Tj ET
+0.94 0.96 0.97 rg 48 482 516 37 re f
+0.80 0.84 0.87 RG 0.7 w 48 482 m 564 482 l S
+BT /F1 11 Tf 0.24 0.32 0.39 rg 1 0 0 1 64 496 Tm (Vendor) Tj ET
+BT /F2 12 Tf 0.11 0.16 0.21 rg 1 0 0 1 230 496 Tm (Rockwell Automation) Tj ET
+0.80 0.84 0.87 RG 0.7 w 48 445 m 564 445 l S
+BT /F1 11 Tf 0.24 0.32 0.39 rg 1 0 0 1 64 459 Tm (Model) Tj ET
+BT /F2 12 Tf 0.11 0.16 0.21 rg 1 0 0 1 230 459 Tm (1734-AENTR) Tj ET
+0.94 0.96 0.97 rg 48 408 516 37 re f
+0.80 0.84 0.87 RG 0.7 w 48 408 m 564 408 l S
+BT /F1 11 Tf 0.24 0.32 0.39 rg 1 0 0 1 64 422 Tm (Room) Tj ET
+BT /F2 12 Tf 0.11 0.16 0.21 rg 1 0 0 1 230 422 Tm (Filler 3) Tj ET
+0.80 0.84 0.87 RG 0.7 w 48 371 m 564 371 l S
+BT /F1 11 Tf 0.24 0.32 0.39 rg 1 0 0 1 64 385 Tm (Network cell) Tj ET
+BT /F2 12 Tf 0.11 0.16 0.21 rg 1 0 0 1 230 385 Tm (Cell F3) Tj ET
+0.94 0.96 0.97 rg 48 334 516 37 re f
+0.80 0.84 0.87 RG 0.7 w 48 334 m 564 334 l S
+BT /F1 11 Tf 0.24 0.32 0.39 rg 1 0 0 1 64 348 Tm (Software revision) Tj ET
+BT /F2 12 Tf 0.11 0.16 0.21 rg 1 0 0 1 230 348 Tm (5.015) Tj ET
+BT /F2 13 Tf 0.11 0.16 0.21 rg 1 0 0 1 48 296 Tm (Installation observation) Tj ET
+BT /F1 11 Tf 0.11 0.16 0.21 rg 1 0 0 1 48 276 Tm (Inside the dry enclosure beside the Filler 3 operator station.) Tj ET
+BT /F1 11 Tf 0.11 0.16 0.21 rg 1 0 0 1 48 259 Tm (The enclosure provides protection during washdown.) Tj ET
+0.80 0.84 0.87 RG 0.7 w 48 86 m 564 86 l S
+BT /F3 9 Tf 0.24 0.32 0.39 rg 1 0 0 1 48 65 Tm (SITE WALK / 21 NOV 2026) Tj ET
+BT /F3 9 Tf 0.24 0.32 0.39 rg 1 0 0 1 512 65 Tm (01 / 01) Tj ET
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000261 00000 n 
+0000000331 00000 n 
+0000000406 00000 n 
+0000000474 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+2854
+%%EOF

@@ -6,6 +6,7 @@ import { parseIcs } from "./ics";
 import { loadSource, recentItems } from "./index";
 import { parseKev } from "./kev";
 import { parseNews } from "./news";
+import { plainText } from "./rss";
 
 describe("feed fixtures", () => {
   it("normalizes the KEV inclusion date, product and CVE", () => {
@@ -33,6 +34,10 @@ describe("feed fixtures", () => {
       url: "https://www.ncsc.gov.uk/news/test-incident", title: "Manufacturer reports a cyber incident",
       summary: "Source confirms an investigation.", cves: [], published: "2026-11-17T12:00:00.000Z",
     }]);
+  });
+
+  it("removes publisher markup escaped inside an RSS description", () => {
+    expect(plainText("&lt;p&gt;Vendor &lt;b&gt;notice&lt;/b&gt;.&lt;/p&gt;", 100)).toBe("Vendor notice.");
   });
 
   it("filters by publication time, retains the latest duplicate, and excludes future dates", () => {

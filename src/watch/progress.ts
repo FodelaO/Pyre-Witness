@@ -5,7 +5,7 @@ import type { Twin } from "@/twin/types";
 import { loadFeeds } from "./feeds";
 import { inventoryForTwin } from "./inventory";
 import { matchThreats } from "./match";
-import { WATCH_SOURCES } from "./sources";
+import { threatKey, WATCH_SOURCES } from "./sources";
 import type { WatchEvent, WatchEventData, WatchStage } from "./types";
 
 export function watchProgress(runId: string, emit: (event: WatchEvent) => void) {
@@ -37,11 +37,14 @@ export async function collectEvidence(twin: Twin, progress: ReturnType<typeof wa
   const endMatches = progress.begin("matches");
   const inventory = inventoryForTwin(twin);
   const candidates = matchThreats(items, inventory);
+  const news = items.filter(({ source }) => source === "ncsc-news");
+  const matchedNews = new Set(matchThreats(news, inventory, Infinity).map(({ threat }) => threatKey(threat)));
+  const unmatchedNews = news.filter((threat) => !matchedNews.has(threatKey(threat)));
   const risk = evaluateTwin(twin);
-  progress.send({ type: "matches", candidates });
+  progress.send({ type: "matches", candidates, unmatchedNews });
   endMatches("done", `${candidates.length} candidate matches`);
   return {
-    sources, items, inventory, candidates, risk,
+    sources, items, inventory, candidates, unmatchedNews, risk,
     warnings: failures.map(({ source, error }) => `${WATCH_SOURCES[source].label} · ${error}.`),
   };
 }

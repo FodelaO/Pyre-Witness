@@ -66,6 +66,10 @@ export const ASSUMED_BOM: Readonly<Record<string, Product>> = {
   "C-2": { vendor: "Danfoss", product: "VLT AutomationDrive FC 302", version: "8.46", productAliases: ["AutomationDrive", "FC 302"] },
 };
 
+export function inventoryFor(assetId: string): Readonly<Product> | undefined {
+  return Object.hasOwn(ASSUMED_BOM, assetId) ? ASSUMED_BOM[assetId] : undefined;
+}
+
 export function inventoryForTwin(twin: Twin): InventoryEntry[] {
   const internetEdges = new Set(twin.conduits
     .filter(({ from, to }) => [from, to].includes("Internet / Cloud"))
@@ -73,15 +77,18 @@ export function inventoryForTwin(twin: Twin): InventoryEntry[] {
 
   return twin.assets.flatMap((asset) => {
     const { id, cyber, network, origin } = asset;
-    const assumed = origin === "seed" ? ASSUMED_BOM[id] : undefined;
-    const product = assumed ?? (cyber?.vendor?.trim() && cyber.model?.trim()
-      ? { vendor: cyber.vendor.trim(), product: cyber.model.trim(), version: cyber.firmware?.trim() || undefined }
-      : undefined);
+    const assumed = origin === "seed" ? inventoryFor(id) : undefined;
+    const vendor = cyber?.vendor?.trim();
+    const model = cyber?.model?.trim();
+    const product = vendor && model && vendor.toLowerCase() !== "fictional plant inventory" ? {
+      ...(assumed?.vendor === vendor && assumed.product === model ? assumed : {}),
+      vendor, product: model, version: cyber?.firmware?.trim() || undefined,
+    } : assumed;
     if (!product) return [];
     return [{
       ...product,
       assetId: id,
-      identity: assumed ? "assumed" : "capture",
+      identity: origin === "seed" ? "assumed" : "capture",
       criticality: asset.criticality,
       exposure: {
         level: network.level,

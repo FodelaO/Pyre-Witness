@@ -1,0 +1,6 @@
+tag,type,vendor,model,room,network_cell,software_version
+LT-312,level transmitter,Endress+Hauser,Micropilot FMR62,Syrup room,Cell Syrup,1.01.00
+TT-217,temperature transmitter,Emerson,Rosemount 3144P,Blending & carbonation,Cell Blend,Rev 3
+VFD-PK3-07,variable frequency drive,Rockwell Automation,PowerFlex 525,Packaging,Cell Pack,7.001
+RIO-F3-07,remote I/O,Rockwell Automation,1734-AENTR,Filler 3,Cell F3,5.015
+WS-OT-07,engineering workstation,Dell,Precision 3660,Control room,Site operations,Windows 11 23H2

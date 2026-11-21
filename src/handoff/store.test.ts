@@ -1,6 +1,6 @@
 /** Exercise delivery, reconnect and expiry without opening a browser or port. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createHandoffStore } from "./store";
+import { createHandoffStore, MAX_UPLOADS_PER_SESSION } from "./store";
 import { HANDOFF_TTL_MS } from "./types";
 
 const payload = { images: [{ mimeType: "image/jpeg", dataBase64: "/9j/2Q==" }], note: "Front label" };
@@ -57,6 +57,34 @@ describe("phone handoff mailbox", () => {
     expect(first.close).toHaveBeenCalledWith("replaced");
     expect(first.send).not.toHaveBeenCalled();
     expect(replacement.send).toHaveBeenCalledOnce();
+  });
+
+  it("recognises only the owner's key and reports whether a session was opened", () => {
+    const store = createHandoffStore();
+    const opened = store.register("ABCD23", "0123456789abcdef0123456789abcdef");
+    const reconnect = store.register("ABCD23", "0123456789abcdef0123456789abcdef");
+    if (opened.status !== "ready" || reconnect.status !== "ready") throw new Error("Could not register fixture.");
+    expect(opened.created).toBe(true);
+    expect(reconnect.created).toBe(false);
+    expect(store.owns("ABCD23", "0123456789abcdef0123456789abcdef")).toBe(true);
+    expect(store.owns("ABCD23", "0123456789abcdef0123456789abcdee")).toBe(false);
+    expect(store.owns("ABCD23", "short")).toBe(false);
+    expect(store.owns("BCDE34", "0123456789abcdef0123456789abcdef")).toBe(false);
+  });
+
+  it("closes a pairing code after its upload allowance is used", () => {
+    const store = createHandoffStore();
+    const session = store.register("ABCD23", "key");
+    if (session.status !== "ready") throw new Error("Could not register fixture.");
+    const desktop = receiver();
+    session.subscribe(desktop);
+    for (let upload = 0; upload < MAX_UPLOADS_PER_SESSION; upload += 1) {
+      expect(store.publish("ABCD23", payload)).toBe(true);
+    }
+    expect(store.publish("ABCD23", payload)).toBe(false);
+    expect(desktop.send).toHaveBeenCalledTimes(MAX_UPLOADS_PER_SESSION);
+    expect(desktop.close).toHaveBeenCalledWith("expired");
+    expect(store.has("ABCD23")).toBe(false);
   });
 
   it("discards photos and frees capacity after ten minutes", () => {

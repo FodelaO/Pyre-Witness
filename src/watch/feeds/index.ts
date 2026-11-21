@@ -14,8 +14,8 @@ const parsers = { "cisa-kev": parseKev, "cisa-ics": parseIcs, "ncsc-news": parse
 export const sourceIds = Object.keys(parsers) as ThreatSource[];
 
 type CacheEntry = { pending: Promise<ThreatItem[]> } | { items: ThreatItem[]; expires: number };
-const server = globalThis as typeof globalThis & { pyreWatchFeeds?: Map<ThreatSource, CacheEntry> };
-const cache = (server.pyreWatchFeeds ??= new Map());
+const server = globalThis as typeof globalThis & { pyreNormalizedWatchFeeds?: Map<ThreatSource, CacheEntry> };
+const cache = (server.pyreNormalizedWatchFeeds ??= new Map());
 
 class FeedFailure extends Error {}
 
@@ -115,4 +115,14 @@ export async function loadFeeds(now: number, onSource: (result: SourceResult) =>
     return feed;
   }));
   return { items: loaded.flatMap(({ items }) => items), sources: loaded.map(({ result }) => result) };
+}
+
+export async function loadKnownExploitedCves(): Promise<ReadonlySet<string>> {
+  // A catalog entry can predate the watch window and still corroborate a fresh advisory.
+  try {
+    const catalog = await getItems("cisa-kev").promise;
+    return new Set(catalog.map(({ id }) => id));
+  } catch {
+    return new Set();
+  }
 }

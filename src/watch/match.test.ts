@@ -1,7 +1,7 @@
 /** Verifies the assumed inventory join and pure advisory matching. */
 import { SEED_TWIN } from "@/twin/seed";
 import { describe, expect, it } from "vitest";
-import { ASSUMED_BOM, inventoryForTwin } from "./inventory";
+import { ASSUMED_BOM, inventoryFor, inventoryForTwin } from "./inventory";
 import { matchThreats } from "./match";
 import type { ThreatItem } from "./types";
 
@@ -13,6 +13,12 @@ const forti: ThreatItem = {
 
 describe("watch matcher", () => {
   const inventory = inventoryForTwin(SEED_TWIN);
+
+  it("exposes only known assumed products through the single-asset lookup", () => {
+    expect(inventoryFor("HMI-F3")).toMatchObject({ vendor: "Rockwell Automation", product: "PanelView Plus 7" });
+    expect(inventoryFor("unmapped-device")).toBeUndefined();
+    expect(inventoryFor("constructor")).toBeUndefined();
+  });
 
   it("binds each assumed component to a real seed tag without changing the twin", () => {
     expect(inventory.filter(({ identity }) => identity === "assumed")).toHaveLength(Object.keys(ASSUMED_BOM).length);

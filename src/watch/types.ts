@@ -68,10 +68,17 @@ export interface WatchFinding {
 
 export interface WatchStage {
   name: "feeds" | "matches" | "triage" | "reassessment" | "rules" | "managed";
-  state: "done" | "failed" | "skipped";
+  state: "done" | "partial" | "failed" | "skipped";
   ms: number;
   detail: string;
   model?: string;
+}
+
+export interface ManagedWatchProgress {
+  phase: "started" | "running" | "done" | "failed";
+  environmentId?: string;
+  ms: number;
+  feeds?: Array<{ source: ThreatSource; status?: "fetched" | "failed" | null; count?: number | null }>;
 }
 
 export interface WatchReport {
@@ -82,18 +89,21 @@ export interface WatchReport {
   headline: string;
   baselineScore: number;
   candidates: Candidate[];
+  unmatchedNews?: ThreatItem[];
   items: WatchFinding[];
   recommendations: Array<Mitigation & { riskDelta: number }>;
   sources: SourceResult[];
   stages: WatchStage[];
   warnings: string[];
+  managed?: ManagedWatchProgress;
 }
 
 export type WatchEventData =
   | { type: "started"; date: string }
   | { type: "working"; name: WatchStage["name"] }
   | { type: "source"; result: SourceResult }
-  | { type: "matches"; candidates: Candidate[] }
+  | { type: "matches"; candidates: Candidate[]; unmatchedNews?: ThreatItem[] }
+  | { type: "managed-progress"; progress: ManagedWatchProgress }
   | { type: "stage"; stage: WatchStage }
   | { type: "done"; report: WatchReport }
   | { type: "error"; message: string };

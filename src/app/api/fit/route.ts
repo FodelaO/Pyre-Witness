@@ -1,7 +1,10 @@
 /** Generates and caches real Gemini images for the fit comparison. */
 import { z } from "zod";
+import { BodyError, readBoundedJson } from "@/app/api/health/boundedJson";
+import { crossOriginRejection } from "@/app/api/health/originGuard";
+import { sharedRateLimit, tooManyRequests } from "@/app/api/health/rateLimit";
 import { areaId, deviceProfileSchema, kind } from "@/gemini/schemas";
-import { geminiClients, providerFailure } from "@/gemini/transport";
+import { geminiClients, noSdkRetries, providerFailure } from "@/gemini/transport";
 import { MODEL_IDS } from "@/gemini/models";
 import { cachedFit, cacheFit, fitCacheKey } from "@/fit/cache";
 import { buildFitPrompt } from "@/fit/prompt";
@@ -15,6 +18,11 @@ export const maxDuration = 60;
 
 const TIMEOUT_MS = 50_000;
 const HEADERS = { "Cache-Control": "no-store" };
+// One reference photo (2 MB, about 2.8 MB as base64) plus the profile and scene text.
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
+// A capture renders two previews. Twenty generations per ten minutes covers a live demo with
+// regenerations and stops a loop from draining the image quota.
+const generations = sharedRateLimit("fit-generate", 20, 10 * 60_000);
 const text = z.string().trim().min(1).max(1_200);
 const requestSchema = z.object({
   profile: deviceProfileSchema,
@@ -47,7 +55,14 @@ function failure(error: string, status: number): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const payload: unknown = await request.json().catch(() => undefined);
+  const rejected = crossOriginRejection(request);
+  if (rejected) return rejected;
+  let payload: unknown;
+  try {
+    payload = await readBoundedJson(request, MAX_BODY_BYTES);
+  } catch (error) {
+    if (error instanceof BodyError && error.status !== 400) return failure(error.message, error.status);
+  }
   const parsed = requestSchema.safeParse(payload);
   if (!parsed.success) return failure("Invalid fit preview request. Check the device and placement.", 400);
   if (!process.env.GEMINI_API_KEY?.trim()) {
@@ -63,6 +78,10 @@ export async function POST(request: Request): Promise<Response> {
   const cached = !regenerate && cachedFit(key);
   if (cached) return Response.json(cached, { headers: HEADERS });
 
+  // Only requests that reach the image model use the budget. Cached previews stay free.
+  const wait = generations.take();
+  if (wait) return tooManyRequests(wait, "Fit image generation");
+
   const prompt = buildFitPrompt(input, scene);
   const timeout = AbortSignal.timeout(TIMEOUT_MS);
   const signal = AbortSignal.any([request.signal, timeout]);
@@ -71,15 +90,16 @@ export async function POST(request: Request): Promise<Response> {
     const reference = input.image;
     const interaction = await geminiClients().interactions.create({
       model: MODEL_IDS.image,
-      input: [
+      input: reference ? [
         { type: "text", text: prompt },
-        ...(reference ? [{ type: "image" as const, mime_type: reference.mimeType, data: reference.dataBase64 }] : []),
-      ],
+        { type: "image", mime_type: reference.mimeType, data: reference.dataBase64 },
+      ] : prompt,
+      generation_config: { thinking_level: "minimal" },
       response_format: { type: "image", aspect_ratio: "4:3", image_size: "1K", mime_type: "image/jpeg" },
       store: false,
       stream: false,
       automatic_continuation: false,
-    }, { signal });
+    }, { signal, retries: noSdkRetries });
     signal.throwIfAborted();
     const image = interaction.output_image;
     const mimeType = image?.mime_type ?? "image/jpeg";

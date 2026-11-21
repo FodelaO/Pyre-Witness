@@ -74,5 +74,7 @@ export function usePhotoDraft() {
     setError("");
   }
 
-  return { photos, preparing, error, prepare, addPrepared, clear, remove };
+  const clearError = () => setError("");
+
+  return { photos, preparing, error, prepare, addPrepared, clear, remove, clearError };
 }

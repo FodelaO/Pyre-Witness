@@ -6,10 +6,11 @@ import { useTwinStore } from "@/twin/store";
 import { create } from "zustand";
 import { WATCH_SOURCES } from "./sources";
 import { readWatchStream } from "./streamClient";
-import type { Candidate, SourceResult, WatchEvent, WatchReport, WatchStage } from "./types";
+import type { Candidate, ManagedWatchProgress, SourceResult, ThreatItem, WatchEvent, WatchReport, WatchStage } from "./types";
+import {
+  LAST_WATCH_DAY, readWatchStorage, rememberWatchDecision, restoreWatchReport, saveWatchReport, watchDecision, writeWatchStorage,
+} from "./watchCache";
 
-const LAST_DAY = "pyre-witness:watch:last-day";
-const LAST_REPORT = "pyre-witness:watch:last-report";
 export const watchDay = () => new Date().toISOString().slice(0, 10);
 type Mode = WatchReport["mode"];
 
@@ -17,10 +18,12 @@ export interface WatchRunState {
   status: "idle" | "running" | "finished" | "error";
   sources: SourceResult[];
   candidates: Candidate[];
+  unmatchedNews?: ThreatItem[];
   stages: WatchStage[];
   working?: WatchStage["name"];
   report?: WatchReport;
   message?: string;
+  managedProgress?: ManagedWatchProgress;
 }
 
 interface WatchState {
@@ -32,26 +35,12 @@ interface WatchState {
 
 const empty: WatchRunState = { status: "idle", sources: [], candidates: [], stages: [] };
 
-function readStorage(key: string): string | null {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-
-function writeStorage(key: string, value: string): void {
-  try { localStorage.setItem(key, value); } catch { /* Storage may be disabled. */ }
-}
-
-function savedReport(date: string): WatchReport | undefined {
-  try {
-    const report: WatchReport = JSON.parse(readStorage(LAST_REPORT) ?? "null");
-    if (report?.date === date && report.mode === "local" && Array.isArray(report.stages)
-      && Array.isArray(report.items) && Array.isArray(report.sources) && Array.isArray(report.candidates)) {
-      return { ...report, recommendations: [] };
-    }
-  } catch { /* A missing or outdated display cache is safe to discard. */ }
-}
-
 function finished(report: WatchReport, message?: string): WatchRunState {
-  return { status: "finished", sources: report.sources, candidates: report.candidates, stages: report.stages, report, message };
+  return {
+    status: "finished", sources: report.sources, candidates: report.candidates, unmatchedNews: report.unmatchedNews,
+    stages: report.stages, report, message,
+    managedProgress: report.managed,
+  };
 }
 
 function activity(event: WatchEvent): void {
@@ -75,9 +64,13 @@ export const useWatchStore = create<WatchState>((set, get) => ({
   runDaily: () => {
     const date = watchDay();
     if (lastAttempt === date) return;
-    if (readStorage(LAST_DAY) === date) {
+    if (get().managed.status === "idle") {
+      const managed = restoreWatchReport(date, "managed");
+      if (managed) set({ managed: finished(managed) });
+    }
+    if (readWatchStorage(LAST_WATCH_DAY) === date) {
       lastAttempt = date;
-      const report = savedReport(date);
+      const report = restoreWatchReport(date, "local");
       if (report) set({ local: finished(report) });
       return;
     }
@@ -87,7 +80,7 @@ export const useWatchStore = create<WatchState>((set, get) => ({
     if (get()[mode].status === "running") return;
     if (mode === "local") {
       lastAttempt = watchDay();
-      writeStorage(LAST_DAY, lastAttempt);
+      writeWatchStorage(LAST_WATCH_DAY, lastAttempt);
     }
 
     const update = (patch: Partial<WatchRunState>) => set((state) => ({ [mode]: { ...state[mode], ...patch } }));
@@ -100,7 +93,8 @@ export const useWatchStore = create<WatchState>((set, get) => ({
         switch (event.type) {
           case "working": update({ working: event.name }); break;
           case "source": update({ sources: [...run.sources, event.result] }); break;
-          case "matches": update({ candidates: event.candidates }); break;
+          case "matches": update({ candidates: event.candidates, unmatchedNews: event.unmatchedNews }); break;
+          case "managed-progress": update({ managedProgress: event.progress }); break;
           case "stage": update({ stages: [...run.stages, event.stage] }); break;
         }
       });
@@ -114,10 +108,18 @@ export const useWatchStore = create<WatchState>((set, get) => ({
           message = "Twin changed during this run. Refresh before reviewing proposals.";
         }
       }
-      if (mode === "local") writeStorage(LAST_REPORT, JSON.stringify({ ...report, recommendations: [] }));
+      saveWatchReport(report);
       set({ [mode]: finished(report, message) });
     } catch (error) {
       update({ status: "error", working: undefined, message: error instanceof Error ? error.message : "Watch unavailable." });
     }
   },
 }));
+
+useTwinStore.subscribe(({ mitigations }, previous) => {
+  if (mitigations === previous.mitigations) return;
+  const recorded = new Set(previous.mitigations.filter(watchDecision).map(({ id }) => id));
+  for (const item of mitigations) {
+    if (watchDecision(item) && !recorded.has(item.id)) rememberWatchDecision(item);
+  }
+});

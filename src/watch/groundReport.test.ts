@@ -74,4 +74,25 @@ describe("watch evidence and approval", () => {
       expect(reassessmentSchema.safeParse({ ...draft, recommendations: [{ ...draft.recommendations[0], effects: [effect] }] }).success).toBe(false);
     }
   });
+
+  it.each(["port-lock", "locked-cabinet"])("measures %s and installs it only after approval", (protection) => {
+    const store = useTwinStore.getState();
+    const hmi = inventoryForTwin(store.twin).find(({ assetId }) => assetId === "HMI-F3")!;
+    const asset = () => useTwinStore.getState().twin.assets.find(({ id }) => id === hmi.assetId);
+    const fixture = reassessmentSchema.parse({
+      ...draft,
+      items: [{ ...draft.items[0], affectedAssetIds: [hmi.assetId] }],
+      recommendations: [{
+        threatId, title: "Protect the service port", description: "Add an independent safeguard.", kind: "physical",
+        effects: [{ type: "add_protection", assetId: hmi.assetId, protection }],
+      }],
+    });
+    const [proposed] = groundReport(fixture, [{ ...candidate, inventory: hmi }], store.twin, store.risk.score, "protection").recommendations;
+    expect(proposed.riskDelta).toBeLessThan(0);
+    store.proposeMitigations([proposed]);
+    expect(asset()?.protections ?? []).not.toContain(protection);
+    store.decideMitigation(proposed.id, "approved");
+    expect(asset()?.protections).toContain(protection);
+    expect(useTwinStore.getState().risk.score).toBeCloseTo(store.risk.score + proposed.riskDelta, 2);
+  });
 });

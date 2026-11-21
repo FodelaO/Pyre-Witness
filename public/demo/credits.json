@@ -1,0 +1,62 @@
+[
+  {
+    "file": "ip-camera.jpg",
+    "label": "IP camera",
+    "title": "Axis network webcam.jpg",
+    "author": "User Mike1024 on en.wikipedia",
+    "licence": "Public domain",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Axis_network_webcam.jpg",
+    "licenceUrl": "https://commons.wikimedia.org/wiki/File:Axis_network_webcam.jpg#Licensing",
+    "modifications": "Resized as needed and re-encoded as JPEG."
+  },
+  {
+    "file": "lte-router.jpg",
+    "label": "LTE router",
+    "title": "Huawei 4G+ Modem.jpg",
+    "author": "Kskhh",
+    "licence": "CC BY-SA 4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Huawei_4G%2B_Modem.jpg",
+    "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "modifications": "Resized as needed and re-encoded as JPEG."
+  },
+  {
+    "file": "usb-drive.jpg",
+    "label": "USB drive",
+    "title": "SanDisk Cruzer Blade.jpg",
+    "author": "아라",
+    "licence": "CC0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:SanDisk_Cruzer_Blade.jpg",
+    "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "modifications": "Resized as needed and re-encoded as JPEG."
+  },
+  {
+    "file": "access-point.jpg",
+    "label": "Access point",
+    "title": "Unifi AC Lite Access Point.jpg",
+    "author": "ServerGuruBrisbane",
+    "licence": "CC BY-SA 4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Unifi_AC_Lite_Access_Point.jpg",
+    "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "modifications": "Resized as needed and re-encoded as JPEG."
+  },
+  {
+    "file": "phone.jpg",
+    "label": "Phone",
+    "title": "Apple iPhone 15.jpg",
+    "author": "IPHONE 15",
+    "licence": "CC BY-SA 4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Apple_iPhone_15.jpg",
+    "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "modifications": "Resized as needed and re-encoded as JPEG."
+  },
+  {
+    "file": "mug.jpg",
+    "label": "Mug",
+    "title": "Coffee mug on table.jpg",
+    "author": "Adam S. Keck",
+    "licence": "CC BY-SA 4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Coffee_mug_on_table.jpg",
+    "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "modifications": "Resized as needed and re-encoded as JPEG."
+  }
+]

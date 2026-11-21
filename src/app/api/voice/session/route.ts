@@ -1,5 +1,5 @@
 /** Mints a one-use Gemini Live token with a locked Chief session configuration. */
-import { VOICE_HEADERS, VoiceHttpError, voiceError, voiceKey } from "../response";
+import { VOICE_HEADERS, VoiceHttpError, voiceBudget, voiceError, voiceKey, voiceSessions } from "../response";
 import { chiefSetup } from "./setup";
 
 export const runtime = "nodejs";
@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export async function POST(request: Request): Promise<Response> {
   try {
     const key = voiceKey(request);
+    voiceBudget(voiceSessions, "Chief voice");
     const now = Date.now();
     const expiresAt = new Date(now + 8 * 60_000).toISOString();
     const response = await fetch("https://generativelanguage.googleapis.com/v1beta/auth_tokens", {

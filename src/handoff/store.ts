@@ -1,6 +1,13 @@
 /** A bounded, expiring in-memory mailbox per desktop handoff session. */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { HANDOFF_TTL_MS, type HandoffPacket, type HandoffPayload } from "./types";
+
+/** Uploads one pairing code accepts before it must be replaced by a new QR code. */
+export const MAX_UPLOADS_PER_SESSION = 20;
+
+const digest = (value: string) => createHash("sha256").update(value).digest();
+/** Compares receiver keys without leaking the position of the first differing character. */
+const sameKey = (left: string, right: string) => timingSafeEqual(digest(left), digest(right));
 
 interface Subscriber {
   send: (packet: HandoffPacket) => void;
@@ -13,6 +20,7 @@ interface Session {
   timer: ReturnType<typeof setTimeout>;
   latest: HandoffPacket | null;
   subscriber: Subscriber | null;
+  uploads: number;
 }
 
 const MAX_SESSIONS = 12;
@@ -39,19 +47,22 @@ export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIO
 
   function register(code: string, key: string) {
     let session = active(code);
+    const created = !session;
     if (session) {
-      if (session.key !== key) return { status: "conflict" } as const;
+      if (!sameKey(session.key, key)) return { status: "conflict" } as const;
     } else {
       if (sessions.size >= capacity) return { status: "full" } as const;
       const timer = setTimeout(() => expire(code), ttlMs);
       timer.unref?.();
-      session = { key, expiresAt: Date.now() + ttlMs, timer, latest: null, subscriber: null };
+      session = { key, expiresAt: Date.now() + ttlMs, timer, latest: null, subscriber: null, uploads: 0 };
       sessions.set(code, session);
     }
 
     const connected = session;
     return {
       status: "ready",
+      /** True when this call opened the session, false for the owner's reconnect. */
+      created,
       expiresAt: connected.expiresAt,
       subscribe(subscriber: Subscriber) {
         const previous = connected.subscriber;
@@ -68,9 +79,20 @@ export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIO
   return {
     register,
     has: (code: string) => !!active(code),
+    /** True only for the desktop that opened this live session. */
+    owns(code: string, key: string) {
+      const session = active(code);
+      return !!session && sameKey(session.key, key);
+    },
     publish(code: string, payload: HandoffPayload) {
       const session = active(code);
       if (!session) return false;
+      // A code is reusable for "Send more", but not as an open-ended upload channel.
+      if (session.uploads >= MAX_UPLOADS_PER_SESSION) {
+        expire(code);
+        return false;
+      }
+      session.uploads += 1;
       const packet = { ...payload, id: randomUUID() };
       session.latest = packet;
       session.subscriber?.send(packet);
@@ -79,5 +101,6 @@ export function createHandoffStore(ttlMs = HANDOFF_TTL_MS, capacity = MAX_SESSIO
   };
 }
 
-const memory = globalThis as typeof globalThis & { pyreHandoffStore?: ReturnType<typeof createHandoffStore> };
-export const handoffStore = (memory.pyreHandoffStore ??= createHandoffStore());
+// The key carries a version so a hot reload never reuses a store built from an older shape.
+const memory = globalThis as typeof globalThis & { pyreHandoffStoreV2?: ReturnType<typeof createHandoffStore> };
+export const handoffStore = (memory.pyreHandoffStoreV2 ??= createHandoffStore());

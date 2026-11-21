@@ -54,10 +54,10 @@ function matchThreat(threat: ThreatItem, inventory: InventoryEntry[]): Candidate
   });
 }
 
-export function matchThreats(threats: ThreatItem[], inventory: InventoryEntry[]): Candidate[] {
+export function matchThreats(threats: ThreatItem[], inventory: InventoryEntry[], limit = MAX_CANDIDATES): Candidate[] {
   return threats.flatMap((threat) => matchThreat(threat, inventory))
     .sort((a, b) => b.score - a.score || b.inventory.criticality - a.inventory.criticality
       || b.threat.published.localeCompare(a.threat.published) || a.threat.id.localeCompare(b.threat.id)
       || a.threat.source.localeCompare(b.threat.source) || a.inventory.assetId.localeCompare(b.inventory.assetId))
-    .slice(0, MAX_CANDIDATES);
+    .slice(0, limit);
 }

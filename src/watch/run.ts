@@ -6,8 +6,11 @@ import type { Twin } from "@/twin/types";
 import { groundReport } from "./groundReport";
 import { collectEvidence, modelError, watchProgress } from "./progress";
 import { assessThreats } from "./reassess";
-import { triageCandidates, type TriagedCandidate } from "./triage";
-import type { WatchEvent, WatchReport } from "./types";
+import { askDecisionsBatch, triageCandidates, type TriagedCandidate } from "./triage";
+import type { Candidate, WatchEvent, WatchReport } from "./types";
+
+const candidateKey = ({ threat, inventory }: Candidate) => JSON.stringify([threat.source, threat.id, inventory.assetId]);
+const REASSESSMENT_TIMEOUT_MS = 85_000;
 
 export async function runWatch(
   twin: Twin,
@@ -16,11 +19,11 @@ export async function runWatch(
   runId: string = randomUUID(),
 ): Promise<WatchReport> {
   const progress = watchProgress(runId, emit);
-  const { sources, candidates, risk, warnings } = await collectEvidence(twin, progress, signal);
+  const { sources, candidates, unmatchedNews, risk, warnings } = await collectEvidence(twin, progress, signal);
   let reviewed = candidates;
   const complete = (headline: string, items: WatchReport["items"] = [], recommendations: WatchReport["recommendations"] = []): WatchReport => ({
     date: progress.date, runId, mode: "local", finishedAt: Date.now(), headline, items, recommendations,
-    baselineScore: risk.score, sources, candidates: reviewed, stages: progress.stages, warnings,
+    baselineScore: risk.score, sources, candidates: reviewed, unmatchedNews, stages: progress.stages, warnings,
   });
 
   const endTriage = progress.begin("triage");
@@ -39,19 +42,21 @@ export async function runWatch(
   }
 
   const { decisions, interactions } = geminiClients();
-  const triageSignal = AbortSignal.any([signal, AbortSignal.timeout(22_000)]);
-  let triaged: TriagedCandidate[];
-  try {
-    triaged = await triageCandidates(decisions, candidates, triageSignal);
-    const count = (status: TriagedCandidate["disposition"]) => triaged.filter(({ disposition }) => disposition === status).length;
-    endTriage("done", `${count("supported")} supported · ${count("uncertain")} uncertain · ${count("excluded")} excluded`, MODEL_IDS.decisions);
-  } catch (error) {
-    signal.throwIfAborted();
-    endTriage("failed", modelError(MODEL_IDS.decisions, error, triageSignal), MODEL_IDS.decisions);
-    warnings.push("Candidates escalated to Neon with Decisions triage unavailable.");
-    triaged = candidates.map((candidate) => ({ ...candidate, disposition: "uncertain" }));
+  const triage = await triageCandidates(candidates, signal, (batch, deadline) => askDecisionsBatch(decisions, batch, deadline));
+  const triaged = triage.reviewed;
+  if (!triaged.length) {
+    endTriage("skipped", "No strong inventory matches to triage", MODEL_IDS.decisions);
+    skipAssessment("No shortlisted candidates to reassess");
+    return complete("Inventory candidates available · below the triage threshold");
   }
-  reviewed = triaged;
+
+  const resultsByCandidate = new Map(triaged.map((candidate) => [candidateKey(candidate), candidate]));
+  reviewed = candidates.map((candidate) => resultsByCandidate.get(candidateKey(candidate)) ?? candidate);
+  const count = (status: TriagedCandidate["disposition"]) => triaged.filter(({ disposition }) => disposition === status).length;
+  const deferred = candidates.length - triaged.length;
+  const triageState = !triage.warnings.length ? "done" : triage.warnings.length === triage.batches ? "failed" : "partial";
+  endTriage(triageState, `${count("supported")} supported · ${count("uncertain")} uncertain · ${count("excluded")} excluded · ${deferred} outside shortlist`, MODEL_IDS.decisions);
+  warnings.push(...triage.warnings);
 
   const surviving = triaged.filter(({ disposition }) => disposition !== "excluded");
   if (!surviving.length) {
@@ -60,7 +65,7 @@ export async function runWatch(
   }
 
   const endAssessment = progress.begin("reassessment");
-  const neonSignal = AbortSignal.any([signal, AbortSignal.timeout(45_000)]);
+  const neonSignal = AbortSignal.any([signal, AbortSignal.timeout(REASSESSMENT_TIMEOUT_MS)]);
   let draft;
   try {
     ({ value: draft } = await assessThreats(interactions, surviving, twin, risk, neonSignal));
@@ -75,5 +80,6 @@ export async function runWatch(
   const grounded = groundReport(draft, surviving, twin, risk.score, runId);
   warnings.push(...grounded.warnings);
   endRules("done", `${grounded.recommendations.length} proposal deltas measured`, "rules engine");
-  return complete(grounded.headline, grounded.items, grounded.recommendations);
+  const headline = triageState === "partial" ? `Partial triage · ${grounded.headline}` : grounded.headline;
+  return complete(headline, grounded.items, grounded.recommendations);
 }

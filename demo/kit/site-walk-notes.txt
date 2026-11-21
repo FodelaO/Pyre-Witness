@@ -1,0 +1,12 @@
+BEBIDAS DEL NORTE / LINE 3
+SITE WALK | 21 NOV 2026 | ASSUMED (SIMULATED PLANT)
+
+Filler 3: Inside the dry enclosure beside the operator station, the new remote I/O
+adapter is tagged RIO-F3-07. Plate: Rockwell Automation 1734-AENTR, rev 5.015.
+Cabinet schedule lists Cell F3. Washdown rating applies to the enclosure.
+
+Packaging: The case-conveyor drive in the conveyor cabinet is tagged VFD-PK3-07.
+Plate: Rockwell Automation PowerFlex 525, rev 7.001. Cabinet schedule lists Cell Pack.
+
+Syrup room: LT-312 is an Endress+Hauser Micropilot FMR62 level transmitter fitted
+to the day tank. The loop sheet lists Cell Syrup. Display shows revision 1.01.00.

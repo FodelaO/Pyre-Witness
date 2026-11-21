@@ -3,7 +3,7 @@ import { ATTACK_ICS } from "@/data/attack-ics";
 import { MODEL_IDS, THINKING } from "@/gemini/models";
 import { structuredInteraction, type GeminiClients } from "@/gemini/transport";
 import type { RiskReport, Twin } from "@/twin/types";
-import { reassessmentSchema } from "./reassessmentSchema";
+import { reassessmentSchema, reviewOnlySchema, type Reassessment } from "./reassessmentSchema";
 import { threatKey } from "./sources";
 import type { TriagedCandidate } from "./triage";
 
@@ -15,8 +15,9 @@ export const DEFENSIVE_REPORT_PROMPT = [
   "Every item must use one supplied threatId and affected asset ids from that advisory's candidates. The BOM is assumed. Explain material uncertainty about version or exposure. Use a listed ATT&CK for ICS technique id when justified, otherwise null.",
   "riskDelta is an estimate of additional points from the advisory (0–100), or null if unsupported. The rules engine owns the measured baseline and proposal score.",
   "Propose a few defensive mitigations tied to an item using its threatId. For uncertain identity or applicability, prioritize verification and vendor patch planning. Use note to mark for patch review without claiming installation.",
+  "Use add_protection for a relevant physical safeguard the asset lacks, such as port-lock or locked-cabinet. The plant operator reviews all proposed changes.",
   "Only use existing asset, area, network zone and conduit ids. Restrict remote or cloud flags to false. Remove network connections only. A conduit may use an existing firewall/switch and a subset of current allows. Preserve process equipment, safety controls, and required production flows. Leave out unsupported effects.",
-  "Summarize the supported or uncertain developments in one short headline. Empty lists are valid when evidence is insufficient.",
+  "Use at most five findings and four proposals. Keep each explanation to one short sentence and propose one or two effects per recommendation. Empty lists are valid when evidence is insufficient.",
 ].join(" ");
 
 export function assessThreats(
@@ -27,11 +28,8 @@ export function assessThreats(
   signal: AbortSignal,
 ) {
   const affected = new Set(candidates.map(({ inventory }) => inventory.assetId));
-  const input = {
-    candidates: candidates.map(({ threat, ...candidate }) => ({ threatId: threatKey(threat), threat, ...candidate })),
-    affectedAssets: twin.assets.filter(({ id }) => affected.has(id)).map(({ id, physical, safetyCritical, status }) => ({
-      id, area: physical.area, kind: physical.kind, connections: physical.connections.map(({ to, medium }) => ({ to, medium })), safetyCritical, status,
-    })),
+  const reviewOnly = candidates.every(({ disposition }) => disposition === "uncertain");
+  const controls = reviewOnly ? undefined : {
     areas: twin.areas.map(({ id, name, kind, attrs, typicalLevels }) => ({ id, name, kind, attrs, typicalLevels })),
     networkZones: [...new Map(twin.assets.map(({ network }) => [
       `${network.level}:${network.area}`, { name: network.area, level: network.level },
@@ -39,17 +37,35 @@ export function assessThreats(
     conduits: twin.conduits,
     availableEnforcers: twin.assets.filter(({ physical }) => ["firewall", "network_switch"].includes(physical.kind))
       .map(({ id, network }) => ({ id, zone: network.area })),
+  };
+  const input = {
+    candidates: candidates.map(({ threat, inventory, disposition, decisions, versionMentioned }) => ({
+      threatId: threatKey(threat), title: threat.title, summary: threat.summary, cves: threat.cves,
+      asset: {
+        id: inventory.assetId, vendor: inventory.vendor, product: inventory.product, version: inventory.version,
+        identity: inventory.identity, criticality: inventory.criticality, exposure: inventory.exposure,
+      },
+      disposition, decisions, versionMentioned,
+    })),
+    affectedAssets: twin.assets.filter(({ id }) => affected.has(id)).map(({ id, physical, safetyCritical, protections, status }) => ({
+      id, area: physical.area, kind: physical.kind, connections: physical.connections.map(({ to, medium }) => ({ to, medium })), safetyCritical, protections, status,
+    })),
+    controls,
     rulesEngine: {
-      score: risk.score, band: risk.band, byArea: risk.byArea,
-      findings: risk.findings.filter(({ assetId }) => affected.has(assetId)),
+      score: risk.score, band: risk.band,
+      findings: risk.findings.filter(({ assetId }) => affected.has(assetId))
+        .map(({ assetId, ruleId, title, severity }) => ({ assetId, ruleId, title, severity })),
       exposure: risk.paths.filter(({ target }) => affected.has(target)).map(({ target, severity, likelihood, impact }) => ({ target, severity, likelihood, impact })),
     },
-    techniques: techniqueCatalog,
+    techniques: techniqueCatalog.map(({ id, name }) => [id, name]),
   };
-  return structuredInteraction(client, reassessmentSchema, {
+  const instruction = reviewOnly
+    ? `${DEFENSIVE_REPORT_PROMPT} Every match is uncertain. Use one procedural note per proposal for confirmation or patch planning. Keep each reason and proposal description to 100 characters.`
+    : DEFENSIVE_REPORT_PROMPT;
+  return structuredInteraction<Reassessment>(client, reviewOnly ? reviewOnlySchema : reassessmentSchema, {
     model: MODEL_IDS.chief,
     input: JSON.stringify(input),
-    system_instruction: DEFENSIVE_REPORT_PROMPT,
+    system_instruction: instruction,
     generation_config: { thinking_level: THINKING.chief },
     store: false,
   }, signal);

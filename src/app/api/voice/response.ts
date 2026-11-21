@@ -1,4 +1,7 @@
 /** Gives both server-side voice routes bounded requests and sanitized JSON errors. */
+import { crossOriginRejection } from "@/app/api/health/originGuard";
+import { sharedRateLimit, type RateLimit } from "@/app/api/health/rateLimit";
+
 export const VOICE_HEADERS = { "Cache-Control": "no-store" };
 
 export class VoiceHttpError extends Error {
@@ -7,8 +10,19 @@ export class VoiceHttpError extends Error {
   }
 }
 
+/** Per-process budgets: Live sessions are billed per minute of audio, speech per uncached text. */
+// The client keeps one Live link open across turns and reconnects after 90 s idle or an error,
+// so twenty new sessions in five minutes leaves room for a talkative demo on a poor network.
+export const voiceSessions = sharedRateLimit("voice-session", 20, 5 * 60_000);
+export const voiceSpeech = sharedRateLimit("voice-speak", 30, 5 * 60_000);
+
+export function voiceBudget(limit: RateLimit, what: string): void {
+  const wait = limit.take();
+  if (wait) throw new VoiceHttpError(429, `${what} is rate limited on this server. Try again in ${wait} s.`);
+}
+
 export function voiceKey(request: Request): string {
-  if (request.headers.get("sec-fetch-site") === "cross-site") {
+  if (crossOriginRejection(request)) {
     throw new VoiceHttpError(403, "Open Pyre Witness to use Chief voice.");
   }
   const key = process.env.GEMINI_API_KEY?.trim();

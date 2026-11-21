@@ -1,9 +1,9 @@
 /** Renders a compact evidence list and the watch-specific approval cards. */
 "use client";
 
-import { ArrowUpRight } from "lucide-react";
+import { WatchLoss } from "@/econ/mountsWatch";
 import { useTwinStore } from "@/twin/store";
-import { WATCH_SOURCES } from "./sources";
+import { threatKey, WATCH_SOURCES } from "./sources";
 import type { Candidate, ThreatItem, WatchFinding, WatchReport } from "./types";
 
 const chip = "rounded border border-pw-line-strong px-1.5 py-0.5 font-mono text-[10px]";
@@ -29,60 +29,36 @@ function candidateRows(candidates: Candidate[]): Row[] {
   return [...rows.values()];
 }
 
-function AssetTags({ ids }: { ids: string[] }) {
-  const assets = useTwinStore((state) => state.twin.assets);
-  const hover = useTwinStore((state) => state.hover);
-  const select = useTwinStore((state) => state.select);
-  return (
-    <div className="flex flex-wrap gap-1" aria-label="Twin assets">
-      {ids.map((id) => {
-        const exists = assets.some((asset) => asset.id === id);
-        return (
-          <button key={id} type="button" disabled={!exists} className={`${chip} hover:border-pw-info disabled:opacity-50`}
-            onPointerEnter={() => exists && hover(id)} onPointerLeave={() => hover(null)}
-            onFocus={() => hover(id)} onBlur={() => hover(null)} onClick={() => select(id)}>
-            {id}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function ThreatRow({ row }: { row: Row }) {
   const { threat, assetIds, finding } = row;
-  const shortId = threat.cves[0] ?? (threat.id !== threat.url ? threat.id : undefined);
+  const hasAsset = useTwinStore((state) => state.twin.assets.some((asset) => assetIds.includes(asset.id)));
+  const triage = finding?.triage ?? row.disposition;
+  const evidence = [WATCH_SOURCES[threat.source].label, ...threat.cves, triage].filter(Boolean).join(" · ");
+  // Several advisories can share one product title, so the identifier is what tells the rows apart.
+  const extra = threat.cves.length - 1;
   return (
-    <li className="min-w-0 space-y-1 border-t border-pw-line py-2">
-      <div className="flex flex-wrap items-center gap-x-2 font-mono text-[10px] text-pw-dim">
-        <span>{WATCH_SOURCES[threat.source].label}</span>
-        {shortId && <span title={[threat.id, ...threat.cves].join(" · ")}>{shortId}</span>}
-        {(finding?.triage ?? row.disposition) === "uncertain" && <span className="text-pw-attention">Uncertain</span>}
-        {row.disposition === "excluded" && <span>Excluded by triage</span>}
-      </div>
-      <a className="flex min-w-0 items-center gap-1 text-pw-text hover:text-pw-info" href={threat.url}
-        target="_blank" rel="noreferrer" title={threat.title}>
-        <span className="truncate">{threat.title}</span><ArrowUpRight size={12} className="shrink-0" aria-hidden />
-      </a>
-      <AssetTags ids={assetIds} />
-      {finding && <p className="text-[11px] text-pw-dim">{finding.technique && `${finding.technique.id} · `}{finding.why}</p>}
+    <li className="min-w-0 space-y-1 border-t border-pw-line py-2" data-watch-source={threat.source}>
+      {(threat.cves.length > 0 || triage) && (
+        <div className="pw-watch-evidence pw-mono">
+          {threat.cves[0] && <span>{threat.cves[0]}{extra > 0 && ` +${extra}`}</span>}
+          {triage && <span data-triage={triage}>{triage}</span>}
+        </div>
+      )}
+      <a className="block min-w-0 text-pw-text hover:text-pw-info [overflow-wrap:anywhere]" href={threat.url}
+        target="_blank" rel="noopener noreferrer" title={evidence} aria-label={`${threat.title} · ${evidence}`}>{threat.title}</a>
+      {hasAsset && row.disposition !== "excluded" && <WatchLoss item={threat} assetIds={assetIds} />}
     </li>
   );
 }
 
-export function WatchThreats({ candidates, report }: { candidates: Candidate[]; report?: WatchReport }) {
-  const findings = report?.items ?? [];
-  const rows: Row[] = findings.length > 0
-    ? findings.map((finding) => ({ threat: finding.threat, assetIds: finding.affectedAssetIds, finding }))
-    : candidateRows(candidates);
+function ThreatList({ rows, title }: { rows: Row[]; title: string }) {
   if (!rows.length) return null;
-
   const list = (items: Row[]) => (
-    <ul>{items.map((row) => <ThreatRow key={`${row.threat.source}:${row.threat.id}`} row={row} />)}</ul>
+    <ul>{items.map((row) => <ThreatRow key={threatKey(row.threat)} row={row} />)}</ul>
   );
   return (
     <div>
-      <h4 className="mb-1 text-[11px] font-medium text-pw-dim">{findings.length ? "Assessed advisories" : "Candidate matches"} · {rows.length}</h4>
+      <h4 className="mb-1 text-[11px] font-medium text-pw-dim">{title} · {rows.length}</h4>
       {list(rows.slice(0, 4))}
       {rows.length > 4 && (
         <details>
@@ -91,6 +67,28 @@ export function WatchThreats({ candidates, report }: { candidates: Candidate[]; 
         </details>
       )}
     </div>
+  );
+}
+
+export function WatchThreats({ candidates, unmatchedNews, report, managed = false }: {
+  candidates: Candidate[];
+  unmatchedNews?: ThreatItem[];
+  report?: WatchReport;
+  managed?: boolean;
+}) {
+  const findings = report?.items ?? [];
+  const rows: Row[] = findings.length > 0
+    ? findings.map((finding) => ({ threat: finding.threat, assetIds: finding.affectedAssetIds, finding }))
+    : candidateRows(candidates);
+  const title = findings.length ? "Assessed advisories" : managed ? "Local cross-check matches" : "Candidate matches";
+  return (
+    <>
+      <ThreatList rows={rows} title={title} />
+      {!!unmatchedNews?.length && <details className="pw-watch-notes">
+        <summary>{unmatchedNews.length} other items · not relevant to this plant</summary>
+        <ul>{unmatchedNews.map((threat) => <ThreatRow key={threatKey(threat)} row={{ threat, assetIds: [] }} />)}</ul>
+      </details>}
+    </>
   );
 }
 

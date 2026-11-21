@@ -12,11 +12,17 @@ const rowSchema = z.object({
 });
 const rootSchema = z.object({ rss: z.object({ channel: z.object({ item: z.unknown().optional() }) }) });
 
-export function plainText(html: string, limit: number): string {
+function readText(html: string): string {
   const root = parse(html);
   root.removeWhitespace();
   for (const node of root.querySelectorAll("script, style")) node.remove();
-  return root.text.replace(/\s+/g, " ").trim().slice(0, limit);
+  return root.text;
+}
+
+export function plainText(html: string, limit: number): string {
+  const decoded = readText(html);
+  const text = /<\/?[a-z][^>]*>/i.test(decoded) ? readText(decoded) : decoded;
+  return text.replace(/\s+/g, " ").trim().slice(0, limit);
 }
 
 export function findCves(text: string): string[] {

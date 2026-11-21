@@ -1,17 +1,26 @@
 /** Stream paired photos to the desktop, with replay after a reconnect. */
+import { crossOriginRejection } from "@/app/api/health/originGuard";
+import { tooManyRequests } from "@/app/api/health/rateLimit";
+import { handoffGuesses } from "@/handoff/guessLimit";
 import { handoffStore } from "@/handoff/store";
 import { HANDOFF_KEY_HEADER, isHandoffCode, type HandoffFrame } from "@/handoff/types";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request, { params }: { params: Promise<{ code: string }> }) {
+  const rejected = crossOriginRejection(request);
+  if (rejected) return rejected;
   const { code } = await params;
   const key = request.headers.get(HANDOFF_KEY_HEADER);
   if (!isHandoffCode(code) || !key || !/^[a-f0-9]{32}$/.test(key)) {
     return new Response("Open phone capture on the desktop.", { status: 403 });
   }
 
+  // Opening a session or meeting another key's code is a probe. The owner's reconnect is not.
+  const wait = handoffGuesses.blocked();
+  if (wait && !handoffStore.owns(code, key)) return tooManyRequests(wait, "Phone pairing");
   const session = handoffStore.register(code, key);
+  if (session.status !== "ready" || session.created) handoffGuesses.take();
   if (session.status === "conflict") return new Response("Get a new QR code.", { status: 409 });
   if (session.status === "full") return new Response("Phone pairing is busy. Try again shortly.", { status: 503 });
 

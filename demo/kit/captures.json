@@ -1,0 +1,12 @@
+{
+  "links": [
+    { "id": "vigi-camera", "title": "TP-Link VIGI C340", "url": "https://www.vigi.com/ph/business-networking/vigi-network-camera/vigi-c340/" },
+    { "id": "teltonika-gateway", "title": "Teltonika TRB140", "url": "https://teltonika.gnshk.com/en/shop/trb140/" },
+    { "id": "cerabar-transmitter", "title": "Endress+Hauser Cerabar PMP23", "url": "https://www.us.endress.com/en/field-instruments-overview/pressure/Absolute-gauge-Cerabar-PMP23" }
+  ],
+  "descriptions": [
+    { "id": "contractor-laptop", "description": "A contractor's service laptop with a USB 4G dongle still on its factory-default admin password, brought in to diagnose Filler 3." },
+    { "id": "vibration-sensor", "description": "A battery-powered wireless vibration sensor for the Filler 3 motor, with its washdown and enclosure ratings unverified." },
+    { "id": "cloud-label-printer", "description": "A cloud-connected Wi-Fi label printer for Packaging that receives print jobs from its vendor's hosted service." }
+  ]
+}

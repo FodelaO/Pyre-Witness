@@ -5,16 +5,18 @@ import { useEffect, useEffectEvent, useRef, useState, type DragEvent, type FormE
 import { Aperture, ArrowRight, Camera, Check, CircleAlert, Link, RotateCcw, Square, TextAlignStart, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { HANDOFF_NOTE_MAX, type HandoffPacket } from "@/handoff/types";
+import { useLensStore } from "@/layers/lensStore";
 import { analyze, cancelRun } from "@/pipeline/client";
 import { useRunStore } from "@/pipeline/runStore";
 import type { CaptureInput } from "@/pipeline/types";
 import { DEFAULT_DROP, useDropStore } from "@/twin/dropPoint";
 import CaptureLocation from "./CaptureLocation";
 import CaptureProgress from "./CaptureProgress";
-import CaptureToolbar, { toggleFloorPin, type CaptureTool } from "./CaptureToolbar";
+import CaptureToolbar, { TECHNOLOGY_CAPTURE, toggleFloorPin, type CaptureTool } from "./CaptureToolbar";
 import { captureErrorMessage } from "./captureError";
 import { MAX_CAPTURE_PHOTOS } from "./image";
 import PhotoPane from "./PhotoPane";
+import SamplePhotos from "./SamplePhotos";
 import PhonePairing from "./PhonePairing";
 import { usePhotoDraft } from "./usePhotoDraft";
 import { usePhoneHandoff } from "./usePhoneHandoff";
@@ -24,6 +26,7 @@ const TABS = [
   { id: "link", label: "Link", Icon: Link },
   { id: "text", label: "Describe", Icon: TextAlignStart },
 ] as const;
+const DATA_TABS = [TABS[1], TABS[2], TABS[0]];
 type Tab = (typeof TABS)[number]["id"];
 
 function productUrl(value: string) {
@@ -44,7 +47,11 @@ type Props = {
 };
 
 export default function CaptureCard({ open, editor, onOpenChange }: Props) {
-  const [tab, setTab] = useState<Tab>("photo");
+  const dataFirst = useLensStore((state) => state.mode === "data");
+  const tabs = dataFirst ? DATA_TABS : TABS;
+  const heading = dataFirst ? TECHNOLOGY_CAPTURE : "Capture device";
+  const [chosenTab, setTab] = useState<Tab | null>(null);
+  const tab = chosenTab ?? tabs[0].id;
   const [tool, setTool] = useState<CaptureTool>("camera");
   const [cameraAttempt, setCameraAttempt] = useState(0);
   const [link, setLink] = useState("");
@@ -64,6 +71,7 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
   const focusField = useRef(false);
   const dragDepth = useRef(0);
   const submittingRun = useRef<symbol | null>(null);
+  const autoRun = useRef(false);
 
   const status = useRunStore((state) => state.status);
   const runId = useRunStore((state) => state.runId);
@@ -71,12 +79,13 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
   const runError = useRunStore((state) => state.error);
   const busy = submitting || status === "running";
   const finished = !busy && !failed && status === "done" && runId !== dismissedRun;
+  const showingSamples = tab === "photo" && tool === "samples";
   const canUpload = !draft.preparing && draft.photos.length < MAX_CAPTURE_PHOTOS;
   const url = tab === "link" ? productUrl(link) : null;
   const invalidLink = tab === "link" && link.trim() !== "" && !url;
   const roomForIncoming = incoming && incoming.images.length + draft.photos.length <= MAX_CAPTURE_PHOTOS;
   let input: CaptureInput | null = null;
-  if (tab === "photo" && draft.photos.length) {
+  if (tab === "photo" && !showingSamples && draft.photos.length) {
     input = { kind: "photo", images: draft.photos.map(({ image }) => image), ...(phoneNote && { note: phoneNote }) };
   } else if (tab === "link" && url) {
     input = { kind: "link", url };
@@ -86,7 +95,12 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
   const canSubmit = !!input && !draft.preparing && !busy;
 
   const phone = usePhoneHandoff((packet) => {
-    if (!submittingRun.current && !busy && !finished && useRunStore.getState().status !== "running" && addPhonePhotos(packet)) return;
+    const fresh = draft.photos.length === 0;
+    if (!submittingRun.current && !busy && !finished && useRunStore.getState().status !== "running" && addPhonePhotos(packet)) {
+      // A send from the phone is the user's intent to analyze: start the run as soon as the draft is ready.
+      autoRun.current = fresh;
+      return;
+    }
     setIncoming(packet);
     setPhoneOpen(false);
   });
@@ -105,6 +119,8 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
   }
 
   function collapse(restoreFocus: boolean) {
+    autoRun.current = false;
+    draft.clearError();
     useDropStore.getState().disarm();
     dragDepth.current = 0;
     setDragging(false);
@@ -119,9 +135,8 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
   function newCapture() {
     focusField.current = true;
     setDismissedRun(runId);
-    setTab("photo");
-    setTool("camera");
-    returnTo.current = "camera";
+    chooseTab(tabs[0].id);
+    returnTo.current = dataFirst ? "link" : "camera";
     setLink("");
     setDescription("");
     setFailed(null);
@@ -185,6 +200,10 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
     else if (finished) newCapture();
     else {
       focusField.current = true;
+      if (!chosenTab) {
+        chooseTab(tab);
+        returnTo.current = dataFirst ? "link" : "camera";
+      }
       onOpenChange(true);
     }
   });
@@ -203,6 +222,7 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
     }
     if (!files.length) return;
     event.preventDefault();
+    if (showingSamples) chooseTab("photo");
     void draft.prepare(files);
   });
 
@@ -220,12 +240,24 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
   useEffect(() => {
     if (!open || !editor || !focusField.current || useDropStore.getState().armed) return;
     focusField.current = false;
-    form.current?.querySelector<HTMLElement>(tab === "photo" ? '[role="tab"][aria-selected="true"]' : "input, textarea")?.focus();
+    const field = tool === "samples" ? "[data-sample-photo]"
+      : tab === "photo" ? '[role="tab"][aria-selected="true"]' : "input, textarea";
+    form.current?.querySelector<HTMLElement>(field)?.focus();
   }, [open, editor, tab, tool]);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (!autoRun.current || !canSubmit || tab !== "photo" || !form.current) return;
+    autoRun.current = false;
+    form.current.requestSubmit();
+  }, [canSubmit, tab, open, editor]);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!input || !canSubmit || submittingRun.current || useRunStore.getState().status === "running") return;
+    if (input && canSubmit) void startCapture(input);
+  }
+
+  async function startCapture(capture: CaptureInput) {
+    if (submittingRun.current || useRunStore.getState().status === "running") return;
     const attempt = Symbol();
     submittingRun.current = attempt;
     setSubmitting(true);
@@ -234,7 +266,7 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
     collapse(false);
     requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>(".pw-capture-run button")?.focus());
     try {
-      await analyze(input, useDropStore.getState().point ?? DEFAULT_DROP);
+      await analyze(capture, useDropStore.getState().point ?? DEFAULT_DROP);
     } catch (cause) {
       if (submittingRun.current !== attempt || (cause instanceof Error && cause.name === "AbortError")) return;
       const { error } = useRunStore.getState();
@@ -257,14 +289,14 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
   }
 
   function tabKeys(event: KeyboardEvent<HTMLButtonElement>) {
-    const index = TABS.findIndex(({ id }) => id === tab);
+    const index = tabs.findIndex(({ id }) => id === tab);
     const keys: Record<string, number> = {
-      ArrowLeft: (index + TABS.length - 1) % TABS.length,
-      ArrowRight: (index + 1) % TABS.length,
+      ArrowLeft: (index + tabs.length - 1) % tabs.length,
+      ArrowRight: (index + 1) % tabs.length,
       Home: 0,
-      End: TABS.length - 1,
+      End: tabs.length - 1,
     };
-    const next = TABS[keys[event.key]];
+    const next = tabs[keys[event.key]];
     if (!next) return;
     event.preventDefault();
     chooseTab(next.id);
@@ -304,7 +336,7 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
   }
 
   const composer = open && !busy && editor && createPortal(
-    <form className="pw-capture-card" aria-label="Capture device" data-dragging={dragging} ref={form} noValidate
+    <form className="pw-capture-card" aria-label={heading} data-dragging={dragging} ref={form} noValidate
       onSubmit={submit} onDrop={dropFiles}
       onDragEnter={(event) => {
         if (!event.dataTransfer.types.includes("Files")) return;
@@ -322,12 +354,12 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
         if (!dragDepth.current) setDragging(false);
       }}>
       <header className="pw-capture-header">
-        <h2><Aperture size={17} aria-hidden /> Capture device</h2>
+        <h2><Aperture size={17} aria-hidden /> {heading}</h2>
         <button type="button" className="pw-capture-icon-button" title="Collapse capture (Esc)" aria-label="Collapse capture"
           onClick={() => collapse(true)}><X size={17} aria-hidden /></button>
       </header>
       <div className="pw-capture-tabs" role="tablist" aria-label="Capture method">
-        {TABS.map(({ id, label, Icon }) => (
+        {tabs.map(({ id, label, Icon }) => (
           <button key={id} type="button" role="tab" id={"capture-tab-" + id} aria-selected={tab === id}
             aria-controls="capture-pane" tabIndex={tab === id ? 0 : -1}
             onClick={() => chooseTab(id)} onKeyDown={tabKeys}>
@@ -336,7 +368,10 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
         ))}
       </div>
       <div role="tabpanel" id="capture-pane" aria-labelledby={"capture-tab-" + tab} className="pw-capture-pane">
-        {tab === "photo" && (
+        {showingSamples && (
+          <SamplePhotos onCapture={(photo) => void startCapture({ kind: "photo", images: [photo] })} />
+        )}
+        {tab === "photo" && !showingSamples && (
           <PhotoPane draft={draft} cameraAttempt={cameraAttempt}
             phonePreview={phoneOpen ? <PhonePairing state={phone.state} onStart={phone.start} /> : null}
             onTogglePhone={openPhone} onUpload={() => upload.current?.click()}
@@ -368,7 +403,9 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
         )}
         {tab === "text" && (
           <label className="pw-capture-field">
-            <span>Device and intended location</span>
+            <span>Device and intended location{description.length >= 1000 && (
+              <span className="pw-capture-count" aria-live="polite"> · {description.length}/1200</span>
+            )}</span>
             <textarea name="description" rows={3} maxLength={1200} value={description}
               placeholder="What is it? Where will it go?"
               onChange={(event) => setDescription(event.target.value)} onKeyDown={(event) => {
@@ -381,11 +418,13 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
         )}
       </div>
       {error && <p className="pw-capture-failure" role="alert"><CircleAlert size={15} aria-hidden />{error}</p>}
-      <footer className="pw-capture-footer">
+      <footer className="pw-capture-footer" data-samples={showingSamples || undefined}>
         <CaptureLocation disabled={false} />
-        <button type="submit" className="pw-capture-analyze" disabled={!canSubmit}>
-          {error ? "Retry" : "Analyze"} <ArrowRight size={15} aria-hidden />
-        </button>
+        {!showingSamples && (
+          <button type="submit" className="pw-capture-analyze" disabled={!canSubmit}>
+            {error ? "Retry" : "Analyze"} <ArrowRight size={15} aria-hidden />
+          </button>
+        )}
       </footer>
     </form>,
     editor,
@@ -410,11 +449,13 @@ export default function CaptureCard({ open, editor, onOpenChange }: Props) {
           <Check size={16} aria-hidden />
           <span role="status" title={deviceType ?? undefined}>{deviceType || "Capture complete"}</span>
           <button type="button" className="pw-tool-button pw-capture-new" aria-label="New capture"
-            data-pw-tip="New capture (C)" data-pw-tip-side="top" onClick={newCapture}><Camera size={18} aria-hidden /></button>
+            data-pw-tip={dataFirst ? heading : "New capture (C)"} data-pw-tip-side="top" onClick={newCapture}>
+            {dataFirst ? <Link size={18} aria-hidden /> : <Camera size={18} aria-hidden />}
+          </button>
         </div>
       ) : failed && !open ? errorReadout(failed) : (
         <>
-          <CaptureToolbar active={open ? tool : null} onTool={useTool} uploadDisabled={!canUpload} />
+          <CaptureToolbar active={open ? tool : null} onTool={useTool} uploadDisabled={!canUpload} dataFirst={dataFirst} />
           {error && !open && errorReadout(error, true)}
         </>
       )}

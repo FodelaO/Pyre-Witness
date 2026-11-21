@@ -1,0 +1,51 @@
+/* Compact feed instrument with plant links and a conditional loss readout. */
+.pw-signal-desk { display: grid; min-width: 0; gap: 6px; }
+.pw-signal-header, .pw-signal-subhead { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.pw-signal-live, .pw-signal-subhead, .pw-signal-row-meta, .pw-signal-chip {
+  font: 10px/1.35 var(--font-geist-mono), ui-monospace, monospace;
+  color: var(--pw-text-dim);
+}
+.pw-signal-live { min-width: 0; }
+.pw-signal-live strong, .pw-signal-chief strong { font-weight: 650; color: var(--pw-text); }
+.pw-signal-desk .pw-signal-run { flex: none; min-height: 26px; padding: 3px 6px; white-space: nowrap; }
+.pw-signal-subhead { min-height: 18px; flex-wrap: wrap; }
+.pw-signal-sources { display: flex; gap: 9px; }
+.pw-signal-source { display: inline-flex; align-items: center; gap: 3px; cursor: help; }
+.pw-signal-source i { width: 6px; height: 6px; border-radius: 50%; background: var(--pw-line-strong); }
+.pw-signal-source i[data-state="ok"] { background: var(--pw-ok); }
+.pw-signal-source i[data-state="slow"] { background: var(--pw-attention); }
+.pw-signal-source i[data-state="failed"] { background: var(--pw-alarm); }
+.pw-signal-basis, .pw-signal-chief, .pw-signal-recall-note, .pw-signal-empty { font-size: 11px; line-height: 1.35; color: var(--pw-text-dim); }
+.pw-signal-chief { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-signal-list { min-width: 0; margin: 1px 0 0; padding: 0; list-style: none; }
+.pw-signal-row { display: grid; min-width: 0; gap: 3px; padding: 6px 3px 4px; border-top: 1px solid var(--pw-line); cursor: pointer; }
+.pw-signal-row:is(:hover, :focus-within) { background: var(--pw-panel-2); }
+.pw-signal-row-meta { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.pw-signal-new { color: var(--pw-ok); }
+.pw-signal-triage { margin-inline-start: auto; white-space: nowrap; }
+.pw-signal-title { display: flex; align-items: center; gap: 5px; min-width: 0; width: fit-content; max-width: 100%; font-size: 13px; line-height: 1.25; font-weight: 630; }
+.pw-signal-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-signal-title svg { flex: none; color: var(--pw-text-dim); }
+.pw-signal-title:hover { color: var(--pw-info); }
+.pw-signal-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 4px; min-width: 0; }
+.pw-signal-chip { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid var(--pw-line-strong); border-radius: 3px; padding: 1px 4px; }
+button.pw-signal-chip { color: var(--pw-text); cursor: pointer; }
+button.pw-signal-chip:hover { border-color: var(--pw-info); }
+.pw-signal-loss > details[data-loss-asset] { margin-block: 0; border: 0; }
+.pw-signal-loss > details[data-loss-asset] > summary { grid-template-columns: 26px minmax(0, 1fr) auto; min-height: 28px; padding: 0; gap: 5px; }
+.pw-signal-loss > details[data-loss-asset] > summary > svg { width: 26px; height: 26px; }
+.pw-signal-loss > details[data-loss-asset] > summary > span:first-of-type {
+  display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); align-items: center; gap: 5px;
+}
+.pw-signal-loss > details[data-loss-asset] > summary > span:first-of-type > span:first-child { font-size: 17px; }
+.pw-signal-loss > details[data-loss-asset] > summary > span:first-of-type > span:last-child {
+  font-size: 10px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.pw-signal-loss > details[data-loss-asset] > summary > span:last-child > span { display: none; }
+.pw-signal-other { border-top: 1px solid var(--pw-line); color: var(--pw-text-dim); font-size: 11px; }
+.pw-signal-other > summary { display: flex; align-items: center; gap: 5px; padding-block: 5px; cursor: pointer; list-style: none; }
+.pw-signal-other > summary::-webkit-details-marker { display: none; }
+.pw-signal-other > summary svg { flex: none; transform: rotate(-90deg); }
+.pw-signal-other[open] > summary svg { transform: none; }
+.pw-signal-other li { padding-block: 4px; }
+.pw-signal-other .pw-signal-title { color: var(--pw-text); font-size: 11px; font-weight: 500; }
