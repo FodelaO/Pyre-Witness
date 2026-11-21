@@ -117,6 +117,18 @@ it("distinguishes ordinary data connectors from removable media, pipe fittings, 
   expect(completeAssessmentRisks(assessment, powerOnly, candidate(powerOnly), check).risks).toEqual([]);
 });
 
+it.each([
+  { storage: "Internal storage without removable media", ports: [], present: false },
+  { storage: "Non-removable flash", ports: [], present: false },
+  { storage: "no SD slot", ports: [], present: false },
+  { storage: "Non-removable flash with a microSD slot", ports: [], present: true },
+  { storage: "Non-removable flash", ports: ["SD card slot"], present: true },
+])("CAP-05 enriches only documented removable media ($storage, $ports)", ({ storage, ports, present }) => {
+  const profile = { ...pressureProfile, storage, ports };
+  const result = completeAssessmentRisks(assessment, profile, candidate(profile), check);
+  expect(result.risks.some(({ id }) => id.startsWith("PROFILE-REMOVABLE-STORAGE:"))).toBe(present);
+});
+
 it("reports a USB flash drive plug and a card slot as removable media without inventing a host port", () => {
   const profile: DeviceProfile = {
     ...pressureProfile, physical_kind: "usb_drive", category: "removable_storage", device_type: "USB flash storage",

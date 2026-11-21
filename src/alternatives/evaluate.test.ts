@@ -75,7 +75,7 @@ it("keeps a cross-process move visible without pricing it as the same workflow",
   const destination = SEED_TWIN.areas.find(({ id }) => id === "water_treatment")!;
   const profile: DeviceProfile = {
     device_type: "Bottle cap inspection camera", category: "camera", object_class: "networked_device",
-    vendor: null, model: null, radios: ["wifi"], ports: ["RJ45"], storage: null,
+    vendor: null, model: null, radios: ["wifi"], ports: ["RJ45 Ethernet"], storage: null,
     default_credentials_visible: true, default_credentials_note: null, cloud_connectivity: false,
     power: null, physical_kind: "ip_camera", capacity_or_size: null, material: "316L",
     food_grade: true, hazardous_area_rating: null, ip_rating: "IP69K", evidence: [], unknowns: [], confidence: 1,

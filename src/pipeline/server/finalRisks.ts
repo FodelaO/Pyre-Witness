@@ -1,5 +1,6 @@
 /** Completes the final risk list from checked placement findings and observed device capabilities. */
 import { techniqueById } from "@/data/attack-ics";
+import { profileHasRemovableStorage, REMOVABLE_STORAGE } from "@/pipeline/assetFromProfile";
 import type { Assessment, DeviceProfile, RiskItem, SelfCheckResult } from "@/pipeline/types";
 import type { Asset, RuleFinding, Severity } from "@/twin/types";
 
@@ -7,7 +8,6 @@ const MAX_VISIBLE_RISKS = 16;
 const THRESHOLD_NOTABLE = 2;
 const DATA_PORT = /\b(?:ethernet|rj[- ]?45|rs[- ]?(?:232|422|485)|serial|usb(?:[ -]?(?:[abc]|type[ -]?[abc]|\d(?:\.\d)?))?|(?:micro[ -]?)?sd(?:hc|xc)?|data port|network port|console port|jtag|sfp|hdmi|displayport)\b/i;
 const POWER_ONLY = /\b(?:power|charg(?:e|ing))[ -]?only\b/i;
-const REMOVABLE_STORAGE = /\b(?:removable (?:storage|media)|(?:micro[ -]?)?sd(?:hc|xc)?(?: card| slot)?|memory card|usb (?:drives?|sticks?|storage|mass storage|media)|flash drives?|thumb drives?)\b/i;
 const PERSONAL_DEVICE = /\b(?:personal (?:device|phone|computer|laptop|tablet)|bring your own device|byod|contractor (?:device|laptop|tablet))\b/i;
 const CAMERA = /\b(?:webcam|camcorder|camera)\b/i;
 const MICROPHONE = /\b(?:microphone|(?:built[- ]in|integrated|external) mic|audio recorder)\b/i;
@@ -60,9 +60,6 @@ function profileRisks(profile: DeviceProfile, candidate: Asset): FeatureRisk[] {
   const hasDataPort = profile.ports.some((port) => DATA_PORT.test(port) && !POWER_ONLY.test(port)
     && !REMOVABLE_STORAGE.test(port) && !/\b(?:plug|male)\b/i.test(port)
     && !(storageDevice && /\busb/i.test(port) && !/\b(?:host port|socket|receptacle|female)\b/i.test(port)));
-  const removable = storageDevice
-    || profile.ports.some((port) => REMOVABLE_STORAGE.test(port) && !POWER_ONLY.test(port))
-    || Boolean(profile.storage && !/\b(?:no|without|non[- ]removable)\b/i.test(profile.storage) && REMOVABLE_STORAGE.test(profile.storage));
   const personal = kind === "phone" || kind === "laptop" || [type, ...stated].some((text) => PERSONAL_DEVICE.test(text));
 
   return [
@@ -81,7 +78,7 @@ function profileRisks(profile: DeviceProfile, candidate: Asset): FeatureRisk[] {
       rules: ["RF-01"], techniques: ["T0860"],
     },
     {
-      key: "REMOVABLE-STORAGE", present: removable, title: "Removable storage and media",
+      key: "REMOVABLE-STORAGE", present: profileHasRemovableStorage(profile), title: "Removable storage and media",
       description: "The device or an observed slot supports removable media, which can carry unauthorized files or software.",
       mitigation: "Use only approved, scanned removable media and secure unused slots.",
       severity: 3, covers: REMOVABLE_STORAGE, rules: ["USB-01"], techniques: ["T0847"],

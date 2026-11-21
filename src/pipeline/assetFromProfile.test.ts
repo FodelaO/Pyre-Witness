@@ -47,6 +47,21 @@ const controllerProfile: DeviceProfile = {
   physical_kind: "plc_cabinet", object_class: "networked_device",
 };
 
+it.each([
+  { storage: "Internal storage without removable media", ports: [], present: false },
+  { storage: "Non-removable flash", ports: [], present: false },
+  { storage: "no SD slot", ports: [], present: false },
+  { storage: "Does not come with an SD slot", ports: [], present: false },
+  { storage: "Soldered internal flash", ports: [], present: false },
+  { storage: "Non-removable flash", ports: ["microSD slot"], present: true },
+])("CAP-05 projects only documented removable media ($storage, $ports)", ({ storage, ports, present }) => {
+  const asset = assetFromProfile({ ...controllerProfile, storage, ports }, SEED_TWIN, "PLC-901", DEFAULT_DROP);
+  expect(asset.cyber?.removableStorage).toBe(present);
+  expect(evaluatePlacement(SEED_TWIN, asset).findings.some(
+    ({ assetId, ruleId }) => assetId === asset.id && ruleId === "USB-01",
+  )).toBe(present);
+});
+
 it("models exposed fieldbus access to the controller without inventing an Ethernet link", () => {
   const candidate = assetFromProfile({ ...controllerProfile, ports: ["MPI", "PROFIBUS DP"] }, SEED_TWIN, "PLC-901", {
     area: "filler3", x: 830, y: 675,

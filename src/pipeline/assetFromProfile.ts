@@ -152,12 +152,24 @@ export function refreshModeledControllerLink(twin: Twin, asset: Asset): Asset {
   return { ...asset, physical: { ...asset.physical, connections: next ? [...retained, next] : retained } };
 }
 
+export const REMOVABLE_STORAGE = /\b(?:removable (?:storage|media|flash|memory|disk|drive)|(?:micro[ -]?)?sd(?:hc|xc)?|memory card|usb (?:drives?|sticks?|storage|mass storage|media)|flash drives?|thumb drives?)\b/i;
+const NEGATED_MEDIA = /\b(?:no|not|without|lacks?|absent|unknown|unsupported|non[ ‐‑-]?removable)\b/i;
+
+export function profileHasRemovableStorage(profile: DeviceProfile): boolean {
+  if (profile.category === "removable_storage" || profile.physical_kind === "usb_drive") return true;
+  const mediaPorts = profile.ports.filter((port) => !/\b(?:power|charg(?:e|ing))[ -]?only\b/i.test(port));
+  return [profile.storage ?? "", ...mediaPorts].some((text) => {
+    const storage = text.replace(/\bnon[ ‐‑-]?removable (?:flash|storage|memory)\b/gi, "fixed storage");
+    return storage.split(/[,;.+\n]|\b(?:but|plus)\b|(?=\bwithout\b)/i).some((part) =>
+      !NEGATED_MEDIA.test(part) && (REMOVABLE_STORAGE.test(part) || part.trim().toLowerCase() === "removable"));
+  });
+}
+
 export function assetFromProfile(profile: DeviceProfile, twin: Twin, id: string, point: DropPoint): Asset {
   const location = { ...point, area: areaAt(twin, point.x, point.y)?.id ?? point.area };
   const passive = profile.object_class === "passive_object";
   const kind = passive ? "generic_device" : profile.physical_kind;
-  const hasRemovableStorage = profile.category === "removable_storage"
-    || /\b(?:removable|(?:micro[ -]?)?sd(?:hc|xc)?|usb (?:drive|storage))\b/i.test(profile.storage ?? "");
+  const hasRemovableStorage = profileHasRemovableStorage(profile);
   const hasCyber = !passive && (IT_KINDS.has(kind) || profile.radios.length > 0 || profile.ports.length > 0
     || profile.cloud_connectivity === true || profile.default_credentials_visible || hasRemovableStorage);
   const asset: Asset = {
