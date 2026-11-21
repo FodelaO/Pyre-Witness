@@ -37,9 +37,9 @@ export default function ServicesBoard() {
 
   return (
     <section className="pw-health-board" aria-labelledby={title} aria-busy={requesting || snapshot?.refreshing}>
-      <header className="pw-health-header">
+      <div className="pw-health-header">
         <div>
-          <h2 id={title}>Gemini at work</h2>
+          <h3 id={title}>Gemini at work</h3>
           <p aria-live="polite">{completed ? `${healthy} / ${completed} checked services healthy` : "Checking services"}</p>
           {snapshot?.checkedAt && <time dateTime={snapshot.checkedAt} className="pw-health-snapshot-age">
             {fromSession ? "Cached · checked " : "Checked "}{healthAge(snapshot.checkedAt, now)}
@@ -48,7 +48,7 @@ export default function ServicesBoard() {
         <button type="button" className="pw-health-refresh" aria-label="Refresh services" disabled={requesting || captureRunning} onClick={() => void refreshServices()}>
           <RefreshCw size={13} aria-hidden />{captureRunning ? "Capture running" : requesting || snapshot?.refreshing ? "Checking…" : "Refresh"}
         </button>
-      </header>
+      </div>
       {error && <p role="status" className="pw-health-request-error">{error}</p>}
       <ul className="pw-health-services">
         {services.map((row) => {

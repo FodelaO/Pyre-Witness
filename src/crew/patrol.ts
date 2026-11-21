@@ -11,6 +11,7 @@ import type { Asset, TelemetryPoint, Twin } from "@/twin/types";
 import { endPatrolVisit, startPatrolVisit, useCrewStore } from "./crewStore";
 import type { CrewCue } from "./director";
 import { CREW, CREW_ORDER, type CrewId } from "./types";
+import type { WalkStop } from "./walk";
 
 function telemetryText({ tag, value, unit, lo, hi }: TelemetryPoint): string {
   const inBand = lo !== undefined && hi !== undefined && value >= lo && value <= hi;
@@ -20,8 +21,9 @@ function telemetryText({ tag, value, unit, lo, hi }: TelemetryPoint): string {
 export function observePatrol(twin: Twin, crew: CrewId, round: number, at: number): CrewCue | undefined {
   const withinFloor = (asset: Asset) => !isOutdoors(twin, asset.physical.x, asset.physical.y);
   const assets = twin.assets.filter(withinFloor);
-  const cue = (text: string, stops: CrewCue["stops"], inspect?: CrewCue["inspect"], engine?: string): CrewCue => ({
-    status: "idle", stops, inspect, activity: { crew, at, text, engine, kind: "patrol" },
+  const cue = (text: string, stops: WalkStop[], inspect?: CrewCue["inspect"], engine?: string): CrewCue => ({
+    status: "idle", stops: stops.map((stop) => ({ ...stop, avoidTitleBands: true })), inspect,
+    activity: { crew, at, text, engine, kind: "patrol" },
   });
   const visitAsset = (asset: Asset, text: string, engine?: string) => {
     const { x, y, area } = asset.physical;

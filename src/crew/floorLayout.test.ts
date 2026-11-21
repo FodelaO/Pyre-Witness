@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { areaById } from "@/twin/geometry";
 import { SEED_TWIN } from "@/twin/seed";
-import { avatarBounds, calloutGap, clearLeader, collides, keepLabelInRoom, placeCallout, placeFloorLabel, placePatrolCallout, ROOM_TITLE_DEPTH } from "./floorLayout";
+import { avatarBounds, calloutGap, clearLeader, collides, keepLabelInRoom, placeCallout, placeFloorLabel, placePatrolCallout, roomTitleBands, ROOM_TITLE_DEPTH } from "./floorLayout";
 import { deskPosition, deskScale } from "./officeLayout";
 import { CREW_ORDER } from "./types";
 
@@ -87,6 +87,18 @@ describe("crew callout placement", () => {
     expect(collides(proposalLabel, checkLabel)).toBe(false);
     const occupiedNeighborhood = { x: anchor.x - 180, y: anchor.y - 180, w: 360, h: 360 };
     expect(placeFloorLabel(passed, anchor, viewport, [occupiedNeighborhood], 1)).toBeNull();
+  });
+
+  it("finds a badge slot clear of the parking title row even next to the office", () => {
+    const room = areaById(SEED_TWIN, "corporate_office")!.bounds;
+    const parking = areaById(SEED_TWIN, "parking_lot")!.bounds;
+    const bands = roomTitleBands(SEED_TWIN.areas);
+    const preferred = { x: 220, y: 860, w: 288, h: 52 };
+    expect(keepLabelInRoom(preferred, room, 2)).toBe(preferred);
+    const label = placeFloorLabel(preferred, { x: 240, y: 827 }, { x: 0, y: 0, w: 1600, h: 1000 }, bands, 2, room);
+    expect(label).not.toBeNull();
+    expect(label).not.toEqual(preferred);
+    expect(label!.y + label!.h).toBeLessThan(parking.y);
   });
 
   it("drops a room caption that drifted into a neighbouring room and measures stray callouts", () => {

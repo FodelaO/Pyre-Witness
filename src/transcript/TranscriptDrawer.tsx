@@ -87,7 +87,7 @@ export function TranscriptHistory({ runs, target }: { runs: readonly TranscriptR
       <header className="pw-transcript-header">
         <div className="pw-transcript-title">
           <ClipboardList size={22} aria-hidden="true" />
-          <div><h2 id="pw-transcript-title">Run transcript</h2>
+          <div><h2 id="pw-transcript-title" tabIndex={-1}>Run transcript</h2>
             <p>{runs.length} {runs.length === 1 ? "run" : "runs"} · {visibleCount} {visibleCount === 1 ? "step" : "steps"} shown
               {runId && <button type="button" className="pw-transcript-all-runs"
                 onClick={() => { setRunId(""); scroll.current?.scrollTo({ top: 0 }); }}>All runs</button>}
@@ -166,7 +166,10 @@ export default function TranscriptDrawer() {
   useLayoutEffect(() => {
     const panel = dialog.current;
     if (!panel) return;
-    if (isOpen && !panel.open) panel.showModal();
+    if (isOpen && !panel.open) {
+      panel.showModal();
+      panel.querySelector<HTMLElement>("#pw-transcript-title")?.focus({ preventScroll: true });
+    }
     if (!isOpen && panel.open) panel.close();
   }, [isOpen]);
 

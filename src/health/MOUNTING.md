@@ -1,7 +1,7 @@
-<!-- Top-bar integration for the orchestrator. -->
+<!-- Crew dock integration for the services board. -->
 # Mount the Gemini services chip
 
-In `src/shell/TopBar.tsx`, add the import and place the chip inside `.pw-top-actions`, beside Watch.
+In `src/crew/CrewDock.tsx`, place the chip in the dock header beside the transcript button. The crew cards use `useCrewHealth` and `CrewHealthDot` to show the assigned engine's reading.
 
 ```tsx
 import ServicesChip from "@/health/ServicesChip";

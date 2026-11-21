@@ -9,7 +9,7 @@ import Avatar from "./Avatar";
 import Bubble from "./Bubble";
 import CrewOffice from "./CrewOffice";
 import { crewAvatar, useCrewStore } from "./crewStore";
-import { avatarBounds, avatarScale, calloutGap, clearLeader, equipmentBounds, keepLabelInRoom, placeCallout, placeFloorLabel, placePatrolCallout, roomTitleBands, type Box } from "./floorLayout";
+import { avatarBounds, avatarScale, calloutGap, clearLeader, collides, equipmentBounds, placeCallout, placeFloorLabel, placePatrolCallout, roomTitleBands, type Box } from "./floorLayout";
 import { deskPosition, deskScale, isDesk } from "./officeLayout";
 import { useIdlePatrol } from "./patrol";
 import { CapturePreview, EvidenceCard, useScoutLanding } from "./ScoutEvidence";
@@ -75,19 +75,34 @@ export default function CrewLayer() {
     : null;
   if (evidenceBox) occupied.push(evidenceBox);
 
-  const proposal = visuals.architect?.effect;
-  const area = proposal?.kind === "proposal" ? areaById(twin, proposal.area) : undefined;
-  const proposalLabel = proposal?.kind === "proposal" ? keepLabelInRoom(placeFloorLabel({
-    x: area ? area.bounds.x + 12 : proposal.to.x,
-    y: (area ? area.bounds.y + area.bounds.h : proposal.to.y) - 25 * scale,
-    w: 158 * scale, h: 18 * scale,
-  }, proposal.to, viewport, [...occupied, ...protectedLabels], scale), area?.bounds, scale) : null;
-  if (proposalLabel) occupied.push(proposalLabel);
   const check = visuals.inspector?.effect;
-  const checkLabel = check?.kind === "check" && check.passed ? keepLabelInRoom(placeFloorLabel({
-    x: check.at.x + 18 * scale, y: check.at.y - 13 * scale, w: 144 * scale, h: 26 * scale,
-  }, check.at, viewport, [...occupied, ...protectedLabels], scale), areaAt(twin, check.at.x, check.at.y)?.bounds, scale) : null;
+  let checkLabel: Box | null = null;
+  if (check?.kind === "check" && check.passed) {
+    const room = areaAt(twin, check.at.x, check.at.y)?.bounds;
+    const w = 144 * scale;
+    const preferredX = check.at.x + 18 * scale;
+    const x = room && room.w >= w + 8 * scale ? Math.min(preferredX, room.x + room.w - w - 8 * scale) : preferredX;
+    checkLabel = placeFloorLabel({ x, y: check.at.y - 12 * scale, w, h: 24 * scale },
+      check.at, viewport, [...occupied, ...protectedLabels], scale, room);
+  }
   if (checkLabel) occupied.push(checkLabel);
+
+  const proposal = visuals.architect?.effect;
+  let proposalLabel: Box | null = null;
+  if (proposal?.kind === "proposal") {
+    const room = areaById(twin, proposal.area)?.bounds;
+    const preferred = {
+      x: room ? room.x + 12 : proposal.to.x,
+      y: (room ? room.y + room.h : proposal.to.y) - 25 * scale,
+      w: 158 * scale, h: 18 * scale,
+    };
+    // Give the verdict first choice, then try the placement caption just beneath it.
+    if (checkLabel && collides(preferred, checkLabel, 4 * scale)) {
+      preferred.y = checkLabel.y + checkLabel.h + 4.5 * scale;
+    }
+    proposalLabel = placeFloorLabel(preferred, proposal.to, viewport, [...occupied, ...protectedLabels], scale, room);
+  }
+  if (proposalLabel) occupied.push(proposalLabel);
 
   return (
     <g ref={ref} className="pw-crew-layer" aria-label="AI crew" pointerEvents="none">

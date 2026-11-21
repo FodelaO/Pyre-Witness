@@ -13,10 +13,10 @@ export const MAX_AVATAR_SCALE = 1.2;
 export const DESK_AVATAR_WIDTH = 74;
 export const ROOM_TITLE_DEPTH = 28;
 
-export function roomTitleBands(areas: readonly Area[]): Box[] {
-  return areas.filter(({ kind }) => kind !== "context").map(({ bounds }) => ({
-    ...bounds, h: Math.min(bounds.h, ROOM_TITLE_DEPTH),
-  }));
+export function roomTitleBands(areas: readonly Area[], includeContext = true): Box[] {
+  // Parking and visitor areas have a top title row too. Nested overlays have separately placed labels.
+  return areas.filter(({ kind, attrs }) => kind !== "context" || (includeContext && !attrs.washdown && attrs.hazard !== "NH3"))
+    .map(({ bounds }) => ({ ...bounds, h: Math.min(bounds.h, ROOM_TITLE_DEPTH) }));
 }
 
 export function avatarScale(inverse: number, limit = MAX_AVATAR_SCALE): number {
@@ -148,9 +148,10 @@ export function placeCallout(anchor: Point, size: Pick<Box, "w" | "h">, viewport
   return fallback;
 }
 
-export function placeFloorLabel(preferred: Box, anchor: Point, viewport: Box, occupied: Box[], scale: number): Box | null {
+export function placeFloorLabel(preferred: Box, anchor: Point, viewport: Box, occupied: Box[], scale: number, room?: Box): Box | null {
   const clear = (label: Box) => label.x >= viewport.x && label.y >= viewport.y
     && label.x + label.w <= viewport.x + viewport.w && label.y + label.h <= viewport.y + viewport.h
+    && keepLabelInRoom(label, room, scale) !== null
     && !occupied.some((box) => collides(label, box, 4 * scale));
   if (clear(preferred)) return preferred;
   const { w, h } = preferred;

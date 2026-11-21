@@ -5,6 +5,9 @@ import { SEED_TWIN } from "@/twin/seed";
 import { DEFAULT_DROP } from "@/twin/dropPoint";
 import type { Asset } from "@/twin/types";
 import { avatarBounds, collides, equipmentBounds, equipmentTagBounds, MAX_AVATAR_SCALE, roomTitleBands } from "./floorLayout";
+import { deskPosition } from "./officeLayout";
+import { observePatrol } from "./patrol";
+import { CREW_ORDER } from "./types";
 import { BADGE_SEPARATION, planWalk } from "./walk";
 import { timeWalk, walkPosition, walksConflict } from "./walkTiming";
 
@@ -111,5 +114,24 @@ describe("crew walking", () => {
     const labels = [...roomTitleBands(twin.areas), ...equipmentTagBounds(tank, 1.6, washdown)];
     expect(labels.some((label) => collides(box, label))).toBe(false);
     expect(distance(end, tank.physical)).toBeLessThan(260);
+  });
+
+  it("lands the Architect in the Syrup room away from title bands", () => {
+    const crew = "architect";
+    const start = deskPosition(crew, twin.plant.building, office);
+    const occupied = CREW_ORDER.filter((id) => id !== crew).map((id) => deskPosition(id, twin.plant.building, office));
+    const cue = observePatrol(twin, crew, 0, 0)!;
+    const end = planWalk(twin, start, cue.stops!, occupied)!.at(-1)!;
+    const syrup = areaById(twin, "syrup_room")!;
+    expect(containsPoint(syrup, end.x, end.y)).toBe(true);
+    expect(roomTitleBands(twin.areas).some((band) => collides(avatarBounds(end, MAX_AVATAR_SCALE), band, 12))).toBe(false);
+  });
+
+  it("skips a patrol stop when every standing spot would cover a title band", () => {
+    const syrup = areaById(twin, "syrup_room")!;
+    const shallow = { ...syrup, bounds: { ...syrup.bounds, h: 50 } };
+    const narrowTwin = { ...twin, areas: twin.areas.map((area) => area === syrup ? shallow : area) };
+    const cue = observePatrol(narrowTwin, "architect", 0, 0)!;
+    expect(planWalk(narrowTwin, areaCenter(shallow), cue.stops!)).toBeUndefined();
   });
 });

@@ -34,3 +34,16 @@ npm run test -- --maxWorkers=1
 ```
 
 The orchestrator mounted the chip in `TopBar.tsx`. Chromium verified the mounted popover at 320, 390 and 1,440 px, including all ten rows and Escape dismissal. The refresh button returned HTTP 200 with the image check on cooldown. The health suite passed all seven tests, and the full suite passed 434 with three skipped. The orchestrator owns the background watch process.
+
+## Crew dock integration
+
+One Gemini button in the AI crew dock opens the existing ten-service board beside the dock. The three model dots read from the same health snapshot. Their tooltips give the assigned model, status, and latest check time when available. The Inspector keeps its `rules engine` label and shows `local · deterministic`. The card tooltip and transcript retain the active step's engine. Checking and stale stay neutral, confirmed core failures are red, and confirmed auxiliary failures are amber.
+
+`npm run typecheck` passed. `npx vitest run src/health --maxWorkers=1` passed 31 tests, including six for the crew health mapping. Playwright confirmed the default light 3D view on a fresh load, the single Gemini control, four visible crew dots, all ten board rows, and Escape returning focus to Gemini. Browser QA used the normal health endpoint and ran zero Gemini captures. Installed Chrome exited at launch in the workspace sandbox, so screenshots use cached Chromium with SwiftShader.
+
+| View | Light 1440×900 | Light 1280×720 | Dark 1440×900 | Dark 1280×720 |
+| --- | --- | --- | --- | --- |
+| 2D | [Board](shots/office-health-after-board-light-2d-1440x900.png) | [Board](shots/office-health-after-board-light-2d-1280x720.png) | [Board](shots/office-health-after-board-dark-2d-1440x900.png) | [Board](shots/office-health-after-board-dark-2d-1280x720.png) |
+| 3D | [Board](shots/office-health-after-board-light-3d-1440x900.png) | [Board](shots/office-health-after-board-light-3d-1280x720.png) | [Board](shots/office-health-after-board-dark-3d-1440x900.png) | [Board](shots/office-health-after-board-dark-3d-1280x720.png) |
+
+The cached browser's 3D screenshots contain a transparent patch outside the dock and board when the popover is open. The 2D screenshots show the full viewport.

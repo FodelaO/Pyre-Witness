@@ -1,10 +1,11 @@
 /** Shows the newest actual crew steps while preserving the reader's scroll position. */
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { useTranscriptStore } from "@/transcript/transcriptStore";
 import { useFeedStore } from "./feedStore";
+import { feedShown } from "./feedVisibility";
 import { CREW } from "./types";
 import "./crewActivityFeed.css";
 
@@ -14,9 +15,24 @@ const timeFormat = new Intl.DateTimeFormat("en-GB", {
 
 export default function ActivityFeed() {
   const entries = useFeedStore((state) => state.entries);
+  const section = useRef<HTMLElement>(null);
   const list = useRef<HTMLOListElement>(null);
   const pinned = useRef(true);
   const previous = useRef(entries);
+  // The rows exist only while the feed is visible: the entries stay in the store either way.
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const disclosure = section.current?.closest("details");
+    const sync = () => {
+      const visible = feedShown(disclosure);
+      if (visible) pinned.current = true; // a reopened list starts at the newest entry
+      setShown(visible);
+    };
+    sync();
+    disclosure?.addEventListener("toggle", sync);
+    return () => disclosure?.removeEventListener("toggle", sync);
+  }, []);
 
   useLayoutEffect(() => {
     const element = list.current;
@@ -32,13 +48,13 @@ export default function ActivityFeed() {
   }, [entries]);
 
   return (
-    <section className="pw-crew-feed" aria-label="Crew activity">
+    <section ref={section} className="pw-crew-feed" aria-label="Crew activity">
       <div className="pw-crew-feed-actions">
         <button type="button" aria-haspopup="dialog" onClick={() => useTranscriptStore.getState().open()}>
           Open transcript <ArrowUpRight size={12} aria-hidden />
         </button>
       </div>
-      {entries.length ? (
+      {!shown ? null : entries.length ? (
         <ol ref={list} className="pw-crew-feed-list pw-scroll" aria-label="Crew activity entries" tabIndex={0}
           onScroll={(event) => { pinned.current = event.currentTarget.scrollTop < 2; }}>
           {entries.map((entry) => {

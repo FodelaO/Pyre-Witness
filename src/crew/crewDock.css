@@ -158,11 +158,7 @@
 .pw-crew-dock-card[data-active] .pw-crew-dock-identity svg { color: var(--crew-color); }
 .pw-crew-dock-engine { color: var(--pw-text-dim); font-size: 9px; line-height: 12px; }
 
-.pw-crew-dock-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  align-items: baseline;
-  gap: 4px;
+.pw-crew-dock-message {
   font-size: 10px;
   line-height: 13px;
 }
@@ -173,11 +169,9 @@
   white-space: nowrap;
 }
 
-.pw-crew-dock-row > * { min-inline-size: 0; }
 .pw-crew-dock-card[data-state="idle"] .pw-crew-dock-message { color: var(--pw-text-dim); }
-.pw-crew-dock-latency { color: var(--pw-text-dim); font-size: 9px; }
+.pw-crew-dock-latency { color: var(--pw-text-dim); font-size: 9px; white-space: nowrap; }
 .pw-crew-dock-card[data-attention] :is(.pw-crew-dock-message, .pw-crew-dock-state) { color: var(--pw-attention); }
-.pw-crew-dock-card[data-attention] .pw-crew-dock-message { white-space: normal; }
 
 @media (width < 760px) {
   .pw-crew-stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }

@@ -10,6 +10,7 @@ export interface WalkStop {
   beside?: boolean;
   clearance?: "device";
   device?: Asset;
+  avoidTitleBands?: boolean;
 }
 
 type Bounds = Twin["plant"]["building"];
@@ -64,9 +65,10 @@ function roomSlots(twin: Twin, stop: WalkStop, occupied: Point[], titles: readon
     if (seen.has(key)) return;
     seen.add(key);
     const exact = !dx && !dy;
-    if (titles.some((title) => collides(bounds, title))) nearTitles.push(point);
-    else if (targetTags.some((tag) => collides(bounds, tag))) nearTargetTag.push(point);
-    else if (!exact && tags.some((tag) => collides(bounds, tag))) nearTags.push(point);
+    if (titles.some((title) => collides(bounds, title, stop.avoidTitleBands ? FLOOR_INSET : 0))) {
+      if (!stop.avoidTitleBands) nearTitles.push(point);
+    } else if (targetTags.some((tag) => collides(bounds, tag))) nearTargetTag.push(point);
+    else if ((!exact || stop.avoidTitleBands) && tags.some((tag) => collides(bounds, tag))) nearTags.push(point);
     else candidates.push(point);
   };
   if (stop.clearance) {
@@ -86,7 +88,7 @@ function roomSlots(twin: Twin, stop: WalkStop, occupied: Point[], titles: readon
     add(offset, offset);
     add(-offset, offset);
   }
-  if (!candidates.length && area && !area.attrs.outdoor) {
+  if ((!candidates.length || stop.avoidTitleBands) && area && !area.attrs.outdoor) {
     // Dense rooms may only have a clear slot between the normal offsets.
     const acrossRoom = [.15, .5, .85].flatMap((x) => [.25, .5, .8].map((y) => ({
       x: room.x + x * room.w - center.x, y: room.y + y * room.h - center.y,
@@ -213,13 +215,14 @@ export function planWalk(twin: Twin, start: Point, stops: WalkStop[], occupied: 
   const floor = inset(twin.plant.building, FLOOR_INSET);
   const rooms = twin.areas.filter((area) => area.kind !== "context").map((area) => area.bounds);
   const washdown = areaById(twin, "washdown")?.bounds;
-  const titles = roomTitleBands(twin.areas);
+  const titles = roomTitleBands(twin.areas, false);
   const tags = twin.assets.flatMap((asset) => equipmentTagBounds(asset, 1.6, washdown));
   const route = [within(start, floor)];
   for (const stop of stops) {
     let leg: Point[] | undefined;
     const from = route[route.length - 1];
-    for (const slot of roomSlots(twin, stop, occupied, titles, tags)) {
+    const titleBands = stop.avoidTitleBands ? roomTitleBands(twin.areas) : titles;
+    for (const slot of roomSlots(twin, stop, occupied, titleBands, tags)) {
       leg = findRoute(floor, rooms, from, slot, occupied);
       if (leg) break;
     }

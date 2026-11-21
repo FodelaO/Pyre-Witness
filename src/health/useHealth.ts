@@ -1,4 +1,4 @@
-/** Shares health reads between the top-bar chip and the board. */
+/** Shares health reads between the crew dock and the services board. */
 "use client";
 
 import { useEffect } from "react";
