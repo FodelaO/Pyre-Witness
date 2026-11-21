@@ -1,11 +1,12 @@
 /** Flags devices explicitly outside plant asset and patch management in OT. */
+import { complianceReferences } from "../compliance";
 import type { Rule, RuleEvidence } from "../context";
 
 export default {
   id: "MGMT-01",
   title: "Unmanaged asset in OT",
   kind: "cyber",
-  references: ["NIST SP 800-82r3 §6.1.1", "NIST SP 800-82r3 §6.2.11"],
+  references: complianceReferences("iec62443-2-1-asset-program", "nist-csf-2.0-id.am"),
   description: "An OT asset's cyber profile explicitly indicates it is outside plant asset and patch management.",
   check(ctx) {
     const findings: RuleEvidence[] = [];

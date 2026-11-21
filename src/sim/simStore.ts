@@ -2,15 +2,17 @@
 import { create } from "zustand";
 import { useTwinStore } from "@/twin/store";
 import type { Twin } from "@/twin/types";
+import { publishNewSimAlerts } from "./crewAlerts";
 import { projectScenarioMitigations, runScenario } from "./engine";
 import { applyMonitorStatus, readMonitors } from "./monitors";
+import { counterfactualText } from "./outcome";
 import { applySimEffects, restoreProjection, type Projection } from "./overlay";
 import { createProcessState, type ProcessState } from "./process/model";
 import { tickProcess } from "./process/tick";
-import type { ScenarioId, SimAlert, SimAssetEffect, SimEffects, SimRun, SimStage } from "./types";
+import type { SimAlert, SimAssetEffect, SimEffects, SimRun, SimScenarioId, SimStage } from "./types";
 
 export interface SimState {
-  activeScenario: ScenarioId | null;
+  activeScenario: SimScenarioId | null;
   run: SimRun | null;
   currentStage: number;
   alerts: SimAlert[];
@@ -19,7 +21,7 @@ export interface SimState {
   elapsed: number;
   speed: 1 | 4;
   visual: SimEffects["visual"];
-  start: (scenarioId: ScenarioId) => void;
+  start: (scenarioId: SimScenarioId) => void;
   togglePlayback: () => void;
   setSpeed: (speed: 1 | 4) => void;
   advance: (realSeconds: number) => void;
@@ -64,6 +66,8 @@ export const useSimStore = create<SimState>((set, get) => {
   let trialPlantProjection: Projection | null = null;
   let process: ProcessState | undefined;
   let trialProcess: ProcessState | undefined;
+  let sequence = 0;
+  let runId: string | undefined;
 
   const restoreTrial = (twin: Twin) => restoreProjection(restoreProjection(twin, scenarioProjection), trialPlantProjection);
 
@@ -96,9 +100,13 @@ export const useSimStore = create<SimState>((set, get) => {
     speed: 1,
     start(scenarioId) {
       clearScenarioProjection();
-      const { twin } = useTwinStore.getState();
-      const run = runScenario(scenarioId, twin);
-      set({ ...idle, activeScenario: scenarioId, run, mode: "playing", alerts: readMonitors(twin) });
+      const { twin, mitigations } = useTwinStore.getState();
+      const appliedEffects = mitigations.filter(({ status }) => status === "applied").flatMap(({ effects }) => effects);
+      const run = runScenario(scenarioId, twin, { appliedEffects });
+      runId = `sim-${++sequence}`;
+      const alerts = readMonitors(twin);
+      publishNewSimAlerts(alerts, get().alerts, runId);
+      set({ ...idle, activeScenario: scenarioId, run, mode: "playing", alerts });
       get().advance(0);
     },
     togglePlayback() {
@@ -122,12 +130,13 @@ export const useSimStore = create<SimState>((set, get) => {
         const stages = state.run.stages.slice(0, currentStage + 1);
         const { painted, alerts, visual } = paintStages(before, stages);
         if (painted !== twin) patchTwinQuiet(() => painted);
+        publishNewSimAlerts(alerts, state.alerts, runId);
         next.alerts = alerts;
         next.visual = visual;
       }
       if (finished) {
         next.mode = "finished";
-        next.outcome = state.run.consequence.summary;
+        next.outcome = `${state.run.consequence.summary}. Counterfactual · ${counterfactualText(state.run)}`;
       }
       set(next);
       if (finished) {
@@ -154,6 +163,7 @@ export const useSimStore = create<SimState>((set, get) => {
         trialPlantProjection = { before: beforeRun, painted: updated };
         const { painted, alerts } = paintStages(updated, stages);
         if (painted !== twin) patchTwinQuiet(() => painted);
+        publishNewSimAlerts(alerts, get().alerts, runId);
         if (alerts.length || get().alerts.length) set({ alerts });
         return;
       }
@@ -164,10 +174,12 @@ export const useSimStore = create<SimState>((set, get) => {
       const painted = applyMonitorStatus(tick.twin, alerts);
       monitorProjection = { before: tick.twin, painted };
       if (painted !== twin) patchTwinQuiet(() => painted);
+      publishNewSimAlerts(alerts, get().alerts);
       if (alerts.length || get().alerts.length) set({ alerts });
     },
     reset() {
       clearScenarioProjection();
+      runId = undefined;
       set({ ...idle, alerts: readMonitors(useTwinStore.getState().twin) });
     },
   };

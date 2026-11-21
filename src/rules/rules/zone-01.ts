@@ -1,11 +1,14 @@
 /** Flags cloud and remote connectivity below the DMZ without documented enforcement. */
+import { complianceReferences } from "../compliance";
 import type { Rule, RuleEvidence } from "../context";
 
 export default {
   id: "ZONE-01",
   title: "External connectivity below the DMZ",
   kind: "cyber",
-  references: ["IEC 62443-3-3 SR 5.1", "IEC 62443-3-3 SR 5.2", "NIST SP 800-82r3 §6.2.10"],
+  references: complianceReferences(
+    "iec62443-3-3-sr-5.1", "iec62443-3-3-sr-5.2", "nist-800-82r3-5.2.3", "nist-800-82r3-6.2.10",
+  ),
   description: "Cloud or remote access is modeled on a Purdue 0–3 asset without an enforced route through Level 3.5.",
   check(ctx) {
     const findings: RuleEvidence[] = [];

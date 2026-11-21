@@ -1,5 +1,6 @@
 /** Flags flat or unenforced network links across different trust or consequence zones. */
 import type { Asset, Severity } from "@/twin/types";
+import { complianceReferences } from "../compliance";
 import type { Rule, RuleContext, RuleEvidence } from "../context";
 
 interface ZoneProfile {
@@ -20,23 +21,21 @@ interface BoundaryEvidence {
 function zoneProfiles(ctx: RuleContext): Map<string, ZoneProfile> {
   const profiles = new Map<string, ZoneProfile>();
   for (const [zone, zoneAssets] of ctx.zoneAssets) {
-    const assets = zoneAssets.filter((asset) => ctx.isNetworked(asset));
-    if (!assets.length) continue;
-    let minCriticality: Severity = 5;
-    let maxCriticality: Severity = 1;
-    for (const asset of assets) {
-      if (asset.criticality < minCriticality) minCriticality = asset.criticality;
-      if (asset.criticality > maxCriticality) maxCriticality = asset.criticality;
+    const profile: ZoneProfile = {
+      assets: [], minCriticality: 5, maxCriticality: 1,
+      hasSafetyCritical: false, hasOtherAssets: false, hasOt: false, hasExternal: false,
+    };
+    for (const asset of zoneAssets) {
+      if (!ctx.isNetworked(asset)) continue;
+      profile.assets.push(asset);
+      if (asset.criticality < profile.minCriticality) profile.minCriticality = asset.criticality;
+      if (asset.criticality > profile.maxCriticality) profile.maxCriticality = asset.criticality;
+      if (asset.safetyCritical === true) profile.hasSafetyCritical = true;
+      else profile.hasOtherAssets = true;
+      if (asset.network.level <= 3) profile.hasOt = true;
+      else profile.hasExternal = true;
     }
-    profiles.set(zone, {
-      assets,
-      minCriticality,
-      maxCriticality,
-      hasSafetyCritical: assets.some((asset) => asset.safetyCritical === true),
-      hasOtherAssets: assets.some((asset) => asset.safetyCritical !== true),
-      hasOt: assets.some((asset) => asset.network.level <= 3),
-      hasExternal: assets.some((asset) => asset.network.level > 3),
-    });
+    if (profile.assets.length) profiles.set(zone, profile);
   }
   return profiles;
 }
@@ -57,7 +56,7 @@ export default {
   id: "ZONE-02",
   title: "Unenforced network boundary",
   kind: "cyber",
-  references: ["IEC 62443-3-3 SR 5.1", "IEC 62443-3-3 SR 5.2", "NIST SP 800-82r3 §5.2.3.1"],
+  references: complianceReferences("iec62443-3-3-sr-5.1", "iec62443-3-3-sr-5.2", "nist-800-82r3-5.2.3"),
   description: "An active link or declared conduit crosses a trust boundary or connects assets of unequal consequence across zones without verified enforcement.",
   check(ctx) {
     const zones = zoneProfiles(ctx);

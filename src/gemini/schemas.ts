@@ -1,6 +1,6 @@
 /** Runtime schemas shared by Gemini structured output and the pipeline validator. */
 import { z } from "zod";
-import { DEVICE_CATEGORIES, type Assessment, type DeviceProfile } from "@/pipeline/types";
+import { DEVICE_CATEGORIES, type DeviceProfile } from "@/pipeline/types";
 import { EQUIPMENT_KINDS, MEDIA, RADIOS, type AreaId, type Medium } from "@/twin/types";
 
 export const areaId = z.enum([
@@ -64,10 +64,16 @@ const effect = z.union([
   z.object({ type: z.literal("remove_connection"), assetId: tag, to: tag, medium: z.literal("network") }),
   z.object({ type: z.literal("remove_asset"), assetId: tag }),
   z.object({ type: z.literal("enforce_conduit"), conduitId: tag, enforcedBy: tag, allows: z.array(detail).max(16) }),
+  z.object({ type: z.literal("add_protection"), assetId: tag, protection: tag }),
   z.object({ type: z.literal("note"), text: detail }),
 ]);
 
-export const assessmentSchema = z.object({
+const risk = z.object({
+  title: tag, kind: riskKind, severity, likelihood: severity,
+  technique: technique.nullable(), description: detail, mitigation: detail,
+});
+
+export const modelAssessmentSchema = z.object({
   placement: z.object({ level, network_area: tag, conduit: tag.nullable(), why: detail }),
   physical_placement: z.object({
     area: areaId,
@@ -77,12 +83,9 @@ export const assessmentSchema = z.object({
     physical_constraints: z.array(detail).max(12),
   }),
   never_place: z.array(z.object({ where: tag, area: areaId.nullable(), level: level.nullable(), why: detail })).max(12),
-  risks: z.array(z.object({
-    id: tag, title: tag, kind: riskKind, severity, likelihood: severity,
-    technique: technique.nullable(), description: detail, mitigation: detail,
-  })).max(12),
+  risks: z.array(risk).max(12),
   attack_paths: z.array(z.object({
-    id: tag, title: tag, entry: tag, target: tag,
+    title: tag, entry: tag, target: tag,
     steps: z.array(z.object({
       from: tag, to: tag,
       via: z.enum(["rf", "network", "physical", "usb", "internet", "remote", "process"]),
@@ -91,22 +94,24 @@ export const assessmentSchema = z.object({
     })).min(1).max(8),
     severity, likelihood: severity,
     impact: detail,
-    source: z.literal("model"),
-    causedBy: tag.optional(),
     ruleIds: z.array(tag).max(12).optional(),
   })).max(6),
   compliance: z.array(z.object({
     framework: tag, clause: tag, status: z.enum(["met", "gap", "unknown"]), note: detail,
   })).max(12),
   mitigations: z.array(z.object({
-    id: tag, title: tag, kind: z.enum(["physical", "software", "procedural"]), description: detail,
+    title: tag, kind: z.enum(["physical", "software", "procedural"]), description: detail,
     targets: z.array(tag).max(12),
     effects: z.array(effect).min(1).max(6),
-    status: z.literal("proposed"),
-    proposedBy: z.literal("architect"),
   })).max(8),
   confidence: probability,
-}) satisfies z.ZodType<Assessment>;
+});
+export type ModelAssessment = z.infer<typeof modelAssessmentSchema>;
+
+/** The single-call evaluation baseline also uses these shapes and supplies its own risk IDs. */
+export const assessmentSchema = modelAssessmentSchema.extend({
+  risks: z.array(risk.extend({ id: tag })).max(12),
+});
 
 const briefingLine = z.string().trim().min(1).max(240).refine((text) => !/[\r\n]/.test(text));
 export const briefingSchema = z.object({ lines: z.array(briefingLine).min(2).max(3) });

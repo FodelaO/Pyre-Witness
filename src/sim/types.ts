@@ -1,7 +1,8 @@
 /** Local contracts for deterministic tabletop runs and simulated plant alerts. */
-import type { AreaId, AssetStatus, Mitigation, Twin } from "@/twin/types";
+import type { AreaId, AssetStatus, Mitigation, MitigationEffect, Twin } from "@/twin/types";
 
 export type ScenarioId = "cip" | "ammonia" | "ransomware" | "wireless" | "chiller";
+export type SimScenarioId = ScenarioId | "carbonation";
 
 export interface SimAlert {
   id: string;
@@ -33,7 +34,15 @@ interface StageEvent {
 }
 
 export interface StageDefinition extends StageEvent {
-  control?: { label: string; where?: string[]; holds(twin: Twin): boolean };
+  control?: ScenarioControl;
+}
+
+export interface ScenarioControl {
+  label: string;
+  where?: string[];
+  holds(twin: Twin): boolean;
+  /** Remove exactly the credited safeguard from a replay copy. */
+  without?(twin: Twin): Twin;
 }
 
 export interface SimStage extends StageEvent {
@@ -47,18 +56,30 @@ export interface SimConsequence {
 }
 
 export interface SimRun {
-  id: ScenarioId;
+  id: SimScenarioId;
   stages: SimStage[];
   contained: boolean;
   /** Simulated seconds from the beginning of the replay. */
   containedAt?: number;
   consequence: SimConsequence;
+  counterfactual: SimCounterfactual;
 }
 
-export interface ScenarioDefinition {
-  id: ScenarioId;
+export interface SimCounterfactual {
+  removedControl: string | null;
+  containedAt?: number;
+  heldBy?: string;
+  consequence: SimConsequence;
+}
+
+export interface ScenarioDefinition<Id extends SimScenarioId = ScenarioId> {
+  id: Id;
   label: string;
-  stages(twin: Twin): StageDefinition[];
+  stages(twin: Twin, context?: ScenarioContext): StageDefinition[];
   consequence(twin: Twin, stages: SimStage[]): SimConsequence;
   mitigations(twin: Twin): Mitigation[];
+}
+
+export interface ScenarioContext {
+  appliedEffects?: readonly MitigationEffect[];
 }

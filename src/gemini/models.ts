@@ -27,8 +27,17 @@ export type ModelRole = keyof typeof MODEL_IDS;
  * Neon and Hydrogen support low | medium | high | xhigh (default high) and REJECT "minimal".
  * Never send temperature / top_p / top_k or thinking budgets to Gemini 4 models.
  */
-export const THINKING = {
+type CarbonThinking = "low" | "medium" | "high";
+
+/**
+ * Carbon at "high" took more than 120 s on the full 92-asset twin (measured live 2026-11-21),
+ * which is too slow for a live capture. Default is tuned for the demo; override per process with
+ * PW_REASONING_THINKING=low|medium|high (server only).
+ */
+const reasoningOverride = process.env.PW_REASONING_THINKING as CarbonThinking | undefined;
+
+export const THINKING: { perception: "low"; reasoning: CarbonThinking; chief: "low" } = {
   perception: "low",
-  reasoning: "high",
+  reasoning: reasoningOverride ?? "medium",
   chief: "low",
-} as const;
+};

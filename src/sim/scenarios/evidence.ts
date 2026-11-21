@@ -4,6 +4,28 @@ import { buildGraph, type AttackGraph } from "@/rules/graph";
 import { placementFindings } from "@/rules/registry";
 import type { Asset, Mitigation, MitigationEffect, Twin } from "@/twin/types";
 
+export const PHYSICAL_INGRESS_PROTECTIONS = ["port-lock", "locked-cabinet"] as const;
+
+export function hasProtection(asset: Asset | undefined, protection: string): boolean {
+  return asset?.protections?.includes(protection) ?? false;
+}
+
+export function editAsset(twin: Twin, id: string, edit: (asset: Asset) => Asset): Twin {
+  return { ...twin, assets: twin.assets.map((asset) => asset.id === id ? edit(asset) : asset) };
+}
+
+export function withoutProtection(twin: Twin, id: string, protection: string): Twin {
+  return editAsset(twin, id, (asset) => ({
+    ...asset,
+    protections: (asset.protections ?? []).filter((installed) => installed !== protection),
+  }));
+}
+
+export function withoutBoundary(twin: Twin, id: string): Twin {
+  return { ...twin, conduits: twin.conduits.map((conduit) =>
+    conduit.id === id ? { ...conduit, enforcedBy: null } : conduit) };
+}
+
 export function inspect(twin: Twin) {
   const context = createContext(twin);
   const findings = placementFindings(context);

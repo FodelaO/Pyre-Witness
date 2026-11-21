@@ -3,20 +3,21 @@ import { randomUUID } from "node:crypto";
 import { assessDevice, briefEngineer } from "@/gemini/assess";
 import { captureEvidence, gateCapture, perceive } from "@/gemini/capture";
 import { MODEL_IDS } from "@/gemini/models";
-import { geminiClients, PipelineFailure, providerFailure, type GeminiClients } from "@/gemini/transport";
+import { geminiClients, PipelineFailure, providerFailure, waitForRetry, type GeminiClients } from "@/gemini/transport";
 import { fetchProductPage } from "@/link/fetchProductPage";
 import { assetFromProfile, capturedAssetId, networkAt, resolveDropPoint } from "@/pipeline/assetFromProfile";
 import type {
-  AnalyzeRequest, CaptureInput, DeviceProfile, DropPoint, LinkSnapshot, PipelineEvent, PipelineStage, ReassessRequest,
+  AnalyzeRequest, CaptureInput, DeviceProfile, DropPoint, LinkSnapshot, PipelineStage, ReassessRequest,
 } from "@/pipeline/types";
 import { assetById } from "@/twin/geometry";
 import type { Asset, Twin } from "@/twin/types";
 import { groundAssessment } from "./groundAssessment";
 import { captureImageSchema } from "./requests";
 import { checkPlacement } from "./selfCheck";
+import type { StreamEvent } from "./sse";
 
-type EventData<T = PipelineEvent> = T extends PipelineEvent ? Omit<T, "runId" | "at"> : never;
-type EventSink = (event: PipelineEvent) => void;
+type EventData<T = StreamEvent> = T extends StreamEvent ? Omit<T, "runId" | "at"> : never;
+type EventSink = (event: StreamEvent) => void;
 interface Run {
   id: string;
   emit: (event: EventData) => void;
@@ -69,25 +70,31 @@ function inputLabel(input: CaptureInput): string {
   }
 }
 
-// The link task owns the fetcher. Its existing one-argument stub also accepts this call at runtime.
-const fetchLink: (url: string, options?: { signal: AbortSignal }) => Promise<LinkSnapshot> = fetchProductPage;
-
 async function readLink(run: Run, url: string): Promise<LinkSnapshot> {
   const start = performance.now();
   run.stage("link");
   run.emit({ type: "link.started", url });
   const result = await deadline(run, "link", async (signal) => {
+    const fetchPage = () => fetchProductPage(url, { signal });
     try {
-      return await fetchLink(url, { signal });
-    } catch {
-      signal.throwIfAborted();
-      throw new PipelineFailure("Could not read this product page. Try a device photo or paste the key specifications.");
+      return await fetchPage();
+    } catch (error) {
+      await waitForRetry(error, signal);
+      return fetchPage();
     }
+  }).catch((error: unknown) => {
+    run.signal.throwIfAborted();
+    if (error instanceof PipelineFailure) throw error;
+    throw new PipelineFailure("Could not read this product page. Try a device photo or paste the key specifications.");
   });
-  const image = captureImageSchema.safeParse(result.image);
+  const parsedImage = captureImageSchema.safeParse(result.image);
+  const image = parsedImage.success ? parsedImage.data : null;
   const { url: fetchedUrl, title, imageUrl } = result;
-  run.emit({ type: "link.fetched", latencyMs: elapsed(start), snapshot: { url: fetchedUrl, title, imageUrl } });
-  return { ...result, image: image.success ? image.data : null };
+  run.emit({
+    type: "link.fetched", latencyMs: elapsed(start), snapshot: { url: fetchedUrl, title, imageUrl },
+    thumbnail: image ?? undefined,
+  });
+  return { ...result, image };
 }
 
 async function assessAndBrief(
@@ -109,32 +116,38 @@ async function assessAndBrief(
     type: "reasoning.done", model: MODEL_IDS.reasoning, latencyMs: elapsed(reasoningStarted), assessment: grounded.assessment,
   });
 
-  function inspect(revised: boolean) {
+  function inspect(revised: boolean, revisionIssue?: string) {
     run.stage("selfcheck");
     run.emit({ type: "selfcheck.started", engine: "rules engine" });
     const start = performance.now();
     const result = checkPlacement(twin, candidate, grounded.assessment, grounded.disagreements, reassess, revised);
+    if (result.disagreements.length && revisionIssue) result.disagreements.push(revisionIssue);
     const latencyMs = elapsed(start);
     for (const path of result.paths) run.emit({ type: "selfcheck.path", path });
     run.emit({ type: "selfcheck.done", latencyMs, result });
     return result;
   }
 
-  let checked = inspect(false);
-  if (checked.disagreements.length) {
+  const previousId = first.interactionId;
+  let checked = inspect(false, previousId ? undefined : "Revision skipped because Gemini returned no interaction ID. The original assessment was retained.");
+  if (checked.disagreements.length && previousId) {
     run.stage("revision");
     run.emit({ type: "revision.started", model: MODEL_IDS.reasoning, reason: checked.disagreements.join(" ") });
-    if (!first.interactionId) throw new PipelineFailure("Gemini did not return the session ID needed for revision.");
     const revisionStarted = performance.now();
-    const previousId = first.interactionId;
     const revised = await deadline(run, "revision", (signal) => assessDevice(clients.interactions, context, signal, onThought, {
       previousId, disagreements: checked.disagreements,
-    }));
-    grounded = groundAssessment(twin, candidate, revised.value, run.id);
-    run.emit({
-      type: "revision.done", model: MODEL_IDS.reasoning, latencyMs: elapsed(revisionStarted), assessment: grounded.assessment,
+    })).catch((error: unknown) => {
+      run.signal.throwIfAborted();
+      checked = inspect(false, `Revision could not finish. The original assessment was retained. ${providerFailure(error)}`);
+      return null;
     });
-    checked = inspect(true);
+    if (revised) {
+      grounded = groundAssessment(twin, candidate, revised.value, run.id);
+      run.emit({
+        type: "revision.done", model: MODEL_IDS.reasoning, latencyMs: elapsed(revisionStarted), assessment: grounded.assessment,
+      });
+      checked = inspect(true);
+    }
   }
 
   run.stage("summary");
@@ -151,12 +164,11 @@ export function runAnalyze(request: AnalyzeRequest, sink: EventSink, signal = ne
     const { input, twin } = request;
     const dropPoint = resolveDropPoint(twin, request.dropPoint);
     run.emit({ type: "run.started", mode: "analyze", input: { kind: input.kind, label: inputLabel(input) }, dropPoint });
-    run.stage("gate");
-    const clients = geminiClients();
     const link = input.kind === "link" ? await readLink(run, input.url) : undefined;
     const evidence = captureEvidence(input, link);
 
     run.stage("gate");
+    const clients = geminiClients();
     run.emit({ type: "gate.started", model: MODEL_IDS.decisions });
     const gateStarted = performance.now();
     const gate = await deadline(run, "gate", (signal) => gateCapture(clients.decisions, evidence, signal));
@@ -179,9 +191,8 @@ export function runReassess(request: ReassessRequest, sink: EventSink, signal = 
     const { twin, profile, assetId, placement } = request;
     const dropPoint: DropPoint = { x: placement.x, y: placement.y, area: placement.area };
     run.emit({ type: "run.started", mode: "reassess", input: { kind: "text", label: `Reassess ${assetId}` }, dropPoint });
-    run.stage("gate");
-    const clients = geminiClients();
     run.stage("reasoning");
+    const clients = geminiClients();
     const asset = assetById(twin, assetId);
     if (!asset || asset.origin !== "added") throw new PipelineFailure("The captured device is missing from the plant.");
     const level = placement.level ?? asset.network.level;

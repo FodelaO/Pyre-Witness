@@ -11,6 +11,7 @@ import { markerPosition, markerRoute, traceTo } from "./floorGeometry";
 import IncidentEffects, { FloorTag } from "./IncidentEffects";
 import { startSimRuntime } from "./runtime";
 import SimControls, { hasShellControls, subscribeShellControls } from "./SimControls";
+import SimFloorAdditions from "./SimFloorAdditions";
 import { useSimStore } from "./simStore";
 import type { SimEffects, SimStage } from "./types";
 
@@ -99,7 +100,10 @@ export default function SimLayer() {
 
   return (
     <g ref={attach} className="pw-sim-layer" aria-label={stage ? "Simulated incident overlay" : undefined}>
-      {floor && !shellControls && createPortal(<SimControls embedded />, floor)}
+      {floor && !shellControls && createPortal(
+        <div onPointerDown={(event) => event.stopPropagation()}><SimControls embedded /></div>, floor,
+      )}
+      {floor && !shellControls && <SimFloorAdditions floor={floor} />}
       {stage && (
         <>
           {visual && <IncidentEffects twin={twin} visual={visual} />}

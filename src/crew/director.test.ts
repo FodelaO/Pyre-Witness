@@ -82,8 +82,10 @@ describe("crew director", () => {
       .toMatchObject({ cue: { activity: { text: "Reconsidering · Placement rule applies" } } });
     expect(next({ ...run, type: "revision.done", model: MODEL_IDS.reasoning, latencyMs: 800, assessment }))
       .toMatchObject({ cue: { activity: { text: "Revised · Packaging · Purdue L2" } } });
+    expect(next({ ...run, type: "summary.started", model: MODEL_IDS.chief }))
+      .toMatchObject({ cue: { stops: [{ point: { x: twin.plant.building.x + twin.plant.building.w - 32 } }] } });
     expect(next({ ...run, type: "summary.done", model: MODEL_IDS.chief, latencyMs: 300, text: "Place by the packaging line." }))
-      .toMatchObject({ cue: { briefing: true, stops: [{ point: { x: twin.plant.building.x + twin.plant.building.w - 32 } }],
+      .toMatchObject({ cue: { briefing: true,
         activity: { crew: "chief", text: "Place by the packaging line.", engine: MODEL_IDS.chief } } });
     expect(next({ ...run, type: "run.completed", totalMs: 5000 })).toMatchObject({ kind: "complete" });
     expect(next({ ...run, type: "selfcheck.path", path })).toBeNull();
@@ -108,10 +110,22 @@ describe("crew director", () => {
     const url = "https://example.com/pressure-gauge";
     next({ ...run, type: "run.started", input: { kind: "link", label: "Gauge" }, dropPoint: null });
     expect(next({ ...run, type: "link.started", url })).toMatchObject({ cue: {
-      status: "working", activity: { crew: "scout", text: "Reading the product page…", engine: undefined },
+      status: "working", activity: { crew: "scout", text: "Opening the product page…", engine: undefined },
     } });
     expect(next({ ...run, type: "summary.started", model: MODEL_IDS.chief })).toMatchObject({ cue: {
       status: "working", activity: { crew: "chief", text: "Writing the briefing…", engine: MODEL_IDS.chief },
     } });
+  });
+
+  it("sends Architect and Inspector to the actual reassessment drop point", () => {
+    const next = cursor();
+    const point = { x: 546, y: 234, area: "syrup_room" } as const;
+    expect(next({ ...run, type: "run.started", mode: "reassess", input: { kind: "text", label: "Gauge" }, dropPoint: point }))
+      .toMatchObject({ kind: "stand", activity: { crew: "architect", text: "Reassessment started" } });
+    expect(next({ ...run, type: "reasoning.started", model: MODEL_IDS.reasoning, candidateArea: "syrup_room" }))
+      .toMatchObject({ cue: { activity: { crew: "architect" }, stops: [{ point, area: "syrup_room" }] } });
+    next({ ...run, type: "reasoning.done", model: MODEL_IDS.reasoning, latencyMs: 20, assessment });
+    expect(next({ ...run, type: "selfcheck.started", engine: "rules engine" }))
+      .toMatchObject({ cue: { activity: { crew: "inspector" }, stops: [{ point, area: "syrup_room" }] } });
   });
 });

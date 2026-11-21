@@ -64,6 +64,8 @@ export async function fetchMainImage(
   imageUrl: string | null,
   options?: FetchMainImageOptions,
 ): Promise<CaptureImage | null> {
+  const signal = options?.signal;
+  signal?.throwIfAborted();
   if (!imageUrl) return null;
 
   try {
@@ -71,7 +73,7 @@ export async function fetchMainImage(
       maxBytes: IMAGE_MAX_BYTES,
       accept: IMAGE_ACCEPT,
       timeoutMs: options?.timeoutMs,
-      signal: options?.signal,
+      signal,
       fetchImpl: options?.fetchImpl,
       dnsLookup: options?.dnsLookup,
     });
@@ -85,8 +87,8 @@ export async function fetchMainImage(
       mimeType,
       dataBase64: Buffer.from(response.body).toString("base64"),
     };
-  } catch (error) {
-    if (options?.signal?.aborted) throw error;
+  } catch {
+    signal?.throwIfAborted();
     return null;
   }
 }

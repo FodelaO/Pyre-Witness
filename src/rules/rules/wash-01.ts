@@ -1,6 +1,7 @@
 /** Checks washdown enclosure and hygienic material evidence near open product. */
 import { UNITS_PER_METRE } from "@/twin/geometry";
 import type { Asset, Severity } from "@/twin/types";
+import { complianceReferences } from "../compliance";
 import type { Rule, RuleEvidence } from "../context";
 
 const PASSIVE_KINDS = new Set(["vertical_tank", "bullet_tank", "valve", "heat_exchanger"]);
@@ -18,7 +19,9 @@ export default {
   id: "WASH-01",
   title: "Washdown or food-contact design gap",
   kind: "compliance",
-  references: ["FDA 21 CFR 117.40(a)", "EHEDG Guideline 13", "3-A 00-02", "IEC 60529", "ISO 20653 (IP code reference)"],
+  references: complianceReferences(
+    "fda-21cfr117-40", "ehedg-doc-8", "ehedg-doc-13", "3a-sanitary-standards", "iec60529-ip-code", "iso20653-ip69k",
+  ),
   description: "Washdown placements need documented hygienic material and suitable enclosure protection. Explicitly non-food-grade equipment within 5 m of open product is flagged.",
   check(ctx): RuleEvidence[] {
     const findings: RuleEvidence[] = [];

@@ -14,6 +14,8 @@ const MIME: Readonly<Record<string, string>> = {
 
 function eventDetail(event: PipelineEvent): string {
   switch (event.type) {
+    case "link.fetched":
+      return event.snapshot.title;
     case "gate.done":
       return Object.entries(event.gate.answers).map(([id, answer]) =>
         `${id}=${answer.value} (confidence ${answer.confidence.toFixed(2)})`,
@@ -35,21 +37,24 @@ function eventDetail(event: PipelineEvent): string {
 }
 
 async function main(): Promise<void> {
-  const [, , description, imagePath] = process.argv;
-  if (!description?.trim()) {
-    console.error('Usage: tsx --env-file=.env scripts/smoke-pipeline.ts "<text description>" [image-path]');
+  const [, , description, imagePath, ...extra] = process.argv;
+  const link = description === "--link";
+  if (extra.length || !description?.trim() || (link && !imagePath?.trim())) {
+    console.error('Usage: tsx --env-file=.env scripts/smoke-pipeline.ts "<text description>" [image-path] | --link <product-url>');
     process.exitCode = 1;
     return;
   }
   let input: CaptureInput = { kind: "text", description };
-  if (imagePath) {
+  if (link && imagePath) {
+    input = { kind: "link", url: imagePath };
+  } else if (imagePath) {
     const mimeType = MIME[extname(imagePath).toLowerCase()];
     if (!mimeType) throw new Error("Use an image with a supported file extension, such as .jpg, .png, or .webp.");
     const dataBase64 = await readFile(imagePath, "base64");
     input = { kind: "photo", note: description, images: [{ mimeType, dataBase64 }] };
   }
   const validated = analyzeRequestSchema.safeParse({ input, twin: SEED_TWIN });
-  if (!validated.success) throw new Error("Invalid smoke capture. Use a short description and an image under 4 MB.");
+  if (!validated.success) throw new Error("Invalid smoke capture. Use a short description, an image under 4 MB, or an HTTP(S) product URL.");
 
   const controller = new AbortController();
   const abort = () => {

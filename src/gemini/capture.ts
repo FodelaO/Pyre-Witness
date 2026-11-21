@@ -3,7 +3,7 @@ import type { Decisions } from "@google/genai";
 import { MODEL_IDS, THINKING } from "@/gemini/models";
 import type { CaptureInput, DeviceProfile, GateAnswer, GateResult, LinkSnapshot } from "@/pipeline/types";
 import { decisionsResponseSchema, deviceProfileSchema } from "./schemas";
-import { structuredInteraction, validated, type GeminiClients } from "./transport";
+import { noSdkRetries, structuredInteraction, validated, type GeminiClients } from "./transport";
 
 type EvidenceInput = Decisions.CreateDecisionRequest["input"];
 
@@ -48,7 +48,7 @@ const QUESTIONS: Decisions.CreateDecisionRequest["questions"] = {
 
 export async function gateCapture(client: GeminiClients["decisions"], input: EvidenceInput, signal: AbortSignal): Promise<GateResult> {
   const { answers } = await validated(decisionsResponseSchema, signal, () =>
-    client.create({ model: MODEL_IDS.decisions, input, questions: QUESTIONS }, { signal }),
+    client.create({ model: MODEL_IDS.decisions, input, questions: QUESTIONS }, { signal, retries: noSdkRetries }),
   );
   const { is_device: device, is_readable: readable, label_visible: label, route } = answers;
   const binary = ({ noul, confidence }: typeof device): GateAnswer => ({ type: "noul", value: noul, confidence });

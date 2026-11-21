@@ -2,7 +2,7 @@
 import { MODEL_IDS } from "@/gemini/models";
 import type { Assessment, DropPoint, PipelineEvent, PipelineStage } from "@/pipeline/types";
 import { DEFAULT_DROP } from "@/twin/dropPoint";
-import { areaById, areaCenter, assetById, clampToArea, nodePosition, type Point } from "@/twin/geometry";
+import { areaById, areaCenter, assetById, clampToArea, containsPoint, nodePosition, type Point } from "@/twin/geometry";
 import type { AttackPath, AttackStep, Twin } from "@/twin/types";
 import { CREW, type ActivityEntry, type CrewId } from "./types";
 import type { WalkStop } from "./walk";
@@ -26,6 +26,7 @@ export type CrewIntent =
 interface DirectorState {
   runId: string | null;
   active: boolean;
+  reassess: boolean;
   drop: DropPoint;
   recommendation: WalkStop | null;
   gateRejection?: string;
@@ -34,7 +35,7 @@ interface DirectorState {
 }
 
 export const INITIAL_DIRECTOR: DirectorState = {
-  runId: null, active: false, drop: DEFAULT_DROP, recommendation: null, lastCrew: "scout",
+  runId: null, active: false, reassess: false, drop: DEFAULT_DROP, recommendation: null, lastCrew: "scout",
 };
 
 const stageOwners: Record<PipelineStage, { crew: CrewId; engine?: string }> = {
@@ -56,7 +57,7 @@ function placementStop(twin: Twin, assessment: Assessment, drop: DropPoint): Wal
   const area = areaById(twin, id);
   if (!area) return { point: drop, area: drop.area };
   const near = nearId ? assetById(twin, nearId) : undefined;
-  if (near?.physical.area === id) {
+  if (near && containsPoint(area, near.physical.x, near.physical.y)) {
     return { point: clampToArea(area, near.physical.x, near.physical.y), area: id, beside: true };
   }
   return { point: areaCenter(area), area: id };
@@ -112,7 +113,7 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
     const reassess = event.mode === "reassess";
     const crew = reassess ? "architect" : "scout";
     return {
-      state: { ...INITIAL_DIRECTOR, lastCrew: crew, runId: event.runId, active: true, drop: event.dropPoint ?? DEFAULT_DROP },
+      state: { ...INITIAL_DIRECTOR, lastCrew: crew, runId: event.runId, active: true, reassess, drop: event.dropPoint ?? DEFAULT_DROP },
       intent: { kind: "stand", activity: activity(crew, reassess ? "Reassessment started" : "Analysis started") },
     };
   }
@@ -128,7 +129,7 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
 
   switch (event.type) {
     case "link.started":
-      return step("scout", "working", "Reading the product page…");
+      return step("scout", "working", "Opening the product page…");
     case "link.fetched":
       return step("scout", "done", `Product page read · ${event.snapshot.title || "link"}`);
     case "gate.started":
@@ -156,7 +157,7 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
     }
     case "reasoning.started": {
       const area = event.candidateArea ? areaById(twin, event.candidateArea) : areaById(twin, state.drop.area);
-      const stop = area ? { point: areaCenter(area), area: area.id } : { point: state.drop, area: state.drop.area };
+      const stop = area && !state.reassess ? { point: areaCenter(area), area: area.id } : { point: state.drop, area: state.drop.area };
       return step("architect", "working", "Checking where this fits…", event.model, { stops: [stop] });
     }
     case "reasoning.thought":
@@ -173,7 +174,7 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
     }
     case "selfcheck.started":
       return step("inspector", "working", "Checking placement rules…", event.engine, {
-        stops: [state.recommendation ?? { point: state.drop, area: state.drop.area }],
+        stops: [(!state.reassess && state.recommendation) || { point: state.drop, area: state.drop.area }],
       });
     case "selfcheck.path":
       return step("inspector", "working", `Path found: ${event.path.title}`, CREW.inspector.engine,
@@ -186,14 +187,14 @@ export function directCrew(state: DirectorState, event: PipelineEvent, twin: Twi
     case "revision.started":
       return step("architect", "working", event.reason ? `Reconsidering · ${event.reason}` : "Reconsidering placement…", event.model,
         { holdMs: 800 });
-    case "summary.started":
-      return step("chief", "working", "Writing the briefing…", event.model);
-    case "summary.done": {
+    case "summary.started": {
       const { x, y, w, h } = twin.plant.building;
-      return step("chief", "done", event.text, event.model, {
-        stops: [{ point: { x: x + w - 32, y: y + h * 0.55 } }], briefing: true,
+      return step("chief", "working", "Writing the briefing…", event.model, {
+        stops: [{ point: { x: x + w - 32, y: y + h * 0.55 } }],
       });
     }
+    case "summary.done":
+      return step("chief", "done", event.text, event.model, { briefing: true });
     case "run.error": {
       const { crew, engine } = event.stage === "unknown"
         ? { crew: standaloneError ? "scout" as const : state.lastCrew, engine: standaloneError ? undefined : state.lastEngine }

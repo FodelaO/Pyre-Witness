@@ -5,13 +5,15 @@ import { useTwinStore } from "@/twin/store";
 import type { Asset, Twin } from "@/twin/types";
 import { assetFromProfile, atRecommendedPlacement, capturedAssetId, resolveDropPoint } from "./assetFromProfile";
 import { useRunStore } from "./runStore";
+import type { StreamEvent } from "./server/sse";
 import type {
-  AnalyzeRequest, Assessment, CaptureInput, DeviceProfile, DropPoint, GateResult, PipelineEvent, ReassessRequest,
+  AnalyzeRequest, Assessment, CaptureImage, CaptureInput, DeviceProfile, DropPoint, GateResult, ReassessRequest,
 } from "./types";
 
 interface CapturedDevice {
   profile: DeviceProfile;
   gate: GateResult | null;
+  thumbnail: CaptureImage | null;
   assessment?: Assessment;
 }
 
@@ -39,10 +41,11 @@ class ConnectionFailure extends Error {}
 function capturedDevice(assetId: string): CapturedDevice | undefined {
   const cached = captured.get(assetId);
   if (cached) return cached;
-  const { placedAssetId, profile, gate, assessment, selfCheck } = useRunStore.getState();
+  const { placedAssetId, profile, gate, assessment, selfCheck, captureThumbnail, events } = useRunStore.getState();
   if (placedAssetId !== assetId || !profile) return undefined;
-  const checked = selfCheck && (selfCheck.revised || !selfCheck.disagreements.length);
-  const device = { profile, gate, assessment: checked ? assessment ?? undefined : undefined };
+  const checked = selfCheck && (selfCheck.revised || !selfCheck.disagreements.length
+    || events.some(({ type }) => type === "summary.started"));
+  const device = { profile, gate, thumbnail: captureThumbnail, assessment: checked ? assessment ?? undefined : undefined };
   captured.set(assetId, device);
   return device;
 }
@@ -70,24 +73,35 @@ function currentMark(twin: Twin, asset: Asset): "unsafe" | "recommended" {
   return findings.some((finding) => finding.severity >= 4) ? "unsafe" : "recommended";
 }
 
-function ingest(run: ActiveRun, event: PipelineEvent, snapshot: Twin): void {
-  if (run.runId !== null && event.runId !== run.runId) {
-    throw new ConnectionFailure("The analysis stream changed unexpectedly. Try the capture again.");
-  }
-  if (run.runId === null && event.type === "run.error") {
-    useRunStore.getState().reset();
-    useRunStore.setState({ runId: event.runId });
+function ingest(run: ActiveRun, event: StreamEvent, request: AnalyzeRequest | ReassessRequest): boolean {
+  if (run.runId !== null && event.runId !== run.runId) return false;
+  if (event.type === "run.started" && run.runId !== null) return false;
+  if (run.runId === null && event.type !== "run.started") {
+    if (event.type !== "run.error") throw new ConnectionFailure("The analysis stream did not start correctly. Try again.");
+    if (run.kind === "analyze") useRunStore.getState().reset();
+    useRunStore.setState({ runId: event.runId, events: [] });
   }
   run.runId = event.runId;
   if (event.type === "run.error") run.failure = event.message;
-  useRunStore.getState().ingest(event);
-  if (active !== run) return;
+  if (event.type === "link.fetched") {
+    const { thumbnail, ...step } = event;
+    useRunStore.getState().ingest(step);
+    if (active === run) useRunStore.getState().setCaptureThumbnail(thumbnail ?? null);
+  } else {
+    useRunStore.getState().ingest(event);
+  }
+  if (active !== run) return false;
 
   if (event.type === "run.started") {
     run.dropPoint = event.dropPoint;
-    if (run.kind === "reassess" && run.assetId) {
+    if ("input" in request) {
+      useRunStore.getState().setCaptureThumbnail(request.input.kind === "photo" ? request.input.images[0] ?? null : null);
+    } else if (run.assetId) {
       const device = captured.get(run.assetId);
-      useRunStore.setState({ placedAssetId: run.assetId, profile: device?.profile ?? null, gate: device?.gate ?? null });
+      useRunStore.setState({
+        placedAssetId: run.assetId, profile: device?.profile ?? null, gate: device?.gate ?? null,
+      });
+      useRunStore.getState().setCaptureThumbnail(device?.thumbnail ?? null);
     }
   }
   if (event.type === "perception.done") {
@@ -95,8 +109,10 @@ function ingest(run: ActiveRun, event: PipelineEvent, snapshot: Twin): void {
     if (assetById(useTwinStore.getState().twin, id)) {
       throw new ConnectionFailure("The plant already contains this device tag. Start a new capture.");
     }
-    const asset = assetFromProfile(event.profile, snapshot, id, resolveDropPoint(snapshot, run.dropPoint));
-    captured.set(id, { profile: event.profile, gate: useRunStore.getState().gate });
+    const { twin } = request;
+    const asset = assetFromProfile(event.profile, twin, id, resolveDropPoint(twin, run.dropPoint));
+    const { gate, captureThumbnail } = useRunStore.getState();
+    captured.set(id, { profile: event.profile, gate, thumbnail: captureThumbnail });
     run.assetId = id;
     useTwinStore.getState().addAsset(asset);
     useRunStore.getState().setPlacedAsset(id);
@@ -104,28 +120,34 @@ function ingest(run: ActiveRun, event: PipelineEvent, snapshot: Twin): void {
   if (event.type === "selfcheck.done" && run.assetId) {
     const store = useTwinStore.getState();
     const asset = assetById(store.twin, run.assetId);
-    if (!asset) return;
-    const placement = currentMark(store.twin, asset);
-    if (asset.placement !== placement) store.updateAsset(asset.id, (item) => ({ ...item, placement }));
-    if (!event.result.revised && event.result.disagreements.length) return;
-    const assessment = useRunStore.getState().assessment;
-    const device = captured.get(asset.id);
-    if (assessment && device) {
-      device.assessment = assessment;
-      store.proposeMitigations(assessment.mitigations.map((item) => ({ ...item, status: "proposed" })));
+    if (asset) {
+      const placement = currentMark(store.twin, asset);
+      if (asset.placement !== placement) store.updateAsset(asset.id, (item) => ({ ...item, placement }));
     }
   }
+  if (event.type === "summary.started" && run.assetId) {
+    const { assessment, selfCheck } = useRunStore.getState();
+    const store = useTwinStore.getState();
+    const device = captured.get(run.assetId);
+    if (selfCheck && assessment && device && assetById(store.twin, run.assetId)) {
+      device.assessment = assessment;
+      store.proposeMitigations(assessment.mitigations);
+    }
+  }
+  return event.type === "run.completed" || event.type === "run.error";
 }
 
-function eventFromFrame(frame: string): PipelineEvent | null {
-  const data = frame.split(/\r?\n/).filter((line) => line.startsWith("data:"))
-    .map((line) => line.slice(5).trimStart()).join("\n");
+function eventFromFrame(frame: string): StreamEvent | null {
+  const data = frame.split(/\r\n|\r|\n/).filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).replace(/^ /, "")).join("\n");
   if (!data) return null;
-  const event: PipelineEvent = JSON.parse(data);
-  if (!event || typeof event.type !== "string" || typeof event.runId !== "string" || typeof event.at !== "number") {
-    throw new ConnectionFailure("The server sent an invalid analysis event. Try again.");
+  try {
+    const event: StreamEvent = JSON.parse(data);
+    if (event && typeof event.type === "string" && typeof event.runId === "string" && event.runId && Number.isFinite(event.at)) return event;
+  } catch {
+    // Report malformed JSON as a stream error.
   }
-  return event;
+  throw new ConnectionFailure("The server sent an invalid analysis event. Try again.");
 }
 
 async function consume(run: ActiveRun, request: AnalyzeRequest | ReassessRequest): Promise<void> {
@@ -146,15 +168,13 @@ async function consume(run: ActiveRun, request: AnalyzeRequest | ReassessRequest
       const chunk = await reader.read();
       if (chunk.done || active !== run) break;
       buffer += decoder.decode(chunk.value, { stream: true });
-      let boundary = /\r?\n\r?\n/.exec(buffer);
+      const frameEnd = /(?:\r\n|\r(?!\n)|\n){2}/;
+      let boundary = frameEnd.exec(buffer);
       while (boundary && active === run) {
         const event = eventFromFrame(buffer.slice(0, boundary.index));
         buffer = buffer.slice(boundary.index + boundary[0].length);
-        if (event) {
-          ingest(run, event, request.twin);
-          if (event.type === "run.completed" || event.type === "run.error") return;
-        }
-        boundary = /\r?\n\r?\n/.exec(buffer);
+        if (event && ingest(run, event, request)) return;
+        boundary = frameEnd.exec(buffer);
       }
     }
     if (active === run) throw new ConnectionFailure("The analysis stream closed before the run finished. Try again.");
@@ -180,7 +200,7 @@ function startRun(kind: ActiveRun["kind"], request: AnalyzeRequest | ReassessReq
     ingest(run, {
       type: "run.error", stage, at: Date.now(), runId: run.runId ?? `local-${Date.now()}`,
       message,
-    }, request.twin);
+    }, request);
   }).finally(() => {
     if (active === run) active = null;
   });

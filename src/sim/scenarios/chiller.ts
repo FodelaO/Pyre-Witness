@@ -2,13 +2,17 @@
 import { assetById } from "@/twin/geometry";
 import type { Twin } from "@/twin/types";
 import type { ScenarioDefinition, StageDefinition } from "../types";
-import { available, enforceBoundary, exposedControl, inspect, reading, removeRemoteAccess, unenrolledRemoteEndpoints } from "./evidence";
+import {
+  available, editAsset, enforceBoundary, exposedControl, hasProtection, inspect, proposal, reading, removeRemoteAccess,
+  unenrolledRemoteEndpoints, withoutProtection,
+} from "./evidence";
 
 const DUTY = "C-1";
 const STANDBY = "C-2";
 const SAFETY = "PLC-UT";
 const PRODUCT_TEMP = "TT-301";
 const GLYCOL_LOOP = ["EV-401", "TK-402", "P-402", "CC-301", "EV-401"];
+const INDEPENDENT_STANDBY = "independent-standby-cooling";
 
 export const chiller: ScenarioDefinition = {
   id: "chiller",
@@ -19,7 +23,8 @@ export const chiller: ScenarioDefinition = {
     const safety = assetById(twin, SAFETY);
     const evaporator = assetById(twin, "EV-401");
     const productTemp = assetById(twin, PRODUCT_TEMP)?.process?.telemetry?.find(({ tag }) => tag === PRODUCT_TEMP);
-    const sharedExposure = !safety?.safetyCritical && !!exposedControl(graph, SAFETY);
+    const independentStandby = hasProtection(standby, INDEPENDENT_STANDBY);
+    const sharedExposure = !independentStandby && !safety?.safetyCritical && !!exposedControl(graph, SAFETY);
     const hasStandbyLoop = evaporator?.physical.connections.some(({ medium, to }) => medium === "ammonia" && to === STANDBY) &&
       standby?.physical.connections.some(({ medium, to }) => medium === "ammonia" && to === "EC-401");
     const glycolLoop = GLYCOL_LOOP.slice(0, -1).every((id, index) => {
@@ -44,7 +49,12 @@ export const chiller: ScenarioDefinition = {
       },
       {
         t: 12, title: "Cooling containment checked", where: [STANDBY, "EV-401"],
-        control: { label: "C-2 standby cooling", where: [STANDBY], holds: () => backupHolds },
+        control: {
+          label: independentStandby ? "Independent C-2 standby cooling" : "C-2 standby cooling",
+          where: [STANDBY], holds: () => backupHolds,
+          without: (current) => independentStandby ? withoutProtection(current, STANDBY, INDEPENDENT_STANDBY)
+            : editAsset(current, STANDBY, (asset) => ({ ...asset, status: "offline" })),
+        },
         effects: { assets: { "TT-401": { status: "attention", telemetry: { "TT-401": -2.4 } } }, areas: { utilities: "alarm" } },
       },
       {
@@ -74,12 +84,19 @@ export const chiller: ScenarioDefinition = {
     const backupStarted = stages.some((stage) => stage.effects?.assets?.[STANDBY]?.running);
     return {
       summary: warm !== undefined ? `${outletTempC.toFixed(1)} °C outlet · warm product held`
-        : backupStarted ? "Standby cooling held outlet within band" : "Cooling challenge unavailable",
+        : backupStarted ? `${outletTempC.toFixed(1)} °C outlet · standby held` : "0 outlet excursions · challenge unavailable",
       metrics: { outletTempC, lineStopped: warm !== undefined },
     };
   },
   mitigations(twin) {
+    const standby = assetById(twin, STANDBY);
+    const independent = available(standby) && !hasProtection(standby, INDEPENDENT_STANDBY) ? [proposal(
+      "sim-chiller-standby", "Independent standby cooling", "physical",
+      "Credit control independence of the installed standby compressor in the exercise.",
+      [STANDBY], [{ type: "add_protection", assetId: STANDBY, protection: INDEPENDENT_STANDBY }],
+    )] : [];
     return [
+      ...independent,
       ...enforceBoundary(twin, "sim-chiller-utility", "C-OPS-UTIL", "SW-OT"),
       ...removeRemoteAccess("sim-chiller-remote", unenrolledRemoteEndpoints(twin, [SAFETY])),
     ];

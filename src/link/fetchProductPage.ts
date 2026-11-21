@@ -45,11 +45,13 @@ export async function fetchProductPage(
   url: string,
   options?: FetchProductPageOptions,
 ): Promise<LinkSnapshot> {
+  const signal = options?.signal;
+  signal?.throwIfAborted();
   const response = await safeFetch(url, {
     maxBytes: HTML_MAX_BYTES,
     accept: HTML_ACCEPT,
     timeoutMs: options?.timeoutMs,
-    signal: options?.signal,
+    signal,
     fetchImpl: options?.fetchImpl,
     dnsLookup: options?.dnsLookup,
   });
@@ -66,11 +68,12 @@ export async function fetchProductPage(
   const extracted = extractProductInfo(html, response.finalUrl);
 
   const image = await fetchMainImage(extracted.imageUrl, {
-    signal: options?.signal,
+    signal,
     timeoutMs: options?.timeoutMs,
     fetchImpl: options?.fetchImpl,
     dnsLookup: options?.dnsLookup,
   });
+  signal?.throwIfAborted();
 
   return {
     url: response.finalUrl,

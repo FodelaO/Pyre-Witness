@@ -1,11 +1,12 @@
 /** Grounds Architect and Chief requests in the fictional twin and checked placement facts. */
 import { ATTACK_ICS } from "@/data/attack-ics";
 import { MODEL_IDS, THINKING } from "@/gemini/models";
+import { placementEnvironment } from "@/pipeline/assetFromProfile";
 import type { Assessment, DeviceProfile, SelfCheckResult } from "@/pipeline/types";
 import { RULES } from "@/rules/registry";
 import { areaById } from "@/twin/geometry";
 import type { Asset, Twin } from "@/twin/types";
-import { assessmentSchema, briefingSchema } from "./schemas";
+import { briefingSchema, modelAssessmentSchema } from "./schemas";
 import { structuredInteraction, type GeminiClients } from "./transport";
 
 const ARCHITECT = [
@@ -13,9 +14,9 @@ const ARCHITECT = [
   "Recommend both a physical area and Purdue level/zone, with any necessary mounting or process constraints. Prefer an actual zone at the selected level or use the room's name for an isolated placement, with conduit null. Choose a feasible placement for the device's function.",
   "Give contraindicated placements and specific cyber, physical and compliance risks. Rate severity and likelihood from 1 to 5. Mark undocumented suitability or compliance unknown.",
   "Use the exact existing area ids and asset tags. near_asset_id is a placement anchor, not a connection. List only necessary planned connections to actual assets. Use null or empty arrays when evidence is missing.",
-  "Use ATT&CK for ICS ids from the supplied catalog only, for defensive risk classification. Model paths are hypothetical exposure relationships across the supplied twin topology and must involve the new device. Use consecutive existing node ids with source model, and describe only exposure, consequence and defensive controls. Omit operational attack steps, credentials, commands and exploitation details.",
-  "Use the Inspector's rules to anticipate blocking conditions and choose a fit outside hazard, washdown and protected boundaries unless the evidence supports it. Do not claim a rule was run.",
-  "Mitigations are proposals only (status proposed, proposedBy architect). Use applicable move_asset, disable_radio, defensive patch_cyber, remove_connection for network links, remove_asset for the new device, enforce_conduit to narrow existing flows, or a note. Use the exact target ids and only changes that reduce the stated exposure.",
+  "Use ATT&CK for ICS ids from the supplied catalog only, for defensive risk classification. Model paths are hypothetical exposure relationships across the supplied twin topology and must involve the new device. Use consecutive existing node ids and describe only exposure, consequence and defensive controls. Omit operational attack steps, credentials, commands and exploitation details.",
+  "Use the Inspector's rules to anticipate blocking conditions. All overlapping zones apply at a point, including their hazard, washdown and public-access restrictions. Choose a fit outside those boundaries unless the evidence supports it. Do not claim a rule was run.",
+  "Propose only changes that reduce the stated exposure. Use applicable move_asset, disable_radio, defensive patch_cyber, remove_connection for network links, remove_asset for the new device, enforce_conduit to narrow existing flows, add_protection for independent safeguards such as port-lock or hardwired-interlock, or a note. Use the exact existing target ids.",
   "Keep each list short. Return up to 6 risks, 3 model paths with up to 5 hops, 4 compliance items, and 4 mitigation proposals.",
 ].join(" ");
 
@@ -23,8 +24,9 @@ function twinContext(twin: Twin) {
   return {
     plant: { name: twin.plant.name, line: twin.plant.line },
     areas: twin.areas.map(({ id, name, kind, bounds, attrs, typicalLevels }) => ({ id, name, kind, bounds, attrs, typicalLevels })),
-    assets: twin.assets.map(({ id, name, physical, network, criticality, safetyCritical, cyber, specs }) => ({
+    assets: twin.assets.map(({ id, name, physical, network, criticality, safetyCritical, cyber, specs, protections }) => ({
       id, name, kind: physical.kind, area: physical.area, x: physical.x, y: physical.y,
+      environment: placementEnvironment(twin, physical),
       level: network.level, zone: network.area, conduit: network.conduit, criticality, safetyCritical,
       cyber: cyber && {
         radios: cyber.radios, ports: cyber.ports, removableStorage: cyber.removableStorage,
@@ -32,7 +34,7 @@ function twinContext(twin: Twin) {
         remoteAccess: cyber.remoteAccess, managed: cyber.managed,
       },
       connections: physical.connections.map(({ to, medium, active }) => ({ to, medium, active })),
-      specs,
+      specs, protections,
     })),
     conduits: twin.conduits,
     entry_points: twin.entryPoints,
@@ -63,12 +65,14 @@ export function assessDevice(
       : "Assess the device at the intended drop point and recommend the safest feasible placement.",
     profile,
     candidate_id: id,
-    current_placement: { area, x, y, level: network.level, zone: network.area },
+    current_placement: {
+      area, x, y, level: network.level, zone: network.area, environment: placementEnvironment(twin, candidate.physical),
+    },
     twin: twinContext(twin),
     allowed_ics_techniques: ATTACK_ICS.map(({ id: techniqueId, name }) => [techniqueId, name]),
     inspector_rules: RULES.map(({ id: ruleId, title }) => [ruleId, title]),
   });
-  return structuredInteraction(client, assessmentSchema, {
+  return structuredInteraction(client, modelAssessmentSchema, {
     model: MODEL_IDS.reasoning,
     input,
     system_instruction: ARCHITECT,

@@ -1,5 +1,6 @@
 /** Screens cameras for possible views of operator interfaces and OT cloud disclosure. */
 import { distance, UNITS_PER_METRE } from "@/twin/geometry";
+import { complianceReferences } from "../compliance";
 import type { Rule, RuleEvidence } from "../context";
 
 const VIEW_RANGE = 10 * UNITS_PER_METRE;
@@ -8,7 +9,7 @@ export default {
   id: "CAM-01",
   title: "Camera may disclose operator information",
   kind: "cyber",
-  references: ["IEC 62443-3-3 SR 4.1", "NIST SP 800-82r3 §6.2.3"],
+  references: complianceReferences("iec62443-3-3-sr-4.1", "nist-800-82r3-5.2.2"),
   description: "A camera is within 10 m of an HMI or keypad in the same room, or is cloud-connected at Purdue levels 0–3.",
   check(ctx): RuleEvidence[] {
     const panels = ctx.twin.assets.filter((asset) =>

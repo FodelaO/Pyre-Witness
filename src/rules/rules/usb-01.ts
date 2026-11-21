@@ -1,5 +1,7 @@
 /** Checks portable media and exposed removable-media interfaces in OT. */
+import { complianceReferences } from "../compliance";
 import { PUBLIC_PORT_RANGE, type Rule, type RuleEvidence } from "../context";
+import { hasPhysicalPortProtection } from "../protections";
 
 const MEDIA_PORT = /\b(?:usb(?=\b|\d)|(?:micro[ -]?)?sd(?:hc|xc)?\b)/i;
 const POWER_ONLY = /\b(?:charg(?:e|ing)|power)[ -]?only\b/i;
@@ -8,8 +10,8 @@ export default {
   id: "USB-01",
   title: "Removable media in OT",
   kind: "cyber",
-  references: ["IEC 62443-3-3 SR 2.3", "NIST SP 800-82r3 §6.2.7", "NIST SP 1334"],
-  description: "Portable storage or an exposed media port at Purdue levels 0–3, with higher severity within 5.5 m of public access.",
+  references: complianceReferences("iec62443-3-3-sr-2.3", "nist-800-82r3-6.2.7"),
+  description: "Portable storage or a media port at Purdue levels 0–3, with higher severity within 5.5 m of public access and reduced severity for a locked interface.",
   check(ctx): RuleEvidence[] {
     const findings: RuleEvidence[] = [];
     for (const asset of ctx.twin.assets) {
@@ -19,17 +21,23 @@ export default {
       if (!isMedia && !asset.cyber?.removableStorage && !mediaPort) continue;
 
       const nearPublic = ctx.nearPublic(asset, PUBLIC_PORT_RANGE);
+      const protectedPort = !isMedia && hasPhysicalPortProtection(asset);
       const exposure = isMedia
         ? "Portable USB storage is present in OT."
         : mediaPort
-          ? `An exposed ${mediaPort} port may accept removable media in OT.`
+          ? `${protectedPort ? "The" : "An exposed"} ${mediaPort} port may accept removable media in OT.`
           : "Removable storage is enabled in OT.";
+      const details = [exposure];
+      if (nearPublic) details.push("A public-access zone is within 5.5 m.");
+      if (protectedPort) details.push("A documented port safeguard limits direct access.");
       findings.push({
         assetId: asset.id,
-        severity: nearPublic ? 4 : 3,
-        detail: nearPublic ? `${exposure} A public-access zone is within 5.5 m.` : exposure,
+        severity: protectedPort ? 2 : nearPublic ? 4 : 3,
+        detail: details.join(" "),
         techniqueId: "T0847",
-        fix: "Restrict removable media to approved devices and disable or physically secure unused media ports.",
+        fix: protectedPort
+          ? "Verify the port safeguard and restrict removable media to approved devices."
+          : "Restrict removable media to approved devices and disable or physically secure unused media ports.",
       });
     }
     return findings;

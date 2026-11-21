@@ -73,6 +73,49 @@ describe("fetchMainImage", () => {
 });
 
 describe("fetchProductPage", () => {
+  it("rejects an already aborted capture without resolving DNS or fetching", async () => {
+    const controller = new AbortController();
+    controller.abort(new Error("Capture canceled"));
+    const dnsLookup = vi.fn(publicDns);
+    const fetchImpl = vi.fn<typeof fetch>();
+    await expect(fetchProductPage("https://shop.example.com/gauge", { signal: controller.signal, dnsLookup, fetchImpl }))
+      .rejects.toBe(controller.signal.reason);
+    expect(dnsLookup).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("stops waiting on DNS after canceling the capture", async () => {
+    const controller = new AbortController();
+    const dnsLookup = vi.fn<DnsLookupFn>(() => new Promise(() => undefined));
+    const fetchImpl = vi.fn<typeof fetch>();
+    const page = fetchProductPage("https://shop.example.com/gauge", { signal: controller.signal, dnsLookup, fetchImpl });
+    expect(dnsLookup).toHaveBeenCalledOnce();
+    controller.abort(new Error("Capture canceled"));
+    await expect(page).rejects.toBe(controller.signal.reason);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it.each(["html", "image"] as const)("cancels a stalled %s response body and propagates the abort", async (stage) => {
+    const controller = new AbortController();
+    let startRead!: () => void;
+    const started = new Promise<void>((resolve) => { startRead = resolve; });
+    const cancelBody = vi.fn();
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      if (stage === "image" && String(input).endsWith("/gauge")) {
+        return new Response('<html><head><meta property="og:image" content="/gauge.png"></head></html>', {
+          headers: { "Content-Type": "text/html" },
+        });
+      }
+      const body = new ReadableStream<Uint8Array>({ pull: startRead, cancel: cancelBody }, { highWaterMark: 0 });
+      return new Response(body, { headers: { "Content-Type": stage === "html" ? "text/html" : "image/png" } });
+    });
+    const page = fetchProductPage("https://shop.example.com/gauge", { signal: controller.signal, dnsLookup: publicDns, fetchImpl });
+    await started;
+    controller.abort(new Error("Capture canceled"));
+    await expect(page).rejects.toBe(controller.signal.reason);
+    expect(cancelBody).toHaveBeenCalledExactlyOnceWith(controller.signal.reason);
+  });
+
   it("fetches HTML, extracts fields, downloads main image, and returns LinkSnapshot", async () => {
     const html = readFileSync(resolve(import.meta.dirname, "__fixtures__", "camera-jsonld.html"), "utf-8");
 

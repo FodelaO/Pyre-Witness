@@ -1,11 +1,12 @@
 /** Flags networked assets whose modeled credential state includes vendor defaults. */
+import { complianceReferences } from "../compliance";
 import type { Rule, RuleEvidence } from "../context";
 
 export default {
   id: "CRED-01",
   title: "Default credentials on a networked asset",
   kind: "cyber",
-  references: ["IEC 62443-3-3 SR 1.5", "NIST SP 800-82r3 §6.2.1.4.5"],
+  references: complianceReferences("iec62443-3-3-sr-1.5", "nist-800-82r3-6.2.1"),
   description: "A networked asset explicitly has visible or known default credentials in its cyber profile.",
   check(ctx) {
     const findings: RuleEvidence[] = [];

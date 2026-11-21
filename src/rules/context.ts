@@ -1,13 +1,11 @@
 /** Indexes the facts shared by the Inspector's rules and reachability checks. */
 import { techniqueById } from "@/data/attack-ics";
-import { containsPoint, distance, UNITS_PER_METRE, type Point } from "@/twin/geometry";
 import type {
   Area, AreaId, Asset, AttackPath, Conduit, EntryPoint, RuleFinding, Severity, Technique, Twin,
 } from "@/twin/types";
+import { spatialEvidence } from "./spatial";
 
-const RF_RANGE = 30 * UNITS_PER_METRE;
-// The twin records symbol centers, so allow half a metre around the 5 m screening radius.
-export const PUBLIC_PORT_RANGE = 5.5 * UNITS_PER_METRE;
+export { PUBLIC_PORT_RANGE } from "./spatial";
 
 export interface RuleEvidence {
   assetId: string;
@@ -32,25 +30,27 @@ export interface RuleContext {
   areaById: ReadonlyMap<AreaId, Area>;
   conduitById: ReadonlyMap<string, Conduit>;
   zoneAssets: ReadonlyMap<string, readonly Asset[]>;
+  highConsequenceTargets: ReadonlyMap<string, Asset>;
+  networkPairs: readonly (readonly [Asset, Asset])[];
+  entryPointsByKind: ReadonlyMap<EntryPoint["kind"], readonly EntryPoint[]>;
   paths: readonly AttackPath[];
   areasFor(asset: Asset): readonly Area[];
   nearPublic(asset: Asset, units: number): boolean;
   nearFoodContact(asset: Asset, units: number): boolean;
   rfExposed(asset: Asset): boolean;
-  rfEntries(asset: Asset): EntryPoint[];
-  visitorEntries(asset: Asset): EntryPoint[];
-  links(asset: Asset): Asset[];
+  rfEntries(asset: Asset): readonly EntryPoint[];
+  visitorEntries(asset: Asset): readonly EntryPoint[];
+  physicalEntries(asset: Asset): readonly EntryPoint[];
+  links(asset: Asset): readonly Asset[];
+  hasDeclaredLocalLink(asset: Asset): boolean;
+  hasActiveLocalLink(asset: Asset): boolean;
+  hasDisabledLink(aId: string, bId: string): boolean;
+  hasDeclaredZoneLink(aZone: string, bZone: string): boolean;
   crossingConduits(a: Asset, b: Asset): readonly Conduit[];
   isEnforced(conduit: Conduit): boolean;
   isNetworked(asset: Asset): boolean;
   hasEnforcedDmz(asset: Asset): boolean;
   technique(id: string): Technique | undefined;
-}
-
-function distanceToArea(point: Point, { bounds: b }: Area): number {
-  const dx = Math.max(b.x - point.x, 0, point.x - (b.x + b.w));
-  const dy = Math.max(b.y - point.y, 0, point.y - (b.y + b.h));
-  return Math.hypot(dx, dy);
 }
 
 function addToIndex<K, V>(index: Map<K, V[]>, key: K, value: V) {
@@ -59,8 +59,15 @@ function addToIndex<K, V>(index: Map<K, V[]>, key: K, value: V) {
   else index.set(key, [value]);
 }
 
-function unorderedPair(a: string, b: string): string {
-  return JSON.stringify(a < b ? [a, b] : [b, a]);
+function addPair(index: Map<string, Set<string>>, a: string, b: string) {
+  const [first, second] = a < b ? [a, b] : [b, a];
+  const values = index.get(first);
+  if (values) values.add(second);
+  else index.set(first, new Set([second]));
+}
+
+function hasPair(index: ReadonlyMap<string, ReadonlySet<string>>, a: string, b: string): boolean {
+  return (a < b ? index.get(a)?.has(b) : index.get(b)?.has(a)) ?? false;
 }
 
 export function compareText(a: string, b: string): number {
@@ -72,73 +79,109 @@ function otherZone(conduit: Conduit, zone: string): string | undefined {
   if (conduit.to === zone) return conduit.from;
 }
 
-export function createContext(twin: Twin): RuleContext {
+const contexts = new WeakMap<Twin, RuleContext>();
+const techniques = new Map<string, Technique>();
+const NO_LINKS: readonly Asset[] = [];
+const NO_CONDUITS: readonly Conduit[] = [];
+
+function technique(id: string): Technique | undefined {
+  const cached = techniques.get(id);
+  if (cached) return cached;
+  const found = techniqueById(id);
+  if (!found) return undefined;
+  const result = Object.freeze({ id: found.id, name: found.name });
+  techniques.set(id, result);
+  return result;
+}
+
+function indexTwin(twin: Twin): RuleContext {
   const assetById = new Map(twin.assets.map((asset) => [asset.id, asset]));
   const areaById = new Map(twin.areas.map((area) => [area.id, area]));
   const conduitById = new Map(twin.conduits.map((conduit) => [conduit.id, conduit]));
   const zoneAssets = new Map<string, Asset[]>();
-  const neighbors = new Map<string, Map<string, Asset>>();
-  const conduitsByPair = new Map<string, Conduit[]>();
+  const highConsequenceTargets = new Map<string, Asset>();
+  const neighbors = new Map<string, Set<Asset>>();
+  const conduitsByPair = new Map<string, Map<string, Conduit[]>>();
   const conduitsByZone = new Map<string, Conduit[]>();
+  const enforcedConduits = new Set<Conduit>();
   const dmzZones = new Set<string>();
-  const localAreas = new Map<string, Area[]>();
-  const disabledLinks = new Set<string>();
+  const otZones = new Set<string>();
+  const declaredLocalLinks = new Set<string>();
+  const activeLocalLinks = new Set<string>();
+  const declaredZoneLinks = new Map<string, Set<string>>();
+  const disabledLinks = new Map<string, Set<string>>();
+  const activeConnections: [from: Asset, to: Asset][] = [];
 
   for (const asset of twin.assets) {
     addToIndex(zoneAssets, asset.network.area, asset);
-    neighbors.set(asset.id, new Map());
+    if (asset.criticality >= 4 || asset.safetyCritical) highConsequenceTargets.set(asset.id, asset);
     if (asset.network.level === 3.5) dmzZones.add(asset.network.area);
-    const { area, x, y } = asset.physical;
-    localAreas.set(asset.id, twin.areas.filter((candidate) =>
-      candidate.id === area || containsPoint(candidate, x, y),
-    ));
+    if (asset.network.level <= 3) otZones.add(asset.network.area);
     for (const link of asset.physical.connections) {
-      if (link.medium === "network" && link.active === false) disabledLinks.add(unorderedPair(asset.id, link.to));
-    }
-  }
-  for (const asset of twin.assets) {
-    for (const link of asset.physical.connections) {
-      if (link.medium !== "network" || link.to === asset.id || disabledLinks.has(unorderedPair(asset.id, link.to))) continue;
+      if (link.medium !== "network" || link.to === asset.id) continue;
       const peer = assetById.get(link.to);
       if (!peer) continue;
-      neighbors.get(asset.id)?.set(peer.id, peer);
-      neighbors.get(peer.id)?.set(asset.id, asset);
+      if (asset.network.area === peer.network.area) {
+        declaredLocalLinks.add(asset.id);
+        declaredLocalLinks.add(peer.id);
+      } else {
+        addPair(declaredZoneLinks, asset.network.area, peer.network.area);
+      }
+      if (link.active === false) addPair(disabledLinks, asset.id, peer.id);
+      else activeConnections.push([asset, peer]);
     }
   }
+  function addNeighbor(from: Asset, to: Asset) {
+    const known = neighbors.get(from.id);
+    if (known) known.add(to);
+    else neighbors.set(from.id, new Set([to]));
+  }
+  const networkPairs: [Asset, Asset][] = [];
+  for (const pair of activeConnections) {
+    const [a, b] = pair;
+    if (hasPair(disabledLinks, a.id, b.id) || neighbors.get(a.id)?.has(b)) continue;
+    networkPairs.push(pair);
+    if (a.network.area === b.network.area) {
+      activeLocalLinks.add(a.id);
+      activeLocalLinks.add(b.id);
+    }
+    addNeighbor(a, b);
+    addNeighbor(b, a);
+  }
+  const activePeers = new Map<string, readonly Asset[]>();
+  for (const [id, peers] of neighbors) activePeers.set(id, [...peers]);
+
   for (const conduit of twin.conduits) {
-    addToIndex(conduitsByPair, unorderedPair(conduit.from, conduit.to), conduit);
+    const [from, to] = conduit.from < conduit.to ? [conduit.from, conduit.to] : [conduit.to, conduit.from];
+    let destinations = conduitsByPair.get(from);
+    if (!destinations) {
+      destinations = new Map();
+      conduitsByPair.set(from, destinations);
+    }
+    addToIndex(destinations, to, conduit);
     addToIndex(conduitsByZone, conduit.from, conduit);
     addToIndex(conduitsByZone, conduit.to, conduit);
+    const kind = conduit.enforcedBy ? assetById.get(conduit.enforcedBy)?.physical.kind : undefined;
+    if (kind === "firewall" || kind === "network_switch") enforcedConduits.add(conduit);
   }
 
-  const publicAreas = twin.areas.filter((area) => area.attrs.publicAccess);
-  const untrustedAreas = twin.areas.filter((area) => area.attrs.publicAccess || area.attrs.outdoor);
-  const foodAreas = twin.areas.filter((area) => area.attrs.foodContact);
-  const rfPoints = twin.entryPoints.filter((entry) => entry.kind === "rf");
-  const visitorPoints = twin.entryPoints.filter((entry) => entry.kind === "physical" && (
-    publicAreas.some((area) => area.id === entry.area || containsPoint(area, entry.x, entry.y))
-    || (!entry.area && entry.id === "visitor")
-  ));
+  const links = (asset: Asset) => activePeers.get(asset.id) ?? NO_LINKS;
+  const isEnforced = (conduit: Conduit) => enforcedConduits.has(conduit);
 
-  const near = (asset: Asset, areas: readonly Area[], units: number) => areas.some((area) =>
-    area.id === asset.physical.area || distanceToArea(asset.physical, area) <= units,
-  );
-  const rfInReach = (asset: Asset, entry: EntryPoint) =>
-    distance(asset.physical, entry) <= (entry.reach ?? RF_RANGE);
-  const links = (asset: Asset) => [...(neighbors.get(asset.id)?.values() ?? [])];
-  const crossingConduits = (a: Asset, b: Asset) =>
-    a.network.area === b.network.area ? [] : conduitsByPair.get(unorderedPair(a.network.area, b.network.area)) ?? [];
-
-  function isEnforced(conduit: Conduit): boolean {
-    const enforcer = conduit.enforcedBy ? assetById.get(conduit.enforcedBy) : undefined;
-    const kind = enforcer?.physical.kind;
-    return kind === "firewall" || kind === "network_switch";
+  function crossingConduits(a: Asset, b: Asset): readonly Conduit[] {
+    const from = a.network.area;
+    const to = b.network.area;
+    if (from === to) return NO_CONDUITS;
+    return (from < to ? conduitsByPair.get(from)?.get(to) : conduitsByPair.get(to)?.get(from)) ?? NO_CONDUITS;
   }
 
-  function isNetworked(asset: Asset): boolean {
+  const networked = new Set<string>();
+  for (const asset of twin.assets) {
     const conduit = asset.network.conduit ? conduitById.get(asset.network.conduit) : undefined;
-    return Boolean(asset.network.ip || asset.network.protocols?.length || neighbors.get(asset.id)?.size
-      || (conduit && otherZone(conduit, asset.network.area)) || asset.cyber?.cloudConnected || asset.cyber?.remoteAccess);
+    if (asset.network.ip || asset.network.protocols?.length || activePeers.has(asset.id)
+      || (conduit && otherZone(conduit, asset.network.area)) || asset.cyber?.cloudConnected || asset.cyber?.remoteAccess) {
+      networked.add(asset.id);
+    }
   }
 
   function hasEnforcedDmz(asset: Asset): boolean {
@@ -169,7 +212,7 @@ export function createContext(twin: Twin): RuleContext {
       if (visited.has(next)) continue;
       visited.add(next);
       if (dmzZones.has(next)) return true;
-      if (!zoneAssets.get(next)?.some((member) => member.network.level <= 3)) continue;
+      if (!otZones.has(next)) continue;
       for (const conduit of conduitsByZone.get(next) ?? []) {
         const destination = otherZone(conduit, next);
         if (destination && !visited.has(destination) && isEnforced(conduit)) toCheck.push(destination);
@@ -179,30 +222,22 @@ export function createContext(twin: Twin): RuleContext {
   }
 
   return {
-    twin, assetById, areaById, conduitById, zoneAssets, paths: [], links, crossingConduits, isEnforced,
-    isNetworked, hasEnforcedDmz,
-    areasFor: (asset) => localAreas.get(asset.id) ?? [],
-    nearPublic: (asset, units) => near(asset, publicAreas, units),
-    nearFoodContact: (asset, units) => near(asset, foodAreas, units),
-    rfExposed: (asset) => rfPoints.some((entry) => rfInReach(asset, entry)) || near(asset, untrustedAreas, RF_RANGE),
-    rfEntries(asset) {
-      const withinReach = rfPoints.filter((entry) => rfInReach(asset, entry));
-      if (withinReach.length || !near(asset, untrustedAreas, RF_RANGE)) return withinReach;
-      const [nearest] = [...rfPoints].sort((a, b) =>
-        distance(asset.physical, a) - distance(asset.physical, b) || compareText(a.id, b.id),
-      );
-      return nearest ? [nearest] : [];
-    },
-    visitorEntries(asset) {
-      if (!near(asset, publicAreas, PUBLIC_PORT_RANGE)) return [];
-      const nearby = visitorPoints.filter((point) => publicAreas.some((area) =>
-        (area.id === point.area || containsPoint(area, point.x, point.y)) && near(asset, [area], PUBLIC_PORT_RANGE),
-      ));
-      return nearby.length ? nearby : visitorPoints.filter((point) => !point.area);
-    },
-    technique(id) {
-      const found = techniqueById(id);
-      return found ? { id: found.id, name: found.name } : undefined;
-    },
+    ...spatialEvidence(twin),
+    twin, assetById, areaById, conduitById, zoneAssets, highConsequenceTargets, networkPairs,
+    paths: [], links, crossingConduits, isEnforced,
+    isNetworked: (asset) => networked.has(asset.id),
+    hasDeclaredLocalLink: (asset) => declaredLocalLinks.has(asset.id),
+    hasActiveLocalLink: (asset) => activeLocalLinks.has(asset.id),
+    hasDisabledLink: (aId, bId) => hasPair(disabledLinks, aId, bId),
+    hasDeclaredZoneLink: (aZone, bZone) => hasPair(declaredZoneLinks, aZone, bZone),
+    hasEnforcedDmz, technique,
   };
+}
+
+export function createContext(twin: Twin): RuleContext {
+  const cached = contexts.get(twin);
+  if (cached) return cached;
+  const context = indexTwin(twin);
+  contexts.set(twin, context);
+  return context;
 }

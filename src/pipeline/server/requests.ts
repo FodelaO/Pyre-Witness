@@ -42,6 +42,7 @@ const asset = z.object({
     capacity: z.string().nullish(), material: z.string().nullish(), foodGrade: z.boolean().nullish(),
     hazardRating: z.string().nullish(), ipRating: z.string().nullish(),
   }).optional(),
+  protections: z.array(id).optional(),
   criticality: severity, safetyCritical: z.boolean().optional(),
   origin: z.enum(["seed", "added"]), placement: z.enum(["recommended", "unsafe", "neutral"]).optional(),
   status: z.enum(["ok", "attention", "alarm", "offline"]),

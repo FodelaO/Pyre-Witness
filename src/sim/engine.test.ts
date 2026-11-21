@@ -134,7 +134,9 @@ describe("scenario player", () => {
     expect(assetById(useTwinStore.getState().twin, "EXERCISE-RADIO")?.cyber?.radios).toContain("wifi");
     useTwinStore.getState().decideMitigation("sim-wireless-radio", "approved");
     togglePlayback();
-    expect(useSimStore.getState().run).toMatchObject({ contained: true, containedAt: 0 });
+    expect(useSimStore.getState().run).toMatchObject({ contained: true, containedAt: 0, counterfactual: {
+      removedControl: "EXERCISE-RADIO radio disable", consequence: { metrics: { fillerRateBph: 29520 } },
+    } });
     expect(useTwinStore.getState().mitigations.find(({ id }) => id === "sim-wireless-radio")?.status).toBe("applied");
     expect(assetById(useTwinStore.getState().twin, "EXERCISE-RADIO")?.cyber?.radios).toEqual([]);
   });

@@ -1,11 +1,12 @@
 /** Flags unmanaged portable endpoints with modeled connectivity in Purdue levels 0–2. */
+import { complianceReferences } from "../compliance";
 import type { Rule, RuleEvidence } from "../context";
 
 export default {
   id: "TRANS-01",
   title: "Unmanaged transient device on control network",
   kind: "cyber",
-  references: ["IEC 62443-3-3 SR 2.3", "NIST SP 800-82r3 §6.2.1"],
+  references: complianceReferences("iec62443-3-3-sr-2.3", "nist-800-82r3-6.2.1"),
   description: "An explicitly unmanaged laptop or phone has a network presence at Purdue Level 0, 1, or 2.",
   check(ctx) {
     const findings: RuleEvidence[] = [];

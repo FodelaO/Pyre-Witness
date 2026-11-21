@@ -68,6 +68,18 @@ describe("Inspector against the plant twin", () => {
     expect(before.byArea[filler.id]).toBeGreaterThan(0);
   });
 
+  it("reuses the report and timestamp for the same snapshot and reevaluates a new snapshot", () => {
+    const twin = add(SEED_TWIN, wifiCamera());
+    const cached = evaluateTwin(twin);
+    const duplicate = evaluateTwin({ ...twin });
+    expect(duplicate).not.toBe(cached);
+    expect(JSON.stringify({ ...duplicate, computedAt: cached.computedAt })).toBe(JSON.stringify(cached));
+    expect(evaluateTwin(twin)).toBe(cached);
+    const changed = applyEffect(twin, { type: "disable_radio", assetId: "TEST-CAMERA", radio: "wifi" });
+    expect(evaluateTwin(changed).score).toBeLessThan(cached.score);
+    expect(evaluateTwin(twin)).toBe(cached);
+  });
+
   it("links an exposed Wi-Fi camera to the filler, raises risk, and clears its RF paths when the radio is disabled", () => {
     const camera = wifiCamera();
     const twin = add(SEED_TWIN, camera);
@@ -149,6 +161,34 @@ describe("Inspector against the plant twin", () => {
     expect(ids({ ...protectedSensor, specs: { ...protectedSensor.specs, foodGrade: false } })).toContain("WASH-01");
   });
 
+  it("checks the ammonia overlay for a gateway whose declared home is Utilities", () => {
+    const utilities = areaWith((area) => area.id === "utilities");
+    const gateway = device("TEST-OVERLAY", "gateway", utilities, 1);
+    const inside = { ...gateway, physical: { ...gateway.physical, ...areaCenter(hazard) } };
+    expect(ids(inside)).toContain("HAZ-01");
+    const outside = { ...inside, physical: { ...inside.physical, x: utilities.bounds.x + 20 } };
+    expect(ids(outside)).not.toContain("HAZ-01");
+  });
+
+  it("combines washdown, food and public evidence across overlapping areas", () => {
+    const utilities = areaWith((area) => area.id === "utilities");
+    const gateway = device("TEST-MERGED", "gateway", utilities, 1);
+    gateway.physical = { ...gateway.physical, ...areaCenter(hazard) };
+    gateway.cyber = { ...managed, radios: ["wifi"], ports: ["USB-A"] };
+    gateway.specs = { ipRating: "IP69K", material: "316L", foodGrade: false };
+    const publicOverlay: Area = { ...hazard, id: "visitor_corridor", attrs: { ...hazard.attrs, hazard: null, publicAccess: true } };
+    const washdownOverlay: Area = { ...hazard, id: "washdown", attrs: { ...hazard.attrs, hazard: null, washdown: true, foodContact: true } };
+    const twin = { ...SEED_TWIN, assets: [], areas: [utilities, hazard, publicOverlay, washdownOverlay], entryPoints: [] };
+    const findings = evaluatePlacement(twin, gateway).findings;
+    expect(findings.map(({ ruleId }) => ruleId)).toEqual(expect.arrayContaining([
+      "HAZ-01", "WASH-01", "PHYS-01", "USB-01", "RF-01",
+    ]));
+    expect(findings.find(({ ruleId }) => ruleId === "USB-01")?.severity).toBe(4);
+    expect(findings.find(({ ruleId }) => ruleId === "WASH-01")?.detail).toContain("non-food-grade");
+    const unrated = { ...gateway, specs: { ...gateway.specs, foodGrade: true, ipRating: "IP54" } };
+    expect(ids(unrated, twin)).toContain("WASH-01");
+  });
+
   it("reports external connectivity below the DMZ until an enforced DMZ route is modeled", () => {
     const gateway = device("TEST-CLOUD", "gateway", filler, 2, panel.network.area);
     gateway.cyber = { ...managed, cloudConnected: true, remoteAccess: true };
@@ -200,7 +240,7 @@ describe("Inspector against the plant twin", () => {
     expect(report.paths.every((path) => path.steps.length <= 6)).toBe(true);
   });
 
-  it("evaluates a 120-asset plant within a 15 ms p95 budget after warm-up", () => {
+  it("groups overlapping routes on a dense 120-asset twin", () => {
     const assets = Array.from({ length: 120 }, (_, i): Asset => ({
       ...panel, id: `PERF-${i}`, origin: "added", criticality: 4,
       physical: { ...panel.physical, connections: [] },
@@ -209,12 +249,21 @@ describe("Inspector against the plant twin", () => {
     }));
     const twin = { ...SEED_TWIN, assets, conduits: [] };
     expect(evaluateTwin(twin).paths).toHaveLength(240);
-    for (let i = 0; i < 20; i++) evaluateTwin(twin);
-    const timings = Array.from({ length: 40 }, () => {
+  });
+
+  it("evaluates fresh seed drag frames within a 1.5 ms warmed median budget", () => {
+    function timeFrame(step: number) {
+      const assets = SEED_TWIN.assets.map((asset) => asset !== panel ? asset : {
+        ...asset, physical: { ...asset.physical, x: asset.physical.x + (step % 16) / 10 },
+      });
       const start = performance.now();
-      evaluateTwin(twin);
+      evaluateTwin({ ...SEED_TWIN, assets });
       return performance.now() - start;
-    }).sort((a, b) => a - b);
-    expect(timings[37]).toBeLessThan(15);
+    }
+
+    for (let i = 0; i < 40; i++) timeFrame(i);
+    const median = (samples: number[]) => samples.sort((a, b) => a - b)[Math.floor(samples.length / 2)];
+    const batchMedians = Array.from({ length: 7 }, () => median(Array.from({ length: 15 }, (_, i) => timeFrame(i))));
+    expect(median(batchMedians)).toBeLessThan(1.5);
   });
 });

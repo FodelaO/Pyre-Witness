@@ -10,6 +10,9 @@ import { scoreRisk } from "./score";
 
 export { explainRule } from "./registry";
 
+// The store publishes immutable twin snapshots. Re-reading a snapshot retains its original report and timestamp.
+const reports = new WeakMap<Twin, RiskReport>();
+
 function withCandidate(twin: Twin, candidate: Asset): Twin {
   const assets = twin.assets.some((asset) => asset.id === candidate.id)
     ? twin.assets.map((asset) => asset.id === candidate.id ? candidate : asset)
@@ -39,9 +42,13 @@ function concernsPlacement(finding: RuleFinding, assetId: string, baseline: Read
 }
 
 export function evaluateTwin(twin: Twin): RiskReport {
+  const cached = reports.get(twin);
+  if (cached) return cached;
   const { ctx, direct, paths } = assess(twin);
   const findings = sortFindings([...direct, ...safetyFindings({ ...ctx, paths })]);
-  return { ...scoreRisk(ctx, findings, paths), findings, paths, computedAt: Date.now() };
+  const report = { ...scoreRisk(ctx, findings, paths), findings, paths, computedAt: Date.now() };
+  reports.set(twin, report);
+  return report;
 }
 
 export function evaluatePlacement(twin: Twin, asset: Asset): { findings: RuleFinding[]; paths: AttackPath[] } {

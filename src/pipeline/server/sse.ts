@@ -1,9 +1,13 @@
 /** Adapts a validated pipeline request to the browser's cancellable event stream. */
 import { randomUUID } from "node:crypto";
-import type { PipelineEvent } from "@/pipeline/types";
+import type { CaptureImage, PipelineEvent } from "@/pipeline/types";
 import type { z } from "zod";
 
-type RunPipeline<T> = (body: T, sink: (event: PipelineEvent) => void, signal: AbortSignal) => Promise<void>;
+/** Link image bytes ride the stream to the browser without entering the shared event history. */
+export type StreamEvent = Exclude<PipelineEvent, { type: "link.fetched" }>
+  | (Extract<PipelineEvent, { type: "link.fetched" }> & { thumbnail?: CaptureImage });
+
+type RunPipeline<T> = (body: T, sink: (event: StreamEvent) => void, signal: AbortSignal) => Promise<void>;
 
 export function streamPipeline<T>(request: Request, schema: z.ZodType<T>, run: RunPipeline<T>): Response {
   const disconnect = new AbortController();
@@ -11,7 +15,7 @@ export function streamPipeline<T>(request: Request, schema: z.ZodType<T>, run: R
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      const emit = (event: PipelineEvent) => {
+      const emit = (event: StreamEvent) => {
         if (!signal.aborted) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       };
       const error = (message: string) => emit({

@@ -1,8 +1,10 @@
 /** Resolves model references against the twin and prepares human-reviewable proposals. */
 import { techniqueById } from "@/data/attack-ics";
+import type { ModelAssessment } from "@/gemini/schemas";
 import { clearPlacementPoint, knownNetworkLocation } from "@/pipeline/assetFromProfile";
 import type { Assessment } from "@/pipeline/types";
-import { explainRule } from "@/rules/engine";
+import { evaluateTwin, explainRule } from "@/rules/engine";
+import { applyEffects } from "@/twin/effects";
 import { areaById, areaCenter, containsPoint } from "@/twin/geometry";
 import type { Asset, MitigationEffect, Technique, Twin } from "@/twin/types";
 
@@ -42,10 +44,11 @@ function groundEffect(effect: MitigationEffect, twin: Twin, assets: Map<string, 
   }
 }
 
-export function groundAssessment(twin: Twin, candidate: Asset, model: Assessment, runId: string) {
+export function groundAssessment(twin: Twin, candidate: Asset, model: ModelAssessment, runId: string) {
   const disagreements = new Set<string>();
   const assets = new Map(twin.assets.map((asset) => [asset.id, asset]));
   assets.set(candidate.id, candidate);
+  const current = { ...twin, assets: [...assets.values()] };
   const entries = new Set<string>(twin.entryPoints.map(({ id }) => id));
   const nodes = new Set([...assets.keys(), ...entries]);
   const knownTargets = new Set([...assets.keys(), ...twin.areas.map(({ id }) => id), ...twin.conduits.map(({ id }) => id)]);
@@ -59,23 +62,23 @@ export function groundAssessment(twin: Twin, candidate: Asset, model: Assessment
   }
 
   const paths: Assessment["attack_paths"] = [];
-  for (const path of model.attack_paths) {
+  for (const [index, path] of model.attack_paths.entries()) {
+    const pathNumber = index + 1;
     const steps = path.steps.map((step) => ({ ...step, technique: canonical(step.technique) }));
     const ids = [path.entry, path.target, ...steps.flatMap(({ from, to }) => [from, to])];
     const unknown = [...new Set(ids.filter((id) => !nodes.has(id)))];
-    if (path.causedBy && !assets.has(path.causedBy)) unknown.push(path.causedBy);
     if (unknown.length) {
-      disagreements.add(`Removed model path ${path.id} referencing unknown nodes: ${unknown.join(", ")}.`);
+      disagreements.add(`Removed model path ${pathNumber} referencing unknown nodes: ${unknown.join(", ")}.`);
       continue;
     }
     const continuous = steps[0]?.from === path.entry && steps[steps.length - 1]?.to === path.target
       && steps.every((step, index) => index === 0 || step.from === steps[index - 1].to);
     if (!continuous || !assets.has(path.target) || !ids.includes(candidate.id)) {
-      disagreements.add(`Removed model path ${path.id}. It must connect known nodes through ${candidate.id} to a plant asset.`);
+      disagreements.add(`Removed model path ${pathNumber}. It must connect known nodes through ${candidate.id} to a plant asset.`);
       continue;
     }
     paths.push({
-      ...path, steps, source: "model", causedBy: candidate.id,
+      ...path, id: `${runId}:path:${pathNumber}`, steps, source: "model", causedBy: candidate.id,
       ruleIds: path.ruleIds?.filter((id) => explainRule(id)),
     });
   }
@@ -93,11 +96,12 @@ export function groundAssessment(twin: Twin, candidate: Asset, model: Assessment
     return false;
   });
 
+  const baseline = model.mitigations.length ? evaluateTwin(current).score : 0;
   const mitigations = model.mitigations.flatMap((proposal, index) => {
     const effects = proposal.effects.flatMap((effect) => {
-      const grounded = groundEffect(effect, twin, assets, candidate);
+      const grounded = groundEffect(effect, current, assets, candidate);
       if (grounded) return [grounded];
-      disagreements.add(`Removed inapplicable ${effect.type} effect from mitigation ${proposal.id}.`);
+      disagreements.add(`Removed inapplicable ${effect.type} effect from mitigation ${index + 1}.`);
       return [];
     });
     if (!effects.length) return [];
@@ -109,6 +113,7 @@ export function groundAssessment(twin: Twin, candidate: Asset, model: Assessment
     return [{
       ...proposal, id: `${runId}:mitigation:${index + 1}`, effects, targets: [...targets],
       status: "proposed" as const, proposedBy: "architect",
+      riskDelta: Math.round((evaluateTwin(applyEffects(current, effects)).score - baseline) * 100) / 100,
     }];
   });
 
@@ -118,7 +123,9 @@ export function groundAssessment(twin: Twin, candidate: Asset, model: Assessment
     never_place: model.never_place.map((item) => ({
       ...item, area: item.area && areaById(twin, item.area) ? item.area : null,
     })),
-    risks: model.risks.map((risk) => ({ ...risk, technique: canonical(risk.technique) ?? null })),
+    risks: model.risks.map((risk, index) => ({
+      ...risk, id: `${runId}:risk:${index + 1}`, technique: canonical(risk.technique) ?? null,
+    })),
     attack_paths: paths,
     mitigations,
   };

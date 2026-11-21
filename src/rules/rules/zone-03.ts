@@ -1,11 +1,12 @@
 /** Checks the declared Purdue level against the plant area's placement profile. */
+import { complianceReferences } from "../compliance";
 import type { Rule, RuleEvidence } from "../context";
 
 export default {
   id: "ZONE-03",
   title: "Purdue level mismatches the area",
   kind: "cyber",
-  references: ["IEC 62443-3-3 SR 5.1", "NIST SP 800-82r3 §5.2.3.1"],
+  references: complianceReferences("iec62443-3-2-zones-conduits", "nist-800-82r3-5.2.3"),
   description: "The modeled asset level falls outside the site's typical Purdue levels for its declared physical area.",
   check(ctx) {
     const findings: RuleEvidence[] = [];

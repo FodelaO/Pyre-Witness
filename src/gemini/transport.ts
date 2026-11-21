@@ -1,4 +1,5 @@
-/** Calls the Gemini Developer API and validates its wire responses with one schema retry. */
+/** Calls Gemini and validates each stage with a bounded retry budget. */
+import { setTimeout as delay } from "node:timers/promises";
 import { GoogleGenAI, type Interactions } from "@google/genai";
 import { z } from "zod";
 
@@ -8,7 +9,9 @@ export function geminiClients() {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) throw new PipelineFailure("GEMINI_API_KEY is missing. Set it on the server to run device analysis.");
   return {
-    interactions: new GoogleGenAI({ apiKey, apiVersion: "v1", vertexai: false }).interactions,
+    // v1beta: the stable v1 surface rejects multimodal content parts passed directly as `input`
+    // ("'text' is not supported for input[0].type in v1"); verified live on 2026-11-21.
+    interactions: new GoogleGenAI({ apiKey, apiVersion: "v1beta", vertexai: false }).interactions,
     decisions: new GoogleGenAI({ apiKey, apiVersion: "v1beta", vertexai: false }).decisions,
   };
 }
@@ -16,19 +19,38 @@ export function geminiClients() {
 export type GeminiClients = ReturnType<typeof geminiClients>;
 type InteractionRequest = Interactions.CreateModelInteractionParamsNonStreaming;
 
+// The stage owns retries and its deadline, so the SDK must not retry the same request.
+export const noSdkRetries = { strategy: "none" } as const;
+
+function httpStatus(error: unknown): number | undefined {
+  if (typeof error === "object" && error !== null && "status" in error && typeof error.status === "number") {
+    return error.status;
+  }
+}
+
+function isServerError(status: number | undefined): boolean {
+  return status !== undefined && status >= 500 && status < 600;
+}
+
+export async function waitForRetry(error: unknown, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  const status = httpStatus(error);
+  if (status !== 429 && !isServerError(status)) throw error;
+  await delay(350, undefined, { signal });
+}
+
 export function providerFailure(error: unknown): string {
   if (error instanceof PipelineFailure) return error.message;
-  const status = typeof error === "object" && error !== null && "status" in error ? error.status : undefined;
+  const status = httpStatus(error);
+  // Server-side diagnostics only: the provider's own words never reach the browser.
+  console.error("[gemini] provider error", status ?? "", error instanceof Error ? error.message.slice(0, 600) : String(error).slice(0, 600));
+  if (isServerError(status)) return "Gemini is temporarily unavailable. Try again shortly.";
   switch (status) {
     case 400: return "Gemini rejected the request. Check the capture and model configuration.";
     case 401:
     case 403: return "Gemini denied access. Check the server key and its model permissions.";
     case 404: return "This Gemini model is unavailable to the configured project.";
     case 429: return "Gemini is rate limited or out of quota. Try again shortly.";
-    case 500:
-    case 502:
-    case 503:
-    case 504: return "Gemini is temporarily unavailable. Try again shortly.";
     default: return "This stage could not finish. Try the capture again.";
   }
 }
@@ -41,7 +63,14 @@ export async function validated<T>(
   let correction: string | undefined;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     signal.throwIfAborted();
-    const value = await request(correction);
+    let value: unknown;
+    try {
+      value = await request(correction);
+    } catch (error) {
+      if (attempt > 0) throw error;
+      await waitForRetry(error, signal);
+      continue;
+    }
     signal.throwIfAborted();
     const result = schema.safeParse(value);
     if (result.success) return result.data;
@@ -74,20 +103,29 @@ function providerSchema(schema: z.ZodType): Record<string, unknown> {
 
 const thoughtText = z.string().min(1);
 
+function interactionText(interaction: { steps?: Interactions.Step[] }): string | null {
+  if ("output_text" in interaction && typeof interaction.output_text === "string" && interaction.output_text.trim()) {
+    return interaction.output_text;
+  }
+  const output = interaction.steps?.findLast((step) => step.type === "model_output");
+  return output?.content?.map((part) => part.type === "text" ? part.text : "").join("") || null;
+}
+
 async function readInteraction(
   client: GeminiClients["interactions"],
   request: InteractionRequest,
   signal: AbortSignal,
   onThought?: (text: string) => void,
 ): Promise<{ text: string | null; id?: string }> {
+  const options = { signal, retries: noSdkRetries };
   if (!onThought) {
-    const result = await client.create({ ...request, stream: false, automatic_continuation: false }, { signal });
+    const result = await client.create({ ...request, stream: false, automatic_continuation: false }, options);
     if (result.status === "incomplete") return { text: null };
     if (result.status !== "completed") throw new PipelineFailure("Gemini could not complete this stage.");
-    return { text: result.output_text ?? null, id: result.id };
+    return { text: interactionText(result), id: result.id };
   }
 
-  const stream = await client.create({ ...request, stream: true, automatic_continuation: false }, { signal });
+  const stream = await client.create({ ...request, stream: true, automatic_continuation: false }, options);
   let id: string | undefined;
   let text = "";
   for await (const event of stream) {
@@ -96,6 +134,9 @@ async function readInteraction(
       case "interaction.created":
         id = event.interaction?.id;
         break;
+      case "interaction.status_update":
+        id ||= event.interaction_id;
+        break;
       case "step.delta":
         if (event.delta?.type === "text") text += event.delta.text ?? "";
         if (event.delta?.type === "thought_summary" && event.delta.content?.type === "text") {
@@ -103,10 +144,17 @@ async function readInteraction(
           if (thought.success) onThought(thought.data);
         }
         break;
-      case "interaction.completed":
-        if (event.interaction?.status === "incomplete") return { text: null };
-        if (event.interaction?.status !== "completed") throw new PipelineFailure("Gemini could not complete this stage.");
-        return { text, id: event.interaction.id ?? id };
+      case "interaction.completed": {
+        const interaction = event.interaction;
+        if (interaction?.status === "incomplete") return { text: null };
+        if (interaction?.status !== "completed") throw new PipelineFailure("Gemini could not complete this stage.");
+        id = interaction.id?.trim() || id?.trim();
+        const output = text.trim() ? text : interactionText(interaction);
+        if (output?.trim() || !id || request.store === false) return { text: output, id };
+        // Lifecycle events can omit the completed interaction's steps.
+        const stored = await client.get(id, {}, options);
+        return { text: stored.status === "completed" ? interactionText(stored) : null, id };
+      }
       case "error":
         throw new PipelineFailure("Gemini interrupted this stage. Try the capture again.");
     }

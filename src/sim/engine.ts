@@ -3,34 +3,53 @@ import { isKnownTechnique } from "@/data/attack-ics";
 import { evaluateTwin } from "@/rules/engine";
 import { applyEffects } from "@/twin/effects";
 import type { Mitigation, Twin } from "@/twin/types";
-import { SCENARIOS } from "./scenarios";
-import type { ScenarioId, SimRun, SimStage } from "./types";
+import { ALL_SCENARIOS } from "./scenarios";
+import type { ScenarioContext, ScenarioControl, SimRun, SimScenarioId, SimStage } from "./types";
 
 export type { SimRun } from "./types";
 
-export function runScenario(scenarioId: ScenarioId, twin: Twin): SimRun {
-  const definition = SCENARIOS[scenarioId];
+function resolve(scenarioId: SimScenarioId, twin: Twin, context?: ScenarioContext): {
+  run: Omit<SimRun, "counterfactual">; control?: ScenarioControl;
+} {
+  const definition = ALL_SCENARIOS[scenarioId];
   const stages: SimStage[] = [];
-  for (const { control, effects, technique, ...event } of definition.stages(twin)) {
+  let held: ScenarioControl | undefined;
+  for (const { control, effects, technique, ...event } of definition.stages(twin, context)) {
     const reference = technique && isKnownTechnique(technique) ? { technique } : {};
     if (control?.holds(twin)) {
       stages.push({ ...event, ...reference, where: control.where ?? event.where, outcome: "blocked", by: control.label });
+      held = control;
       break;
     }
     stages.push({ ...event, ...reference, outcome: "advanced", ...(effects ? { effects } : {}) });
   }
   const final = stages.at(-1);
   const contained = final?.outcome === "blocked";
-  return {
+  return { control: held, run: {
     id: scenarioId,
     stages,
     contained,
     ...(contained ? { containedAt: final.t } : {}),
     consequence: definition.consequence(twin, stages),
+  } };
+}
+
+export function runScenario(scenarioId: SimScenarioId, twin: Twin, context?: ScenarioContext): SimRun {
+  const { run, control } = resolve(scenarioId, twin, context);
+  const copy = { ...twin };
+  const replay = resolve(scenarioId, control?.without?.(copy) ?? copy, context);
+  return {
+    ...run,
+    counterfactual: {
+      removedControl: control?.without ? control.label : null,
+      ...(replay.run.containedAt !== undefined ? { containedAt: replay.run.containedAt } : {}),
+      ...(replay.control ? { heldBy: replay.control.label } : {}),
+      consequence: replay.run.consequence,
+    },
   };
 }
 
-function containsEarlier(projected: SimRun, baseline: SimRun): boolean {
+function containsEarlier(projected: Omit<SimRun, "counterfactual">, baseline: Omit<SimRun, "counterfactual">): boolean {
   if (!projected.contained) return false;
   if (!baseline.contained) return true;
   const projectedTime = projected.containedAt ?? Infinity;
@@ -39,14 +58,14 @@ function containsEarlier(projected: SimRun, baseline: SimRun): boolean {
     || (projectedTime === baselineTime && projected.stages.length < baseline.stages.length);
 }
 
-export function projectScenarioMitigations(scenarioId: ScenarioId, twin: Twin): Mitigation[] {
-  const baseline = runScenario(scenarioId, twin);
-  const candidates = SCENARIOS[scenarioId].mitigations(twin);
+export function projectScenarioMitigations(scenarioId: SimScenarioId, twin: Twin): Mitigation[] {
+  const baseline = resolve(scenarioId, twin).run;
+  const candidates = ALL_SCENARIOS[scenarioId].mitigations(twin);
   if (candidates.length === 0) return [];
   const before = evaluateTwin(twin).score;
   return candidates.flatMap((candidate) => {
     const changed = applyEffects(twin, candidate.effects);
-    const projected = runScenario(scenarioId, changed);
+    const projected = resolve(scenarioId, changed).run;
     if (!containsEarlier(projected, baseline)) return [];
     return [{
       ...candidate,

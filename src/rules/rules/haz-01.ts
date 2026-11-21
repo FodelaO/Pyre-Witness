@@ -1,5 +1,6 @@
 /** Checks ignition-source screening for the twin's modeled ammonia hazard area. */
 import type { Asset } from "@/twin/types";
+import { complianceReferences } from "../compliance";
 import type { Rule, RuleEvidence } from "../context";
 
 const PASSIVE_KINDS = new Set(["vertical_tank", "bullet_tank", "heat_exchanger"]);
@@ -17,7 +18,9 @@ export default {
   id: "HAZ-01",
   title: "Ammonia-area rating unverified",
   kind: "compliance",
-  references: ["NFPA 70 (NEC) Articles 500–505", "IEC 60079-14", "ANSI/IIAR 2", "OSHA 29 CFR 1910.119", "OSHA 29 CFR 1910.307"],
+  references: complianceReferences(
+    "nfpa-70-art-500", "nfpa-70-art-505", "iec60079-14", "iiar-2-ch6-machinery-room", "osha-1910.119-d",
+  ),
   description: "Potential ignition sources in the modeled ammonia area need a recognizable gas-area marking and site-specific approval.",
   check(ctx): RuleEvidence[] {
     const findings: RuleEvidence[] = [];

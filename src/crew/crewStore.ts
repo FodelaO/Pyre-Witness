@@ -178,10 +178,12 @@ function onEvent(event: PipelineEvent, replay = false): void {
   if (intent.kind === "stand") {
     useCrewStore.setState({ phase: "running" });
     clearMotion(now);
-    for (const crew of CREW_ORDER) {
-      const home = toOffice(crew);
-      if (distance(useCrewStore.getState().avatars[crew].point, home.point) < 3) {
-        queue[crew].push({ stops: [{ ...home, point: { ...home.point, x: home.point.x - 12 } }] });
+    if (event.type === "run.started" && event.mode !== "reassess") {
+      for (const crew of CREW_ORDER) {
+        const home = toOffice(crew);
+        if (distance(useCrewStore.getState().avatars[crew].point, home.point) < 3) {
+          queue[crew].push({ stops: [{ ...home, point: { ...home.point, x: home.point.x - 12 } }] });
+        }
       }
     }
   } else if (intent.kind === "complete") {
@@ -193,7 +195,8 @@ function onEvent(event: PipelineEvent, replay = false): void {
   } else if (intent.kind === "step") {
     const job = cueJob(intent.cue);
     const crew = intent.cue.activity.crew;
-    if (crew !== "inspector" && !job.stops?.length && !queue[crew].length && heldUntil[crew] <= now) {
+    const waitForArrival = intent.cue.briefing && moving.has(crew);
+    if (crew !== "inspector" && !waitForArrival && !job.stops?.length && !queue[crew].length && heldUntil[crew] <= now) {
       startJob(crew, job, now, replay || !!preference?.matches);
     } else {
       queue[crew].push(job);

@@ -63,6 +63,20 @@ function defaultDnsLookup(hostname: string): Promise<DnsAddress[]> {
   return dnsLookupCallback(hostname, { all: true, verbatim: true });
 }
 
+async function lookupWithSignal(hostname: string, lookup: DnsLookupFn, signal: AbortSignal): Promise<DnsAddress[]> {
+  signal.throwIfAborted();
+  let abort!: () => void;
+  const canceled = new Promise<never>((_resolve, reject) => {
+    abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+  });
+  try {
+    return await Promise.race([lookup(hostname), canceled]);
+  } finally {
+    signal.removeEventListener("abort", abort);
+  }
+}
+
 function stripIpv6Brackets(host: string): string {
   return host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
 }
@@ -288,7 +302,8 @@ export async function validateSafeUrl(rawUrl: string, dnsLookup: DnsLookupFn = d
   return parsed;
 }
 
-async function readBodyWithCap(response: Response, maxBytes: number): Promise<Uint8Array> {
+async function readBodyWithCap(response: Response, maxBytes: number, signal: AbortSignal): Promise<Uint8Array> {
+  signal.throwIfAborted();
   const lengthHeader = response.headers.get("content-length");
   if (lengthHeader) {
     const declared = Number(lengthHeader);
@@ -303,12 +318,15 @@ async function readBodyWithCap(response: Response, maxBytes: number): Promise<Ui
   }
 
   const reader = response.body.getReader();
+  const abort = () => { void reader.cancel(signal.reason).catch(() => undefined); };
+  signal.addEventListener("abort", abort, { once: true });
   const chunks: Uint8Array[] = [];
   let total = 0;
 
   try {
     while (true) {
       const { done, value } = await reader.read();
+      signal.throwIfAborted();
       if (done) break;
       if (!value) continue;
       total += value.byteLength;
@@ -319,6 +337,7 @@ async function readBodyWithCap(response: Response, maxBytes: number): Promise<Ui
       chunks.push(value);
     }
   } finally {
+    signal.removeEventListener("abort", abort);
     reader.releaseLock();
   }
 
@@ -340,18 +359,17 @@ export async function safeFetch(rawUrl: string, options: SafeFetchOptions): Prom
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxRedirects = options.maxRedirects ?? MAX_REDIRECTS;
   const fetchImpl = options.fetchImpl ?? fetch;
-  const dnsLookup = options.dnsLookup ?? defaultDnsLookup;
+  const lookup = options.dnsLookup ?? defaultDnsLookup;
 
   const timer = AbortSignal.timeout(timeoutMs);
   const signal = options.signal ? AbortSignal.any([options.signal, timer]) : timer;
 
-  let currentUrl = await validateSafeUrl(rawUrl, dnsLookup);
+  const dnsLookup = (hostname: string) => lookupWithSignal(hostname, lookup, signal);
 
   try {
+    signal.throwIfAborted();
+    let currentUrl = await validateSafeUrl(rawUrl, dnsLookup);
     for (let redirects = 0; ; redirects++) {
-      if (timer.aborted && !options.signal?.aborted) {
-        throw new LinkFetchError("timeout", `Request timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
-      }
       signal.throwIfAborted();
 
       const headers = new Headers({
@@ -399,7 +417,8 @@ export async function safeFetch(rawUrl: string, options: SafeFetchOptions): Prom
         });
       }
 
-      const body = await readBodyWithCap(response, maxBytes);
+      const body = await readBodyWithCap(response, maxBytes, signal);
+      signal.throwIfAborted();
       return {
         finalUrl: currentUrl.toString(),
         status: response.status,
@@ -408,15 +427,13 @@ export async function safeFetch(rawUrl: string, options: SafeFetchOptions): Prom
       };
     }
   } catch (error) {
-    if (error instanceof LinkFetchError) throw error;
-    if (timer.aborted && !options.signal?.aborted) {
+    options.signal?.throwIfAborted();
+    if (timer.aborted) {
       throw new LinkFetchError("timeout", `Request timed out after ${Math.round(timeoutMs / 1000)} seconds.`, {
         cause: error,
       });
     }
-    if (options.signal?.aborted) {
-      throw error;
-    }
+    if (error instanceof LinkFetchError) throw error;
     throw new LinkFetchError("http_error", "Failed to fetch the product page.", { cause: error });
   }
 }

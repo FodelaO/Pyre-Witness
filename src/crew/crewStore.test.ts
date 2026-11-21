@@ -79,7 +79,13 @@ describe("crew bus connection", () => {
   it("shows Chief's real briefing before returning everyone to a separate desk", () => {
     ingest(start());
     ingest({ ...run, type: "perception.started", model: MODEL_IDS.perception });
+    vi.advanceTimersByTime(400);
+    ingest({ ...run, type: "summary.started", model: MODEL_IDS.chief });
+    expect(useCrewStore.getState().avatars.chief).toMatchObject({
+      walking: true, speech: { kind: "step", text: "Writing the briefing…" },
+    });
     ingest({ ...run, type: "summary.done", model: MODEL_IDS.chief, latencyMs: 510, text: "Use the operator panel." });
+    expect(useCrewStore.getState().avatars.chief.speech?.text).toBe("Writing the briefing…");
     ingest({ ...run, type: "run.completed", totalMs: 4800 });
     for (let index = 0; index < 65; index += 1) {
       vi.advanceTimersByTime(160);
@@ -97,7 +103,20 @@ describe("crew bus connection", () => {
       expect(avatars[crew]).toMatchObject({ point: deskPosition(crew, SEED_TWIN.plant.building, areaById(SEED_TWIN, "crew_office")),
         walking: false, speech: null });
     }
-    expect(feed()).toHaveLength(4);
+    expect(feed()).toHaveLength(5);
+  });
+
+  it("keeps Scout at the desk during reassessment and moves the checking crew", () => {
+    const initial = useCrewStore.getState().avatars;
+    const dropPoint = { x: 546, y: 234, area: "syrup_room" } as const;
+    ingest({ ...run, type: "run.started", mode: "reassess", dropPoint, input: { kind: "text", label: "Reassess" } });
+    ingest({ ...run, type: "reasoning.started", model: MODEL_IDS.reasoning, candidateArea: dropPoint.area });
+    ingest({ ...run, type: "selfcheck.started", engine: "rules engine" });
+    vi.advanceTimersByTime(5500);
+    const { avatars } = useCrewStore.getState();
+    expect(avatars.scout).toEqual(initial.scout);
+    expect(avatars.architect.point).not.toEqual(initial.architect.point);
+    expect(avatars.inspector.point).not.toEqual(initial.inspector.point);
   });
 
   it("teleports in reduced motion and rejects patrol while the tab is hidden", () => {

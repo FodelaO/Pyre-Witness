@@ -1,7 +1,8 @@
 /** Availability tabletop for enterprise, site operations and separated production cells. */
+import { applyEffect } from "@/twin/effects";
 import type { AreaId } from "@/twin/types";
 import type { ScenarioDefinition, StageDefinition } from "../types";
-import { enforceBoundary, inspect, proposal, reachFrom } from "./evidence";
+import { enforceBoundary, inspect, proposal, reachFrom, withoutBoundary } from "./evidence";
 
 const CELLS: ReadonlyArray<{ area: AreaId; controller: string; equipment: string; conduit: string }> = [
   { area: "water_treatment", controller: "PLC-WT", equipment: "RO-101", conduit: "C-OPS-WATER" },
@@ -42,10 +43,14 @@ export const ransomware: ScenarioDefinition = {
     if (managed && !hasViewLoss && stopped.length === 0) {
       return [{
         t: 0, title: "Transient admission checked", where: [managed.id], technique: "T0864",
-        control: { label: `${managed.id} managed admission`, where: [managed.id], holds: () => true },
+        control: {
+          label: `${managed.id} managed admission`, where: [managed.id], holds: () => true,
+          without: (current) => applyEffect(current, { type: "patch_cyber", assetId: managed.id, patch: { managed: false } }),
+        },
       }];
     }
-    const defense = origin?.asset === enterprise ? boundary?.enforcedBy : null;
+    const activeBoundary = origin?.asset === enterprise ? boundary : undefined;
+    const defense = activeBoundary?.enforcedBy;
     const stages: StageDefinition[] = [
       {
         t: 0, title: "Endpoint availability lost", where: [origin?.asset.id ?? "corporate_office"],
@@ -58,8 +63,11 @@ export const ransomware: ScenarioDefinition = {
           : stopped.length ? "Local cell availability affected" : "OT availability checked",
         where: [hasViewLoss ? "SCADA-03" : stopped[0]?.controller ?? defense ?? "SW-OT"],
         ...(hasViewLoss ? { technique: "T0829" } : {}),
-        control: { label: defense ?? "Site isolation", where: [defense ?? "SW-OT"],
-          holds: () => !hasViewLoss && !stopped.length },
+        control: {
+          label: activeBoundary ? `${defense} · ${activeBoundary.id}` : "Site isolation", where: [defense ?? "SW-OT"],
+          holds: () => !hasViewLoss && !stopped.length,
+          ...(activeBoundary ? { without: (current) => withoutBoundary(current, activeBoundary.id) } : {}),
+        },
         effects: hasViewLoss ? {
           assets: { "SCADA-03": { status: "alarm" }, "HIST-03": { status: "alarm" } },
           areas: { control_room: "alarm" },
@@ -68,9 +76,17 @@ export const ransomware: ScenarioDefinition = {
     ];
 
     if (!stopped.length) {
+      const cellBoundary = hasViewLoss && origin ? CELLS.map(({ conduit, controller }) => ({
+        boundary: context.conduitById.get(conduit), controller,
+      })).find(({ boundary, controller }) => boundary && context.isEnforced(boundary) &&
+        reachFrom(inspect(withoutBoundary(twin, boundary.id)).graph, origin.asset.id).has(controller))?.boundary : undefined;
       return [...stages, {
         t: 14, title: "Production cells remain available", where: ["SW-OT"],
-        control: { label: "Production cell isolation", where: ["SW-OT"], holds: () => true },
+        control: {
+          label: cellBoundary ? `${cellBoundary.enforcedBy} · ${cellBoundary.id}` : "Production cell isolation",
+          where: [cellBoundary?.enforcedBy ?? "SW-OT"], holds: () => true,
+          ...(cellBoundary ? { without: (current) => withoutBoundary(current, cellBoundary.id) } : {}),
+        },
       }];
     }
 
@@ -94,8 +110,7 @@ export const ransomware: ScenarioDefinition = {
     const areasStopped = advanced.filter((stage) => stage.technique === "T0827").length;
     const lostView = advanced.some((stage) => stage.technique === "T0829");
     return {
-      summary: areasStopped ? `${areasStopped} production ${areasStopped === 1 ? "area" : "areas"} stopped`
-        : lostView ? "Site view lost · production cells available" : "OT availability held",
+      summary: `${areasStopped} production ${areasStopped === 1 ? "area" : "areas"} stopped · site view ${lostView ? "lost" : "held"}`,
       metrics: { areasStopped, lostView },
     };
   },
@@ -109,8 +124,15 @@ export const ransomware: ScenarioDefinition = {
       portables.map((asset) => asset.id),
       portables.map((asset) => ({ type: "patch_cyber", assetId: asset.id, patch: { managed: true } })),
     )] : [];
+    const addedPortables = portables.filter((asset) => asset.origin === "added");
+    const removal = addedPortables.length ? [proposal(
+      "sim-ransomware-disconnect", "Disconnect transient laptops", "physical",
+      "Remove the newly placed unmanaged maintenance endpoints from the modeled OT plant.",
+      addedPortables.map((asset) => asset.id), addedPortables.map((asset) => ({ type: "remove_asset", assetId: asset.id })),
+    )] : [];
     return [
       ...admission,
+      ...removal,
       ...["C-ENT-DMZ", "C-DMZ-OPS"].flatMap((id) => enforceBoundary(twin, `sim-ransomware-${id}`, id, "FW-DMZ")),
       ...CELLS.flatMap(({ conduit }) => enforceBoundary(twin, `sim-ransomware-${conduit}`, conduit, "SW-OT")),
       ...enforceBoundary(twin, "sim-ransomware-C-F3-PACK", "C-F3-PACK", "SW-F3"),

@@ -1,5 +1,6 @@
 /** Flags an OT radio within modeled reach of an untrusted location. */
 import type { Radio } from "@/twin/types";
+import { complianceReferences } from "../compliance";
 import type { Rule, RuleEvidence } from "../context";
 
 const exposedRadios = new Set<Radio>(["wifi", "bluetooth", "cellular", "zigbee", "lora"]);
@@ -8,7 +9,7 @@ export default {
   id: "RF-01",
   title: "Wireless within untrusted reach",
   kind: "cyber",
-  references: ["IEC 62443-3-3 SR 1.6", "IEC 62443-3-3 SR 2.2", "NIST SP 800-82r3 §6.2.9"],
+  references: complianceReferences("iec62443-3-3-sr-1.6", "iec62443-3-3-sr-2.2", "nist-800-82r3-6.2.9"),
   description: "An OT radio falls within a modeled RF entry radius or 30 m of a public or outdoor area.",
   check(ctx) {
     const findings: RuleEvidence[] = [];

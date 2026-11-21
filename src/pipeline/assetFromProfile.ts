@@ -1,6 +1,6 @@
 /** Maps captured evidence to a provisional asset and finds clear floor positions. */
 import { FOOTPRINT } from "@/equipment/types";
-import { areaById, areaCenter, assetById, containsPoint, distance, type Point } from "@/twin/geometry";
+import { areaAt, areaById, areaCenter, areasAt, assetById, containsPoint, distance, type Point } from "@/twin/geometry";
 import { DEFAULT_DROP } from "@/twin/dropPoint";
 import type { Area, Asset, EquipmentKind, NetworkPresence, PurdueLevel, Twin } from "@/twin/types";
 import type { Assessment, DeviceProfile, DropPoint } from "./types";
@@ -40,7 +40,7 @@ export function networkAt(
   kind: EquipmentKind,
   level?: PurdueLevel,
 ): NetworkPresence {
-  const area = areaById(twin, point.area);
+  const area = areasAt(twin, point.x, point.y).find(({ id }) => id === point.area);
   const typical = area?.typicalLevels ?? [];
   const preferred = DEVICE_LEVEL[kind] ?? (IT_KINDS.has(kind) || kind === "generic_device" ? 2 : 0);
   const chosenLevel = level ?? (typical.includes(preferred) ? preferred : (typical[0] ?? preferred));
@@ -50,7 +50,22 @@ export function networkAt(
   return { level: chosenLevel, area: nearest?.network.area ?? area?.name ?? point.area, conduit: null };
 }
 
+/** Derives restrictions at the exact point so they follow an asset when it moves. */
+export function placementEnvironment(twin: Twin, { x, y }: Point) {
+  const areas = areasAt(twin, x, y);
+  return {
+    zones: areas.map(({ id }) => id),
+    hazards: [...new Set(areas.flatMap(({ attrs }) => attrs.hazard ? [attrs.hazard] : []))],
+    washdown: areas.some(({ attrs }) => attrs.washdown),
+    publicAccess: areas.some(({ attrs }) => attrs.publicAccess),
+    restricted: areas.some(({ attrs }) => attrs.restricted),
+    outdoor: areas.some(({ attrs }) => attrs.outdoor),
+    foodContact: areas.some(({ attrs }) => attrs.foodContact),
+  };
+}
+
 export function assetFromProfile(profile: DeviceProfile, twin: Twin, id: string, point: DropPoint): Asset {
+  const location = { ...point, area: areaAt(twin, point.x, point.y)?.id ?? point.area };
   const hasRemovableStorage = profile.category === "removable_storage"
     || /\b(?:removable|(?:micro[ -]?)?sd(?:hc|xc)?|usb (?:drive|storage))\b/i.test(profile.storage ?? "");
   const hasCyber = IT_KINDS.has(profile.physical_kind) || profile.radios.length > 0 || profile.ports.length > 0
@@ -59,8 +74,8 @@ export function assetFromProfile(profile: DeviceProfile, twin: Twin, id: string,
     id,
     name: [profile.vendor, profile.model].filter(Boolean).join(" ") || profile.device_type,
     description: profile.device_type,
-    physical: { ...point, kind: profile.physical_kind, rotation: 0, connections: [] },
-    network: networkAt(twin, point, profile.physical_kind),
+    physical: { ...location, kind: profile.physical_kind, rotation: 0, connections: [] },
+    network: networkAt(twin, location, profile.physical_kind),
     cyber: hasCyber ? {
       vendor: profile.vendor ?? undefined,
       model: profile.model ?? undefined,

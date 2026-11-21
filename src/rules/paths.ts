@@ -1,14 +1,16 @@
 /** Finds bounded, evidence-linked routes from entry points to high-consequence assets. */
-import type { Asset, AttackPath, AttackStep, Severity } from "@/twin/types";
+import type { Asset, AttackPath, AttackStep, AttackVia, Severity } from "@/twin/types";
 import { compareText, type RuleContext } from "./context";
 import type { AttackGraph, EntryEdge } from "./graph";
+import { interlockLimitsSafetyPath } from "./protections";
 
-const MAX_STEPS = 6;
+const MAX_NETWORK_STEPS = 5;
 
 type TraversalEdge = AttackStep & { ruleIds: readonly string[] };
 
 interface Visit {
-  edge: TraversalEdge;
+  nodeId: string;
+  edge?: TraversalEdge;
   depth: number;
   previous?: Visit;
 }
@@ -18,50 +20,50 @@ interface Route {
   target: Asset;
   visit: Visit;
   likelihood: Severity;
+  severity: Severity;
+  safetyLimited: boolean;
 }
 
-function search(graph: AttackGraph, first: Visit, stopAt?: string, excluded?: ReadonlySet<string>): Map<string, Visit> {
-  const visited = new Map([[first.edge.to, first]]);
+function search(graph: AttackGraph, first: Visit, stopAt?: string, excluded?: ReadonlySet<string>): Visit[] {
+  const visited = new Set([first.nodeId]);
   const queue = [first];
   for (let index = 0; index < queue.length; index++) {
     const current = queue[index];
-    if (current.edge.to === stopAt) break;
-    if (current.depth === MAX_STEPS) continue;
-    for (const edge of graph.network.get(current.edge.to) ?? []) {
+    if (current.depth === MAX_NETWORK_STEPS) continue;
+    for (const edge of graph.network.get(current.nodeId) ?? []) {
       if (visited.has(edge.to) || excluded?.has(edge.to)) continue;
-      const next: Visit = { edge, depth: current.depth + 1, previous: current };
-      visited.set(edge.to, next);
-      queue.push(next);
+      queue.push({ nodeId: edge.to, edge, depth: current.depth + 1, previous: current });
+      if (edge.to === stopAt) return queue;
+      visited.add(edge.to);
     }
   }
-  return visited;
+  return queue;
 }
 
-function searchThrough(graph: AttackGraph, first: Visit, focus: string): Map<string, Visit> {
-  if (first.edge.to === focus) return search(graph, first);
-  const junction = search(graph, first, focus).get(focus);
-  if (!junction) return new Map();
+function searchThrough(graph: AttackGraph, first: Visit, focus: string): Visit[] {
+  if (first.nodeId === focus) return search(graph, first);
+  const junction = search(graph, first, focus).at(-1);
+  if (junction?.nodeId !== focus) return [];
 
   // Preserve a shortest, cycle-free prefix through the evaluated asset, then
   // find downstream targets without walking back through that prefix.
   const excluded = new Set<string>();
-  for (let step = junction.previous; step; step = step.previous) excluded.add(step.edge.to);
+  for (let step = junction.previous; step; step = step.previous) excluded.add(step.nodeId);
   return search(graph, junction, undefined, excluded);
 }
 
-const targetSeverity = (target: Asset): Severity => target.safetyCritical ? 5 : target.criticality;
-
-function betterRoute(target: Asset, likelihood: Severity, depth: number, previous?: Route): boolean {
+function betterRoute(target: Asset, severity: Severity, likelihood: Severity, depth: number, previous?: Route): boolean {
   if (!previous) return true;
-  return (targetSeverity(target) - targetSeverity(previous.target)
+  return (severity - previous.severity
     || likelihood - previous.likelihood
     || previous.visit.depth - depth
     || compareText(previous.target.id, target.id)) > 0;
 }
 
-function makePath(ctx: RuleContext, { start, target, visit, likelihood }: Route, focus?: string): AttackPath {
+function makePath(ctx: RuleContext, { start, target, visit, likelihood, severity, safetyLimited }: Route, focus?: string): AttackPath {
   const edges: TraversalEdge[] = [];
-  for (let current: Visit | undefined = visit; current; current = current.previous) edges.push(current.edge);
+  for (let current: Visit | undefined = visit; current?.edge; current = current.previous) edges.push(current.edge);
+  edges.push(start);
   edges.reverse();
 
   const ruleIds = new Set<string>();
@@ -73,7 +75,11 @@ function makePath(ctx: RuleContext, { start, target, visit, likelihood }: Route,
     const { from, to, via, technique, note } = edge;
     steps.push({ from, to, via, technique, note });
   }
-  if (target.safetyCritical) ruleIds.add("SAFE-01");
+  if (target.safetyCritical && !safetyLimited) ruleIds.add("SAFE-01");
+
+  let impact = `Potential loss of availability or integrity at ${target.id}.`;
+  if (safetyLimited) impact += " The modeled hardwired interlock remains independent of this network route.";
+  else if (target.safetyCritical) impact = `Potential impairment of the safety function at ${target.id}.`;
 
   return {
     id: `rules:${JSON.stringify([start.from, start.via, start.to, target.id])}`,
@@ -81,11 +87,9 @@ function makePath(ctx: RuleContext, { start, target, visit, likelihood }: Route,
     entry: start.from,
     target: target.id,
     steps,
-    severity: targetSeverity(target),
+    severity,
     likelihood,
-    impact: target.safetyCritical
-      ? `Potential impairment of the safety function at ${target.id}.`
-      : `Potential loss of availability or integrity at ${target.id}.`,
+    impact,
     source: "rules",
     ...(causedBy && { causedBy }),
     ruleIds: [...ruleIds],
@@ -93,25 +97,52 @@ function makePath(ctx: RuleContext, { start, target, visit, likelihood }: Route,
 }
 
 export function findPaths(ctx: RuleContext, graph: AttackGraph, focusAssetId?: string): AttackPath[] {
-  const routesByOrigin = new Map<string, Map<string, Route>>();
+  const targets = ctx.highConsequenceTargets;
+  if (!graph.entries.length || !targets.size) return [];
+
+  const routesByOrigin = new Map<string, Map<AttackVia, Map<string, Route>>>();
   const addedLandingRoutes: Route[] = [];
+  const focusRoutes: Route[] = [];
+  // Multiple entry mechanisms can land on one asset and share its network walk.
+  const traversals = new Map<string, Visit[]>();
   for (const start of graph.entries) {
-    const originKey = JSON.stringify(focusAssetId ? [start.from, start.via, start.to] : [start.from, start.via]);
-    const routes = routesByOrigin.get(originKey) ?? new Map<string, Route>();
-    routesByOrigin.set(originKey, routes);
+    let routes: Map<string, Route> | undefined;
+    if (!focusAssetId) {
+      let mechanisms = routesByOrigin.get(start.from);
+      if (!mechanisms) {
+        mechanisms = new Map();
+        routesByOrigin.set(start.from, mechanisms);
+      }
+      routes = mechanisms.get(start.via);
+      if (!routes) {
+        routes = new Map();
+        mechanisms.set(start.via, routes);
+      }
+    }
     const addedLanding = !focusAssetId && ctx.assetById.get(start.to)?.origin === "added";
     let representative: Route | undefined;
-    const first: Visit = { edge: start, depth: 1 };
-    const visits = focusAssetId ? searchThrough(graph, first, focusAssetId) : search(graph, first);
-    for (const [id, visit] of visits) {
-      const target = ctx.assetById.get(id);
-      if (!target || (target.criticality < 4 && !target.safetyCritical)) continue;
-      const likelihood = Math.max(1, start.likelihood - Math.floor((visit.depth - 1) / 3)) as Severity;
-      const winsTarget = betterRoute(target, likelihood, visit.depth, routes.get(id));
-      const winsLanding = addedLanding && betterRoute(target, likelihood, visit.depth, representative);
+    let visits = traversals.get(start.to);
+    if (!visits) {
+      const first: Visit = { nodeId: start.to, depth: 0 };
+      visits = focusAssetId ? searchThrough(graph, first, focusAssetId) : search(graph, first);
+      traversals.set(start.to, visits);
+    }
+    for (const visit of visits) {
+      const target = targets.get(visit.nodeId);
+      if (!target) continue;
+      const safetyLimited = interlockLimitsSafetyPath(target, visit.edge?.via ?? start.via);
+      const severity: Severity = safetyLimited
+        ? Math.min(4, target.criticality) as Severity
+        : target.safetyCritical ? 5 : target.criticality;
+      const likelihood = Math.max(1, start.likelihood - Math.floor(visit.depth / 3)) as Severity;
+      const winsTarget = betterRoute(target, severity, likelihood, visit.depth, routes?.get(target.id));
+      const winsLanding = addedLanding && betterRoute(target, severity, likelihood, visit.depth, representative);
       if (!winsTarget && !winsLanding) continue;
-      const route = { start, target, visit, likelihood };
-      if (winsTarget) routes.set(id, route);
+      const route = { start, target, visit, likelihood, severity, safetyLimited };
+      if (winsTarget) {
+        if (routes) routes.set(target.id, route);
+        else focusRoutes.push(route);
+      }
       if (winsLanding) representative = route;
     }
     if (representative) addedLandingRoutes.push(representative);
@@ -120,9 +151,13 @@ export function findPaths(ctx: RuleContext, graph: AttackGraph, focusAssetId?: s
   // For the live plant, retain the strongest route per origin, access mechanism,
   // and target, plus a route showing each new landing. Construct report objects
   // only after selection so overlapping exposures don't inflate drag-frame work.
-  const routes = new Set(addedLandingRoutes);
-  for (const targets of routesByOrigin.values()) for (const route of targets.values()) routes.add(route);
-  const paths = Array.from(routes, (route) => makePath(ctx, route, focusAssetId));
+  const selected = new Set(addedLandingRoutes);
+  for (const mechanisms of routesByOrigin.values()) {
+    for (const originTargets of mechanisms.values()) {
+      for (const route of originTargets.values()) selected.add(route);
+    }
+  }
+  const paths = Array.from(focusAssetId ? focusRoutes : selected, (route) => makePath(ctx, route, focusAssetId));
   return paths.sort((a, b) => b.severity - a.severity || b.likelihood - a.likelihood
     || a.steps.length - b.steps.length || compareText(a.id, b.id));
 }

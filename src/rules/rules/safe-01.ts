@@ -1,16 +1,19 @@
 /** Escalates modeled reachability of safety-critical targets after path evaluation. */
+import { complianceReferences } from "../compliance";
 import type { Rule, RuleEvidence } from "../context";
+import { interlockLimitsSafetyPath } from "../protections";
 
 export default {
   id: "SAFE-01",
   title: "Safety-critical asset is reachable",
   kind: "cyber",
-  references: ["IEC 61511-1 §11.2", "IEC 62443-3-3 SR 5.1", "NIST SP 800-82r3 §2.3.7"],
-  description: "One or more modeled exposure paths reach a safety-critical asset. The target receives a severity 5 finding.",
+  references: complianceReferences("iec61511-1-sis-independence", "iec61511-1-sis-security", "iec62443-3-3-sr-5.1"),
+  description: "Modeled reachability of a safety-critical asset triggers severity 5 unless an independent hardwired valve interlock limits the network-mediated arrival.",
   check(ctx): RuleEvidence[] {
     const targets = new Map<string, number>();
     for (const path of ctx.paths) {
-      if (ctx.assetById.get(path.target)?.safetyCritical) {
+      const target = ctx.assetById.get(path.target);
+      if (target?.safetyCritical && !interlockLimitsSafetyPath(target, path.steps.at(-1)?.via)) {
         targets.set(path.target, (targets.get(path.target) ?? 0) + 1);
       }
     }
