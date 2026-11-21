@@ -50,6 +50,10 @@ export function phoneMarkup(code: string) {
     <div class="pw-call-notice" id="connection-error" role="status" hidden></div>
     <div class="pw-call-notice" id="operation-error" role="status" hidden></div>
     <button class="pw-call-button pw-call-primary" id="enable" type="button" hidden>${icon("bell", 20)} <span>Enable ringer</span></button>
+    <section class="pw-call-role-picker" id="role-picker" aria-label="Choose this phone’s role" hidden>
+      <button class="pw-call-button pw-call-secondary" id="role-ring-here" type="button">This is the on-call phone</button>
+      <button class="pw-call-button pw-call-secondary" id="role-helper" type="button">Helper phone (dial on-call)</button>
+    </section>
     <a class="pw-call-button pw-call-primary pw-call-dial" id="dial" hidden>${icon("phone", 21)}<span id="dial-label"></span></a>
     <div class="pw-call-muted pw-call-dial-receipt" id="dial-receipt" hidden>Call tapped on this phone</div>
     <div class="pw-call-incoming-actions" id="incoming" hidden>
@@ -76,6 +80,10 @@ export function phoneMarkup(code: string) {
         <button class="pw-call-button pw-call-secondary" id="acknowledge" type="button">${icon("check", 20)} Acknowledge</button>
       </div>
     </section>
+    <div class="pw-call-role-current" id="role-current" hidden>
+      <span class="pw-call-muted" id="role-label"></span>
+      <button class="pw-call-quiet" id="change-role" type="button" aria-label="Change phone role">Change</button>
+    </div>
     <noscript><div class="pw-call-notice">Enable JavaScript to connect the call.</div></noscript>
   </div>
 </main>

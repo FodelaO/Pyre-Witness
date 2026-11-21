@@ -2,15 +2,24 @@
 import { callCommand, fetchDialTarget, listenToCall, randomHex } from "./connection.mjs";
 import { PhoneAudio } from "./phoneAudio.mjs";
 
-const page = document.querySelector(".pw-call");
+/** @param {string | null} role @param {boolean} choosingRole */
+export function canUseNativeDial(role, choosingRole = false) {
+  return role === "helper" && !choosingRole;
+}
+
+const page = globalThis.document?.querySelector(".pw-call");
 if (page?.dataset.code) attachPhone(page);
 
 function attachPhone(page) {
   const code = page.dataset.code;
   const keyName = `pw:escalation-pair:${code}`;
+  const roleKey = `${keyName}:role`;
   let key = randomHex(16);
+  let phoneRole = null;
   try {
     key = sessionStorage.getItem(keyName) ?? key;
+    const savedRole = sessionStorage.getItem(roleKey);
+    if (savedRole === "helper" || savedRole === "ring-here") phoneRole = savedRole;
     sessionStorage.setItem(keyName, key);
   } catch { /* The open tab can use its in-memory key. */ }
 
@@ -21,8 +30,11 @@ function attachPhone(page) {
   const show = (id, visible) => { element(id).hidden = !visible; };
   const text = (id, value) => { element(id).textContent = value || ""; };
   const dial = element("dial");
+  const allowsDial = () => canUseNativeDial(phoneRole, choosingRole);
   let snapshot;
   let messageKey = "";
+  let choosingRole = false;
+  let contactName = "";
   let choosingOverride = false;
   let targetVersion;
   let targetRequest = 0;
@@ -35,6 +47,7 @@ function attachPhone(page) {
   let enabled = false;
   let connectionError = "";
   let operationError = "";
+  let dialError = "";
   let voice = "idle";
   let duration;
   let pending = "";
@@ -56,6 +69,8 @@ function attachPhone(page) {
     clearTimeout(targetRetry);
     targetRequest++;
     targetVersion = undefined;
+    contactName = "";
+    dialError = "";
     dial.removeAttribute("href");
     text("dial-label", "");
   }
@@ -63,7 +78,8 @@ function attachPhone(page) {
   function syncDialTarget() {
     const call = snapshot?.call;
     const version = call?.destinationVersion;
-    if (!version || !foreground || awaitingSnapshot || dialStarted || connectionError || Date.now() >= snapshot.expiresAt) {
+    if ((!allowsDial() && !choosingRole) || !version || !foreground || awaitingSnapshot
+      || dialStarted || connectionError || Date.now() >= snapshot.expiresAt) {
       clearDialTarget();
       return;
     }
@@ -74,15 +90,22 @@ function attachPhone(page) {
     void fetchDialTarget(connection, call.alert.id, version).then((target) => {
       if (request !== targetRequest || Date.now() >= snapshot?.expiresAt) return;
       if (!/^tel:\+[1-9]\d{7,14}$/.test(target.href) || typeof target.label !== "string") throw new Error("Invalid destination");
-      dial.setAttribute("href", target.href);
-      text("dial-label", target.label);
-      operationError = "";
+      if (choosingRole) {
+        // The relay label is “Call <name> · <mask>”. Use only the name in the picker.
+        const separator = target.label.lastIndexOf(" · ");
+        if (target.label.startsWith("Call ") && separator > 5) contactName = target.label.slice(5, separator);
+      } else if (allowsDial()) {
+        dial.setAttribute("href", target.href);
+        text("dial-label", target.label);
+      }
       render();
     }).catch(() => {
       if (request !== targetRequest) return;
       clearDialTarget();
-      operationError = "Could not load the call destination. Check the phone link.";
-      targetRetry = setTimeout(syncDialTarget, 1500);
+      if (allowsDial()) {
+        dialError = "Could not load the call destination. Check the phone link.";
+        targetRetry = setTimeout(syncDialTarget, 1500);
+      }
       render();
     });
   }
@@ -117,7 +140,7 @@ function attachPhone(page) {
     const awaitingAnswer = !!call && ready && !answered && !terminalAt;
     const dialed = !!call && (call.dialedAt !== undefined || dialStarted);
     const ringing = awaitingAnswer && !dialed && !connectionError;
-    const canDial = !!call && ready && !terminalAt && !dialed && dial.hasAttribute("href");
+    const canDial = allowsDial() && !!call && ready && !terminalAt && !dialed && dial.hasAttribute("href");
     const waiting = !!(call?.approvalRequestedAt && !call.approvalUnavailableAt && !terminalAt);
     const ladder = alert?.decision !== undefined;
     const approvable = !!(alert?.canApprove && !call.approvalUnavailableAt);
@@ -150,12 +173,17 @@ function attachPhone(page) {
     }
     show("connection-error", !!connectionError);
     text("connection-error", connectionError);
-    show("operation-error", !!operationError);
-    text("operation-error", operationError);
+    show("operation-error", !!(operationError || dialError));
+    text("operation-error", operationError || dialError);
 
     show("enable", !!snapshot && ready && !call);
     element("enable").disabled = ringerReady;
     element("enable").querySelector("span").textContent = ringerReady ? "Ringer enabled" : "Enable ringer";
+    show("role-picker", ready && !!snapshot && choosingRole);
+    show("role-current", ready && !!snapshot && !!phoneRole && !choosingRole);
+    text("role-ring-here", contactName && contactName !== "on-call" ? `This is ${contactName}'s phone` : "This is the on-call phone");
+    text("role-helper", `Helper phone (dial ${contactName || "on-call"})`);
+    text("role-label", phoneRole === "helper" ? "Helper phone" : "Ring here");
     show("dial", canDial);
     show("dial-receipt", dialed);
     show("incoming", awaitingAnswer);
@@ -218,7 +246,28 @@ function attachPhone(page) {
       enabled = true;
       operationError = "";
     } catch { operationError = "Ringer unavailable. Keep this screen open."; }
+    if (!phoneRole && !choosingRole) openRolePicker();
+    else render();
+  }
+
+  function openRolePicker() {
+    choosingRole = true;
+    clearDialTarget();
+    syncDialTarget();
     render();
+    element("role-ring-here").focus();
+  }
+
+  /** @param {"ring-here" | "helper"} role */
+  function chooseRole(role) {
+    phoneRole = role;
+    choosingRole = false;
+    try { sessionStorage.setItem(roleKey, role); }
+    catch { /* The current page still uses the selected role. */ }
+    clearDialTarget();
+    syncDialTarget();
+    render();
+    element("change-role").focus();
   }
 
   async function play(alert) {
@@ -266,6 +315,9 @@ function attachPhone(page) {
 
   element("enable").addEventListener("click", enableRinger);
   element("enable-incoming").addEventListener("click", enableRinger);
+  element("change-role").addEventListener("click", openRolePicker);
+  element("role-ring-here").addEventListener("click", () => chooseRole("ring-here"));
+  element("role-helper").addEventListener("click", () => chooseRole("helper"));
   element("answer").addEventListener("click", answer);
   async function respondToDecision(kind, action) {
     const id = snapshot?.call?.alert.id;
@@ -291,7 +343,7 @@ function attachPhone(page) {
   element("acknowledge").addEventListener("click", () => void respond("acknowledge"));
   dial.addEventListener("click", (event) => {
     const alert = snapshot?.call?.alert;
-    if (!alert || !event.isTrusted || !foreground || awaitingSnapshot || dialStarted
+    if (!allowsDial() || !alert || !event.isTrusted || !foreground || awaitingSnapshot || dialStarted || dial.hidden
       || !dial.hasAttribute("href") || Date.now() >= snapshot.expiresAt) {
       event.preventDefault();
       return;

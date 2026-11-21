@@ -92,6 +92,10 @@ svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-l
 .pw-call-secondary { background: var(--pw-panel-2); color: var(--pw-text); }
 .pw-call-dial { min-height: 62px; font-size: 16px; touch-action: manipulation; overflow-wrap: anywhere; }
 .pw-call-dial-receipt { text-align: center; }
+.pw-call-role-picker { display: grid; gap: 6px; }
+.pw-call-role-picker .pw-call-button { min-height: 54px; overflow-wrap: anywhere; }
+.pw-call-role-current { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.pw-call-role-current .pw-call-quiet { min-height: 44px; text-decoration: underline; }
 .pw-call-button:disabled { opacity: .62; cursor: default; }
 .pw-call-quiet {
   display: inline-flex; justify-content: center; align-items: center; gap: 4px; min-height: 31px; padding: 3px 5px;
