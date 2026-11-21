@@ -1,7 +1,7 @@
 # 🔥👁️ Pyre Witness
 
 <p align="center">
-  <img src="docs/media/hero-app.jpg" alt="Pyre Witness running: the Bebidas del Norte Line 3 plant floor as an engineering drawing with colour-coded process lines, the AI crew dock on the left and the plant risk score of 46 (elevated) on the right" width="100%">
+  <img src="docs/media/hero-app.jpg" alt="Pyre Witness in 3D: a phone captured as an Apple iPhone Pro lands at Filler 3, the attack path Internet to PH-901 to SW-F3 to FIL-3 crosses the escalation threshold at an estimated 290 thousand dollars per event, the rules engine recommends the corporate office and the Chief gives a three-line briefing" width="100%">
 </p>
 
 **Snap any device. See where it belongs in your plant, and what risk it brings, before you plug it in.**
