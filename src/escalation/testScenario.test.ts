@@ -6,6 +6,7 @@ import { estimateLoss } from "@/econ/model";
 import { scenarioFromPath } from "@/econ/scenarios";
 import { SEED_TWIN } from "@/twin/seed";
 import { useTwinStore } from "@/twin/store";
+import { useFlagStore } from "./flagStore";
 import { monitorEscalations } from "./monitor";
 import { DEFAULT_THRESHOLDS, ESCALATION_DEBOUNCE_MS, thresholdCrossed } from "./policy";
 import { useEscalationStore } from "./store";
@@ -27,7 +28,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("starts without a phone and raises and resolves one labeled test alert above the threshold", () => {
+it("starts without a phone and raises and resolves all three labeled tiers together", () => {
   const stop = monitorEscalations();
   const records = () => useEscalationStore.getState().records.filter(({ trigger }) => trigger.test);
   const baseline = useTwinStore.getState().risk.score;
@@ -58,7 +59,12 @@ it("starts without a phone and raises and resolves one labeled test alert above 
     vi.advanceTimersByTime(ESCALATION_DEBOUNCE_MS - 1);
     expect(records()).toHaveLength(0);
     vi.advanceTimersByTime(1);
-    expect(records()).toHaveLength(1);
+    expect(records().map(({ level, trigger }) => [level, trigger.assetId])).toEqual([
+      [3, TEST_ASSET_ID], [1, "PT-401"], [2, "HMI-F3"],
+    ]);
+    expect(new Set(records().map(({ raisedAt }) => raisedAt)).size).toBe(1);
+    expect(useFlagStore.getState().flags).toContainEqual(expect.objectContaining({ assetId: "PT-401", level: 1 }));
+    expect(useFlagStore.getState().flags.map(({ assetId }) => assetId)).not.toContain("HMI-F3");
     expect(records()[0].script.startsWith(TEST_BRIEFING_PREFIX)).toBe(true);
     expect(records()[0].script).toContain("rogue LTE gateway");
     expect(records()[0].script).toMatch(/ Attack path from .+ to FIL-3\. Estimated loss \$[\d.,]+[kM]?\. /);
@@ -71,12 +77,13 @@ it("starts without a phone and raises and resolves one labeled test alert above 
 
     runTestAlert();
     vi.advanceTimersByTime(ESCALATION_DEBOUNCE_MS);
-    expect(records()).toHaveLength(1);
+    expect(records()).toHaveLength(3);
     clearTestAlert();
     expect(useTwinStore.getState().twin.assets.some(({ id }) => id === TEST_ASSET_ID)).toBe(false);
     expect(useTwinStore.getState().risk.score).toBe(baseline);
-    expect(records()[0].resolvedAt).toBeDefined();
+    expect(records().every(({ resolvedAt }) => resolvedAt !== undefined)).toBe(true);
     expect(testScenarioCause(useTwinStore.getState())).toBeNull();
+    expect(useFlagStore.getState().flags.map(({ assetId }) => assetId)).not.toContain("PT-401");
   } finally {
     stop();
   }

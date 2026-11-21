@@ -32,6 +32,7 @@ export function phoneMarkup(code: string) {
     <header class="pw-call-head">
       <span>${icon("shield", 20)} PYRE WITNESS</span><span>${icon("broadcast", 14)} On-call line</span>
     </header>
+    <div id="messages" aria-live="polite" hidden></div>
     <section class="pw-call-hero" aria-label="Call status">
       <div class="pw-call-signal" id="signal">${icon("bell", 31)}${icon("phone", 31, true)}${icon("headphones", 31, true)}${icon("check", 31, true)}</div>
       <div class="pw-call-caller" id="caller">CHIEF · LINE 3</div>
@@ -42,6 +43,8 @@ export function phoneMarkup(code: string) {
       </div>
       <div class="pw-call-assumed" id="assumed" hidden>assumed (simulated plant)</div>
       <div class="pw-call-assumed" id="keep-open" hidden>Keep this tab open.</div>
+      <div class="pw-call-action" id="decision" hidden></div>
+      <div class="pw-call-action" id="decision-receipt" hidden></div>
       <time class="pw-call-time" id="call-time" hidden></time>
     </section>
     <div class="pw-call-notice" id="connection-error" role="status" hidden></div>
@@ -63,6 +66,11 @@ export function phoneMarkup(code: string) {
       <div class="pw-call-script" id="script"></div>
       <div class="pw-call-response" id="response">
         <button class="pw-call-button pw-call-primary" id="approve" type="button">${icon("shield", 19)} <span>Approve action</span></button>
+        <button class="pw-call-button pw-call-secondary" id="override" type="button" hidden>Override</button>
+        <select id="override-action" aria-label="Override action" hidden>
+          <option value="">Choose action</option>
+          <option>isolate asset</option><option>move asset</option><option>add protection</option><option>accept risk</option>
+        </select>
         <span class="pw-call-action" id="action"></span>
         <div class="pw-call-notice" id="approval-error" role="status" hidden>The proposed action changed on the desktop.</div>
         <button class="pw-call-button pw-call-secondary" id="acknowledge" type="button">${icon("check", 20)} Acknowledge</button>

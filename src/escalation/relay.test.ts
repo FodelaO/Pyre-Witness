@@ -98,3 +98,28 @@ describe("paired phone relay", () => {
     }
   });
 });
+
+it("streams a silent message alongside a call and accepts an explicit fallback choice", () => {
+  const session = register("paired-ladder", "desk")!;
+  let frame: PairingSnapshot | undefined;
+  const stop = subscribe(session, { role: "phone", close() {}, send: (snapshot) => { frame = structuredClone(snapshot); } });
+  const message = { id: "e-test-2", tag: "HMI-F3", title: "Test exposure", lossText: "$125k", simulated: true };
+  expect(receive(session, "phone", { type: "message", message })).toBe(false);
+  expect(receive(session, "desktop", { type: "message", message })).toBe(true);
+  expect(frame?.messages).toEqual([message]);
+  expect(frame?.call).toBeNull();
+
+  expect(receive(session, "desktop", { type: "ring", alert: { ...alert, decision: null } })).toBe(true);
+  expect(frame?.messages).toEqual([message]);
+  expect(frame?.call?.alert.decision).toBeNull();
+  const response = { kind: "override", action: "add protection" } as const;
+  expect(receive(session, "phone", { type: "respond", id: alert.id, response })).toBe(false);
+  expect(receive(session, "phone", { type: "answer", id: alert.id })).toBe(true);
+  expect(receive(session, "phone", { type: "approve", id: alert.id })).toBe(false);
+  expect(receive(session, "phone", { type: "respond", id: alert.id, response })).toBe(true);
+  expect(frame?.call?.humanResponse).toEqual(response);
+  expect(receive(session, "desktop", { type: "respond", id: alert.id, response })).toBe(false);
+  expect(receive(session, "desktop", { type: "clear-message", id: message.id })).toBe(true);
+  expect(frame?.messages).toEqual([]);
+  stop();
+});

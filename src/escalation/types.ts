@@ -2,6 +2,10 @@
 import type { EquipmentKind } from "@/twin/types";
 import type { TelephoneReceipt } from "./telephoneTypes";
 
+import type { AlertDecision, HumanResponse } from "./decision";
+
+export type AlertLevel = 1 | 2 | 3;
+
 export interface Thresholds {
   loss: number;
   risk: number;
@@ -12,6 +16,7 @@ export interface EscalationCause {
   kind: "finding" | "risk" | "simulation";
   title: string;
   test?: true;
+  testLevel?: AlertLevel;
   assetId: string | null;
   assetName: string | null;
   assetKind: EquipmentKind | null;
@@ -38,6 +43,10 @@ export interface EscalationRecord {
   action: string;
   canApprove: boolean;
   raisedAt: number;
+  level?: AlertLevel;
+  messageStatus?: "pending" | "sent" | "failed";
+  decision?: AlertDecision | null;
+  humanResponse?: HumanResponse;
   ringing?: EscalationMoment;
   audioGenerated?: EscalationMoment;
   answered?: EscalationMoment;

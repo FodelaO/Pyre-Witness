@@ -113,3 +113,10 @@
 @media (prefers-reduced-motion: reduce) {
   :where(.lens-material-only, .lens-data-only, .lens-ghost-in-data, .lens-ghost-in-material) { transition: none; }
 }
+
+/* Keep the local flag visible on the physical floor when the data lens is off. */
+.pw-lens-data:not([data-visible]):has(.pw-lens-escalation-flag) { opacity: 1 !important; }
+.pw-lens-data:not([data-visible]):has(.pw-lens-escalation-flag) > :not(.pw-lens-node-meta),
+.pw-lens-data:not([data-visible]) .pw-lens-node-meta > :not(.pw-lens-escalation-flag) { visibility: hidden; }
+.pw-lens-escalation-flag circle { fill: #ffbd4a; stroke: #7c4300; stroke-width: 1; }
+.pw-lens-escalation-flag text { fill: #251600; font: 800 12px monospace; }

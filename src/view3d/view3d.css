@@ -324,3 +324,19 @@
 @container (width < 700px) {
   .pw3d-hint { display: none; }
 }
+
+.pw3d-escalation-flag {
+  position: absolute;
+  inset: 0 auto auto 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #7c4300;
+  border-radius: 50%;
+  color: #251600;
+  background: #ffbd4a;
+  font: 800 12px/1 monospace;
+  visibility: hidden;
+}

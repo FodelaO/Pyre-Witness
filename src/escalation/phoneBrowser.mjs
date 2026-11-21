@@ -22,6 +22,8 @@ function attachPhone(page) {
   const text = (id, value) => { element(id).textContent = value || ""; };
   const dial = element("dial");
   let snapshot;
+  let messageKey = "";
+  let choosingOverride = false;
   let targetVersion;
   let targetRequest = 0;
   let targetRetry;
@@ -38,6 +40,7 @@ function attachPhone(page) {
   let pending = "";
 
   function callStatus(call) {
+    if (call?.humanResponse) return "Response recorded";
     if (call?.approvedAt) return "Action approved";
     if (call?.acknowledgedAt) return "Acknowledged";
     if (call?.resolvedAt) return "Alert cleared";
@@ -84,17 +87,39 @@ function attachPhone(page) {
     });
   }
 
+  function renderMessages(messages) {
+    const key = JSON.stringify(messages);
+    if (key === messageKey) return;
+    messageKey = key;
+    const items = messages.map((message) => {
+      const details = document.createElement("details");
+      details.className = "pw-call-notice";
+      const summary = document.createElement("summary");
+      const label = message.test ? "TEST SCENARIO · " : message.simulated ? "SIMULATION · " : "";
+      const loss = message.lossText ? ` · ${message.lossText} est.` : "";
+      summary.textContent = `${label}Pyre Witness · ${message.tag}${loss} · open`;
+      const finding = document.createElement("div");
+      finding.textContent = message.title;
+      details.append(summary, finding);
+      return details;
+    });
+    element("messages").replaceChildren(...items);
+    show("messages", items.length > 0);
+  }
+
   function render() {
+    renderMessages(snapshot?.messages ?? []);
     const call = snapshot?.call;
     const alert = call?.alert;
     const answered = !!call?.answeredAt;
-    const terminalAt = call?.approvedAt ?? call?.acknowledgedAt ?? call?.resolvedAt;
+    const terminalAt = call?.humanResponse ? call.answeredAt ?? call.ringingAt : call?.approvedAt ?? call?.acknowledgedAt ?? call?.resolvedAt;
     const ready = foreground && !awaitingSnapshot;
     const awaitingAnswer = !!call && ready && !answered && !terminalAt;
     const dialed = !!call && (call.dialedAt !== undefined || dialStarted);
     const ringing = awaitingAnswer && !dialed && !connectionError;
     const canDial = !!call && ready && !terminalAt && !dialed && dial.hasAttribute("href");
     const waiting = !!(call?.approvalRequestedAt && !call.approvalUnavailableAt && !terminalAt);
+    const ladder = alert?.decision !== undefined;
     const approvable = !!(alert?.canApprove && !call.approvalUnavailableAt);
     const ringerReady = enabled && audio.context?.state === "running";
     const loss = alert?.lossText ?? (alert?.loss == null ? "" : `$${alert.loss.toLocaleString("en-US")}`);
@@ -141,15 +166,30 @@ function attachPhone(page) {
     if (ringerReady && ringing && !pending) audio.ring();
     else audio.stopRing();
 
+    show("decision", ladder);
+    const decision = alert?.decision;
+    text("decision", decision
+      ? `Decision · ${decision.model}: ${decision.choice} (${Math.round(decision.confidence * 100)}%)`
+      : "Decision unavailable");
+    show("decision-receipt", !!call?.humanResponse);
+    if (call?.humanResponse) {
+      const { kind, action } = call.humanResponse;
+      text("decision-receipt", `${kind === "approve" ? "Approved" : "Overridden"} · ${action}`);
+    }
     show("briefing", answered);
     text("script", alert?.script);
     show("response", ready && !terminalAt);
-    show("approve", approvable);
+    show("approve", ladder || approvable);
+    show("override", ladder);
+    show("override-action", ladder && choosingOverride);
+    show("acknowledge", !ladder);
+    element("override").disabled = !!pending || (choosingOverride && !element("override-action").value);
     show("action", approvable);
     text("action", alert && `Twin update · ${alert.action}`);
     show("approval-error", !!call?.approvalUnavailableAt);
     element("approve").disabled = element("acknowledge").disabled = waiting || !!pending;
-    element("approve").querySelector("span").textContent = waiting ? "Waiting for desktop…" : "Approve action";
+    if (ladder && !decision) element("approve").disabled = true;
+    element("approve").querySelector("span").textContent = waiting ? "Waiting for desktop…" : ladder ? "Approve" : "Approve action";
 
     show("generating", voice === "loading");
     show("audio-error", voice === "error");
@@ -227,7 +267,27 @@ function attachPhone(page) {
   element("enable").addEventListener("click", enableRinger);
   element("enable-incoming").addEventListener("click", enableRinger);
   element("answer").addEventListener("click", answer);
-  element("approve").addEventListener("click", () => void respond("approve"));
+  async function respondToDecision(kind, action) {
+    const id = snapshot?.call?.alert.id;
+    if (!id || !action || pending) return;
+    pending = "respond";
+    operationError = "";
+    render();
+    try { await callCommand(connection, { type: "respond", id, response: { kind, action } }); }
+    catch { operationError = "Could not record the response."; }
+    finally { pending = ""; render(); }
+  }
+
+  element("approve").addEventListener("click", () => {
+    const decision = snapshot?.call?.alert.decision;
+    if (decision) void respondToDecision("approve", decision.choice);
+    else if (decision === undefined) void respond("approve");
+  });
+  element("override").addEventListener("click", () => {
+    if (!choosingOverride) { choosingOverride = true; render(); return; }
+    void respondToDecision("override", element("override-action").value);
+  });
+  element("override-action").addEventListener("change", render);
   element("acknowledge").addEventListener("click", () => void respond("acknowledge"));
   dial.addEventListener("click", (event) => {
     const alert = snapshot?.call?.alert;
@@ -261,6 +321,8 @@ function attachPhone(page) {
       audio.stopSpeech();
       clearDialTarget();
       dialStarted = false;
+      choosingOverride = false;
+      element("override-action").value = "";
       voice = "idle";
       duration = undefined;
       operationError = "";

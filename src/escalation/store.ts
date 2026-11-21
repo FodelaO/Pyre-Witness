@@ -7,13 +7,13 @@ const SETTINGS_KEY = "pw:escalation-thresholds";
 type RecordUpdate = Partial<Omit<EscalationRecord, "id" | "thresholds" | "raisedAt">>;
 
 export function canRingEscalation(record: EscalationRecord): boolean {
-  return !record.resolvedAt && !record.dismissedAt && !record.dialed && !record.acknowledged && !record.approved;
+  return (record.level === undefined || record.level === 3) && !record.humanResponse && !record.resolvedAt && !record.dismissedAt && !record.dialed && !record.acknowledged && !record.approved;
 }
 
 /** Keep the desktop on the handset's active alert, then select the next alert for both. */
 export function selectEscalationRecord(records: readonly EscalationRecord[], pairedRecord?: EscalationRecord) {
   const paired = pairedRecord?.dismissedAt ? undefined : pairedRecord;
-  if (paired && !paired.resolvedAt && !paired.acknowledged && !paired.approved) return paired;
+  if (paired && !paired.resolvedAt && !paired.acknowledged && !paired.approved && !paired.humanResponse) return paired;
 
   const newestFirst = (a: EscalationRecord, b: EscalationRecord) => b.raisedAt - a.raisedAt;
   const pending = records.filter(canRingEscalation);

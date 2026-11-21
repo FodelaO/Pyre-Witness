@@ -1,6 +1,6 @@
 /** Short-lived LAN pairing relay. The desktop owns all decisions that change the twin. */
 import { maskPhoneNumber } from "./phoneNumber";
-import { PAIRING_TTL, type CallCommand, type DialDestination, type DialTarget, type PairingSnapshot, type PhoneCall } from "./protocol";
+import { PAIRING_TTL, type CallCommand, type DialDestination, type DialTarget, type PairingSnapshot, type PhoneCall, type PublicMessage } from "./protocol";
 
 type Role = "desktop" | "phone";
 type Subscriber = { role: Role; send: (snapshot: PairingSnapshot) => void; close: () => void };
@@ -9,6 +9,7 @@ interface Session {
   phone: string | null;
   expiresAt: number;
   call: PhoneCall | null;
+  messages?: PublicMessage[];
   subscribers: Set<Subscriber>;
   expiry?: ReturnType<typeof setTimeout>;
   destination?: DialDestination;
@@ -24,6 +25,7 @@ function snapshot(session: Session): PairingSnapshot {
     expiresAt: session.expiresAt,
     phoneConnected: [...session.subscribers].some(({ role }) => role === "phone"),
     call: session.call,
+    ...(session.messages && { messages: session.messages }),
   };
 }
 
@@ -80,7 +82,7 @@ export function subscribe(session: Session, subscriber: Subscriber) {
 }
 
 function ended(call: PhoneCall) {
-  return call.approvedAt !== undefined || call.acknowledgedAt !== undefined || call.resolvedAt !== undefined;
+  return !!call.humanResponse || call.approvedAt !== undefined || call.acknowledgedAt !== undefined || call.resolvedAt !== undefined;
 }
 
 function updateDestination(session: Session, destination: DialDestination | undefined): boolean {
@@ -107,6 +109,15 @@ export function readDialTarget(session: Session, role: Role, id: string, version
 export function receive(session: Session, role: Role, command: Exclude<CallCommand, { type: "pair" | "dial-target" }>): boolean {
   if (Date.now() >= session.expiresAt) return false;
   const now = Date.now();
+  if (command.type === "message" || command.type === "clear-message") {
+    if (role !== "desktop") return false;
+    const messages = session.messages ?? [];
+    const id = command.type === "message" ? command.message.id : command.id;
+    const remaining = messages.filter((message) => message.id !== id);
+    session.messages = command.type === "message" ? [...remaining, command.message].slice(-12) : remaining;
+    broadcast(session);
+    return true;
+  }
   if (command.type === "ring") {
     if (role !== "desktop") return false;
     if (session.call?.alert.id === command.alert.id) {
@@ -124,6 +135,11 @@ export function receive(session: Session, role: Role, command: Exclude<CallComma
   if (!call || call.alert.id !== command.id) return false;
 
   switch (command.type) {
+    case "respond":
+      if (ended(call) || call.alert.decision === undefined || (role === "phone" && !call.answeredAt)) return false;
+      if (command.response.kind === "approve" && call.alert.decision?.choice !== command.response.action) return false;
+      call.humanResponse = command.response;
+      break;
     case "answer":
       if (role !== "phone" || call.resolvedAt) return false;
       call.answeredAt ??= now;
@@ -133,7 +149,7 @@ export function receive(session: Session, role: Role, command: Exclude<CallComma
       call.acknowledgedAt ??= now;
       break;
     case "approve":
-      if (role !== "phone" || !call.answeredAt || !call.alert.canApprove || call.resolvedAt || call.acknowledgedAt) return false;
+      if (role !== "phone" || !call.answeredAt || !call.alert.canApprove || call.alert.decision !== undefined || call.resolvedAt || call.acknowledgedAt) return false;
       call.approvalRequestedAt ??= now;
       break;
     case "approval-applied":

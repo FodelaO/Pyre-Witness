@@ -4,7 +4,7 @@ import { monitorEscalations } from "./monitor";
 import { ESCALATION_DEBOUNCE_MS } from "./policy";
 import { monitorSlackAlerts, useSlackStatuses } from "./slackClient";
 import { useEscalationStore } from "./store";
-import { clearTestAlert, runTestAlert, TEST_ASSET_ID } from "./testScenario";
+import { clearTestAlert, runTestAlert } from "./testScenario";
 
 it("posts a test alert once and keeps its Slack receipt across record updates and remounts", async () => {
   vi.useFakeTimers();
@@ -17,15 +17,16 @@ it("posts a test alert once and keeps its Slack receipt across record updates an
   try {
     expect(runTestAlert()).toBe(true);
     await vi.advanceTimersByTimeAsync(ESCALATION_DEBOUNCE_MS);
-    const record = useEscalationStore.getState().records.find(({ trigger }) => trigger.test);
+    const record = useEscalationStore.getState().records.find(({ trigger, level }) => trigger.test && level === 2);
     if (!record) throw new Error("The rehearsal did not raise its test alert.");
 
     const testPosts = () => post.mock.calls.filter(([, options]) =>
-      JSON.parse(String(options?.body)).assetTag === TEST_ASSET_ID);
+      JSON.parse(String(options?.body)).assetTag === "HMI-F3");
     expect(testPosts()).toHaveLength(1);
+    expect(post.mock.calls.filter(([, options]) => JSON.parse(String(options?.body)).test)).toHaveLength(1);
     expect(testPosts()[0][0]).toBe("/api/escalation/slack");
     expect(JSON.parse(String(testPosts()[0][1]?.body))).toEqual({
-      assetTag: TEST_ASSET_ID,
+      assetTag: "HMI-F3",
       assetName: record.trigger.assetName,
       lossUsd: record.trigger.loss,
       risk: record.trigger.score,

@@ -3,7 +3,8 @@ import { useRunStore } from "@/pipeline/runStore";
 import { useSimStore } from "@/sim/simStore";
 import { useTwinStore } from "@/twin/store";
 import { readCauses } from "./evidence";
-import { advancePolicy, initialPolicy } from "./policy";
+import { syncFlags } from "./flagStore";
+import { advancePolicy, alertLevel, initialPolicy } from "./policy";
 import { approvalTitle, planApproval } from "./recommendation";
 import { buildEscalationScript } from "./script";
 import { useEscalationStore } from "./store";
@@ -28,18 +29,20 @@ export function monitorEscalations(): () => void {
     const { records, thresholds } = useEscalationStore.getState();
     const causes = readCauses(useRunStore.getState().placedAssetId);
     const now = Date.now();
-    const result = advancePolicy(policy, causes, thresholds, now);
+    const result = advancePolicy(policy, causes, thresholds, now, alertLevel);
     policy = result.state;
 
     for (const record of records) {
-      if (!record.resolvedAt && !policy.episodes.has(record.trigger.key)) update(record.id, { resolvedAt: now });
+      if (!record.resolvedAt && policy.episodes.get(record.trigger.key)?.level !== record.level) {
+        update(record.id, { resolvedAt: now });
+      }
     }
-    add(result.raised.filter((cause) => !records.some((record) => !record.resolvedAt && record.trigger.key === cause.key))
+    add(result.raised.filter((cause) => !records.some((record) => !record.resolvedAt && record.trigger.key === cause.key && record.level === alertLevel(cause, thresholds)))
       .map((trigger) => {
         const { action, plan, script } = recommendedBriefing(trigger, thresholds);
         return {
           id: `e-${now.toString(36)}-${++sequence}`, trigger, thresholds, script, action,
-          canApprove: plan !== null, raisedAt: now,
+          canApprove: plan !== null, raisedAt: now, level: alertLevel(trigger, thresholds) || undefined,
         };
       }));
 
@@ -59,10 +62,12 @@ export function monitorEscalations(): () => void {
         || (current.status !== "running" && current.assessment !== previous.assessment)) check();
     }),
     useEscalationStore.subscribe((current, previous) => {
+      if (current.records !== previous.records) syncFlags(current.records);
       if (current.thresholds !== previous.thresholds) check();
     }),
   ];
   check();
+  syncFlags(useEscalationStore.getState().records);
 
   return () => { clearTimeout(timer); stops.forEach((stop) => stop()); };
 }

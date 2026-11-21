@@ -5,6 +5,7 @@ import { Bell, Check, ChevronDown, FlaskConical, MessageSquare, Phone, PhoneCall
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { formatUsd } from "@/econ/format";
 import { Equipment, FOOTPRINT } from "@/equipment";
+import { AlertLadder } from "./AlertLadder";
 import { monitorEscalations } from "./monitor";
 import { PhoneContactDialog } from "./PhoneContactDialog";
 import { BASELINE_INCREASE, validThresholds } from "./policy";
@@ -155,7 +156,7 @@ export default function EscalationCall() {
   const records = useEscalationStore((state) => state.records);
   const thresholds = useEscalationStore((state) => state.thresholds);
   const phone = useEscalationPhone(records);
-  const { pairing, snapshot, busy, error, preparePairing, ring, record, activeRecord } = useCallPairing(label, phone.contact);
+  const { pairing, snapshot, busy, error, preparePairing, ring, respond, record, activeRecord } = useCallPairing(label, phone.contact);
 
   useEffect(monitorSlackAlerts, []);
   useEffect(monitorEscalations, []);
@@ -200,7 +201,11 @@ export default function EscalationCall() {
         setSettings(false); setPairingOpen(true); void preparePairing();
       }}><QrCode size={15} aria-hidden /> {phoneConnected ? "Show paired phone" : "Pair phone"}</button>
     </section>}
-    {record && <AlertCard record={record} busy={busy} phoneConnected={phoneConnected}
+    <AlertLadder records={records} call={record} phoneConnected={phoneConnected} respond={respond} onRing={(high) => {
+      if (phoneConnected) void ring(high);
+      else { setSettings(false); setPairingOpen(true); void preparePairing(); }
+    }} />
+    {record && record.level === undefined && <AlertCard record={record} busy={busy} phoneConnected={phoneConnected}
       telephone={<TelephoneCard mode={phone.mode} maskedNumber={phone.maskedNumber} receipt={record.telephoneCalls?.at(-1)}
         resolved={!!record.resolvedAt} onCall={() => phone.callNow(record.id)}
         onDevice={() => phone.callFromDevice(record.id)} />} onRing={() => {
@@ -213,7 +218,7 @@ export default function EscalationCall() {
     {pairingOpen && !settings && <section className="pw-es-popover" aria-label="Phone pairing">
       <div className="pw-es-popup-head"><span>On-call link</span><button type="button" className="pw-es-icon" aria-label="Close pairing" onClick={() => setPairingOpen(false)}><X size={15} /></button></div>
       {pairing ? <PairingCard pairing={pairing} connected={phoneConnected}
-        canRenew={!activeRecord || !!(activeRecord.approved || activeRecord.acknowledged || activeRecord.resolvedAt)}
+        canRenew={!activeRecord || !!(activeRecord.approved || activeRecord.acknowledged || activeRecord.resolvedAt || activeRecord.humanResponse)}
         onRenew={() => void preparePairing(true)} />
         : busy && <div className="pw-es-note">Opening phone link…</div>}
     </section>}

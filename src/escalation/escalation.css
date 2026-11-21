@@ -103,3 +103,11 @@
   .pw-es > * { grid-column: 2; }
   .pw-es > .pw-es-chip { grid-column: 1; grid-row: 1; }
 }
+
+.pw-es-ladder { display: grid; gap: 8px; padding: 10px 12px; }
+.pw-es-ladder-row { display: grid; grid-template-columns: 16px 62px minmax(0, 1fr); gap: 6px; align-items: center; }
+.pw-es-ladder-row + .pw-es-ladder-row { border-top: 1px solid var(--pw-line); padding-top: 7px; }
+.pw-es-ladder-flag { display: grid; place-items: center; border-radius: 50%; background: #ffbd4a; color: #251600; }
+.pw-es-ladder-call { grid-column: 2 / -1; }
+.pw-es-ladder-decision { display: grid; gap: 3px; }
+.pw-es-ladder-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

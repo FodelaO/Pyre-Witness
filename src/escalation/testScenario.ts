@@ -12,7 +12,8 @@ export function runTestAlert(): boolean {
   const { twin, addAsset, select } = useTwinStore.getState();
   const plc = assetById(twin, "PLC-F3");
   const room = areaById(twin, "filler3");
-  if (!plc || !room || plc.physical.area !== room.id) return false;
+  if (!plc || !room || plc.physical.area !== room.id
+    || !assetById(twin, "PT-401") || !assetById(twin, "HMI-F3")) return false;
 
   const at = clampToArea(room, plc.physical.x + 78, plc.physical.y + 29, 20);
   const gateway: Asset = {

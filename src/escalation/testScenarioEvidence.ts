@@ -21,7 +21,7 @@ export function testScenarioCause({ twin, risk, baselineScore }: TwinState): Esc
       .sort((a, b) => b.estimate.lossIfManifests - a.estimate.lossIfManifests)[0];
     if (priced) {
       cause = {
-        key: "test-scenario:" + asset.id, kind: "finding", test: true,
+        key: "test-scenario:" + asset.id, kind: "finding", test: true, testLevel: 3,
         assetId: asset.id, assetName: asset.name, assetKind: asset.physical.kind,
         room: areaById(twin, asset.physical.area)?.name ?? null,
         title: priced.path.title,

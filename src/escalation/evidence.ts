@@ -122,6 +122,17 @@ export function readCauses(preferredAsset: string | null): EscalationCause[] {
   // Finding-level figures stay out for the captured device: none while its run prices it, then the panel's.
   const pricedId = capture?.assetId ?? (run.status === "running" ? run.placedAssetId : null);
   const test = testScenarioCause(state);
+  const testTiers = test ? ([
+    { id: "PT-401", level: 1, loss: 8_000 },
+    { id: "HMI-F3", level: 2, loss: 125_000 },
+  ] as const).flatMap(({ id, level, loss }): EscalationCause[] => {
+    const asset = assetById(state.twin, id);
+    return asset ? [{
+      key: "test-scenario:" + id, kind: "finding", test: true, testLevel: level,
+      ...identity(state.twin, asset), title: "TEST SCENARIO · Simulated asset exposure",
+      loss, score: state.risk.score, baseline: state.baselineScore,
+    }] : [];
+  }) : [];
   const everyFinding = findingCauses(state).filter(({ assetId }) => assetId !== TEST_ASSET_ID);
   const findings = everyFinding.filter(({ assetId }) => assetId !== pricedId);
   const own = capture?.assetId === preferredAsset ? capture : everyFinding.find((finding) => finding.assetId === preferredAsset);
@@ -142,5 +153,5 @@ export function readCauses(preferredAsset: string | null): EscalationCause[] {
   const simulation = sim.mode === "finished" && sim.run ? simulationCause(sim.run, state) : null;
   const ranked = findings.toSorted((a, b) =>
     Number(b.assetId === preferredAsset) - Number(a.assetId === preferredAsset) || (b.loss ?? 0) - (a.loss ?? 0));
-  return [...(test ? [test] : []), ...(simulation ? [simulation] : []), ...(capture ? [capture] : []), ...ranked, risk];
+  return [...(test ? [test, ...testTiers] : []), ...(simulation ? [simulation] : []), ...(capture ? [capture] : []), ...ranked, risk];
 }

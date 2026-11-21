@@ -112,3 +112,6 @@ svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-l
 @media (prefers-reduced-motion: reduce) {
   .pw-call[data-ringing="true"] .pw-call-signal { animation: none; }
 }
+
+#messages summary { cursor: pointer; }
+#override-action { padding: .6rem; color: var(--pw-text); background: var(--pw-panel-2); font: inherit; }

@@ -1,6 +1,6 @@
 /** Covers exact threshold boundaries, transient detections and episode re-arming. */
 import { describe, expect, it } from "vitest";
-import { advancePolicy, DEFAULT_THRESHOLDS as thresholds, initialPolicy, thresholdCrossed } from "./policy";
+import { advancePolicy, alertLevel, DEFAULT_THRESHOLDS as thresholds, initialPolicy, thresholdCrossed } from "./policy";
 import type { EscalationCause } from "./types";
 
 const device: EscalationCause = {
@@ -49,4 +49,23 @@ describe("escalation policy", () => {
     expect(result.raised).toEqual([device, sim]);
     expect(advancePolicy(result.state, [device], thresholds, 1000).state.episodes.has(sim.key)).toBe(false);
   });
+});
+
+it("maps the loss and risk boundaries to exclusive tiers", () => {
+  expect([0, 1, 99_999, 100_000, 199_999, 200_000].map((loss) =>
+    alertLevel({ ...device, loss }, thresholds))).toEqual([0, 1, 1, 2, 2, 3]);
+  const risk = { ...device, kind: "risk" as const, loss: null, baseline: 54 };
+  expect([54, 59, 60, 74, 80].map((score) => alertLevel({ ...risk, score }, thresholds)))
+    .toEqual([0, 1, 2, 3, 3]);
+  expect(alertLevel({ ...risk, score: 55, assetId: null }, thresholds)).toBe(0);
+});
+
+it("debounces again when the same evidence crosses into a higher tier", () => {
+  const low = { ...device, loss: 999 };
+  const first = advancePolicy(initialPolicy, [low], thresholds, 0, alertLevel);
+  const flagged = advancePolicy(first.state, [low], thresholds, 500, alertLevel);
+  expect(flagged.raised).toEqual([low]);
+  const medium = advancePolicy(flagged.state, [device], thresholds, 600, alertLevel);
+  expect(medium.raised).toEqual([]);
+  expect(advancePolicy(medium.state, [device], thresholds, 1100, alertLevel).raised).toEqual([device]);
 });

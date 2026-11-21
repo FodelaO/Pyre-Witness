@@ -11,6 +11,7 @@ import { useCrewHoverId } from "@/crew/crewHover";
 import { crewPosition, useCrewStore } from "@/crew/crewStore";
 import { CREW, CREW_ORDER, type CrewId } from "@/crew/types";
 import { useCrewReadout } from "@/crew/useCrewReadout";
+import { useFlagStore } from "@/escalation/flagStore";
 import type { CaptureImage } from "@/pipeline/types";
 import CrewWorkLabels, { type CrewWorkLabelProps, type CrewWorkLabelsHandle } from "./CrewWorkLabels";
 import CrewWorkMotion, { type CrewWorkMotionHandle } from "./CrewWorkMotion";
@@ -123,6 +124,7 @@ function CrewBillboard({ id, register, sizes, writing, invalidate }: {
 }
 
 export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted, placedAssetId, thumbnail, workLabels, tools, briefing, invalidate }: OverlayProps) {
+  const flags = useFlagStore((state) => state.flags);
   const elements = useRef(new Map<string, HTMLDivElement>());
   const plateSizes = useRef(new Map<CrewId, PlateSize>());
   const work = useRef<CrewWorkLabelsHandle>(null);
@@ -134,7 +136,11 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
     focus.current = { selectedId, hoveredId, highlighted, placedAssetId };
     nodes.current = labelled;
   }, [selectedId, hoveredId, highlighted, placedAssetId, labelled]);
-  useLayoutEffect(invalidate, [invalidate, workLabels, thumbnail]);
+  const flagged = useMemo(() => flags.flatMap((flag) => {
+    const node = scene.nodes.find(({ id }) => id === flag.assetId);
+    return node ? [{ flag, node }] : [];
+  }), [flags, scene]);
+  useLayoutEffect(invalidate, [invalidate, workLabels, thumbnail, flagged]);
 
   const register = (key: string, element: HTMLDivElement | null) => {
     if (element) elements.current.set(key, element);
@@ -219,6 +225,13 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
         });
       }
 
+      for (const { flag, node } of flagged) {
+        const screen = projectToScreen(viewProjection, node.anchor, width, height);
+        if (screen.visible) boxes.push({
+          id: `flag:${flag.assetId}`, x: screen.x + 12, y: screen.y - 9, width: 16, height: 16,
+          priority: 9e5, forced: true,
+        });
+      }
       const shown = declutter(boxes);
       work.current?.place(shown);
       for (const box of crewBoxes) {
@@ -242,7 +255,7 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
         if (element.style.transform !== transform) element.style.transform = transform;
       }
     },
-  }), [tools, briefing]);
+  }), [tools, briefing, flagged]);
 
   return (
     <div className="pw3d-overlay" aria-hidden="true">
@@ -266,6 +279,8 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
           {node.id === selectedId && node.name && <span className="pw3d-label-name">{node.name}</span>}
         </div>
       ))}
+      {flagged.map(({ flag }) => <div key={flag.assetId} ref={(element) => register(`flag:${flag.assetId}`, element)}
+        className="pw3d-escalation-flag" title={flag.reason}>!</div>)}
       {CREW_ORDER.map((id) => <CrewBillboard key={id} id={id} register={register} sizes={plateSizes.current}
         writing={id === "chief" && workLabels.work.writing} invalidate={invalidate} />)}
       <CrewWorkLabels ref={work} scene={scene} thumbnail={thumbnail} placedAssetId={placedAssetId} {...workLabels} />

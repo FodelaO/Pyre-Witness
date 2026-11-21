@@ -59,7 +59,7 @@ async function pollCarrier(recordId: string, sid: string, receipt: TelephoneRece
 }
 
 function liveRecord(id: string): EscalationRecord | undefined {
-  return useEscalationStore.getState().records.find((record) => record.id === id && !record.resolvedAt && !record.dismissedAt);
+  return useEscalationStore.getState().records.find((record) => record.id === id && record.level === undefined && !record.resolvedAt && !record.dismissedAt);
 }
 
 async function dialCarrier(id: string, number: string, automatic: boolean): Promise<CallMode | undefined> {
@@ -94,7 +94,7 @@ export function useTelephoneCalls(contact: PhoneContact | null, records: Escalat
 
   useEffect(() => {
     if (mode !== "twilio" || !contact?.consent) return;
-    const eligible = records.filter((record) => !record.resolvedAt && !record.dismissedAt && !record.telephoneCalls?.length)
+    const eligible = records.filter((record) => record.level === undefined && !record.resolvedAt && !record.dismissedAt && !record.telephoneCalls?.length)
       .sort((a, b) => Number(!!b.trigger.test) - Number(!!a.trigger.test) || a.raisedAt - b.raisedAt);
     const record = takeAutomatic(eligible);
     if (record) void dialCarrier(record.id, contact.number, true).then((result) => {

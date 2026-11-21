@@ -2,6 +2,7 @@
 "use client";
 
 import { memo, useMemo } from "react";
+import { useFlagStore } from "@/escalation/flagStore";
 import { assetLabel } from "@/floor/assetLabel";
 import type { LabelBox } from "@/floor/labelPlacement";
 import { useTwinStore } from "@/twin/store";
@@ -94,6 +95,7 @@ export default memo(function NodeAnnotations({ canvas, annotations, showAllSoftw
   const hoveredId = useTwinStore((state) => state.hoveredId);
   const selectedId = useTwinStore((state) => state.selectedId);
   const { nodes, badges, occupied } = annotations;
+  const flags = useFlagStore((state) => state.flags);
 
   const chips = useMemo(() => {
     const focus = (id: string) => id === hoveredId || id === selectedId;
@@ -139,6 +141,17 @@ export default memo(function NodeAnnotations({ canvas, annotations, showAllSoftw
           {watch && <circle cx={box.w} cy={1} r={3.25} />}
         </g>
       ))}
+      {flags.map(({ assetId, reason }) => {
+        const node = nodes.find(({ id }) => id === assetId);
+        if (!node) return null;
+        const { symbol } = node;
+        return <g key={assetId} className="pw-lens-escalation-flag" role="img" aria-label={reason}
+          transform={`translate(${symbol.x + symbol.w} ${symbol.y}) scale(${print})`}>
+          <title>{reason}</title>
+          <circle r={8} />
+          <text textAnchor="middle" y={4}>!</text>
+        </g>;
+      })}
     </g>
   );
 });

@@ -35,7 +35,7 @@ async function postAlert({ trigger, action }: EscalationRecord): Promise<SlackSt
 export function monitorSlackAlerts() {
   function sendNewAlerts(records: readonly EscalationRecord[]) {
     for (const record of records) {
-      if (record.resolvedAt || record.dismissedAt || useSlackStatuses.getState()[record.id]) continue;
+      if (record.level !== 2 || record.resolvedAt || record.dismissedAt || useSlackStatuses.getState()[record.id]) continue;
       useSlackStatuses.setState({ [record.id]: "pending" });
       void postAlert(record).then((status) => useSlackStatuses.setState({ [record.id]: status }));
     }
