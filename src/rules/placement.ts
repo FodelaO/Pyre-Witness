@@ -1,6 +1,7 @@
-/** Enumerates supported room, Purdue level and network-zone combinations for a device. */
+/** Enumerates supported room and network-placement combinations for equipment and passive objects. */
 import { areaCenter, containsPoint } from "@/twin/geometry";
-import type { Area, Asset, EquipmentKind, PurdueLevel, Twin } from "@/twin/types";
+import type { Area, AreaId, Asset, EquipmentKind, PurdueLevel, RuleFinding, Twin } from "@/twin/types";
+import type { Rule } from "./context";
 
 const CONTROL_LEVELS: Partial<Record<EquipmentKind, readonly PurdueLevel[]>> = {
   instrument: [0, 1],
@@ -12,6 +13,33 @@ const PROCESS_EQUIPMENT: ReadonlySet<EquipmentKind> = new Set([
   "vertical_tank", "bullet_tank", "agitated_tank", "pump", "valve", "ro_skid", "uv_reactor", "carbo_cooler",
   "heat_exchanger", "rotary_filler", "conveyor", "labeler", "palletizer", "chiller_compressor", "condenser",
 ]);
+
+export const placementHomeRule = {
+  id: "PLACE-01",
+  title: "Ineligible plant destination",
+  kind: "physical",
+  references: [],
+  description: "The AI crew office is virtual. The washdown and ammonia overlays describe conditions within real plant areas.",
+} satisfies Omit<Rule, "check">;
+
+export function isPlantHome(area: AreaId): boolean {
+  return area !== "crew_office" && area !== "washdown" && area !== "nh3_hazard";
+}
+
+export function checkPlacementHome(asset: Asset, area?: Area): RuleFinding[] {
+  if (isPlantHome(asset.physical.area)) return [];
+  const areaType = asset.physical.area === "crew_office" ? "a virtual crew area" : "a condition overlay";
+  return [{
+    ruleId: placementHomeRule.id,
+    title: placementHomeRule.title,
+    kind: placementHomeRule.kind,
+    severity: 4,
+    assetId: asset.id,
+    detail: `${area?.name ?? asset.physical.area} is ${areaType}.`,
+    fix: "Choose a physical plant area and check the conditions at the destination.",
+    references: [...placementHomeRule.references],
+  }];
+}
 
 function candidateZones(twin: Twin, asset: Asset, area: Area, level: PurdueLevel): string[] {
   const { x, y, w, h } = area.bounds;
@@ -27,15 +55,21 @@ function candidateZones(twin: Twin, asset: Asset, area: Area, level: PurdueLevel
   return [...zones].sort();
 }
 
-export function* placementCandidates(twin: Twin, asset: Asset): Generator<{ area: Area; candidate: Asset }> {
+export function* placementCandidates(twin: Twin, asset: Asset, passive = false): Generator<{ area: Area; candidate: Asset }> {
   const allowedLevels = CONTROL_LEVELS[asset.physical.kind]
     ?? (PROCESS_EQUIPMENT.has(asset.physical.kind) ? [0, 1] : undefined);
 
   for (const area of twin.areas) {
+    if (!isPlantHome(area.id) || (passive && area.kind !== "support")) continue;
     const point = area.id === asset.physical.area ? asset.physical : areaCenter(area);
-    for (const level of new Set(area.typicalLevels)) {
+    if (passive && twin.areas.some((room) => room.kind === "process" && containsPoint(room, point.x, point.y))) continue;
+    // Purdue fields are nominal placement metadata for offline objects.
+    const nominalLevel = area.typicalLevels.includes(asset.network.level) ? asset.network.level : area.typicalLevels[0];
+    const levels = passive ? [nominalLevel ?? asset.network.level] : new Set(area.typicalLevels);
+    for (const level of levels) {
       if (allowedLevels && !allowedLevels.includes(level)) continue;
-      for (const zone of candidateZones(twin, asset, area, level)) {
+      const zones = passive ? [area.name] : candidateZones(twin, asset, area, level);
+      for (const zone of zones) {
         yield {
           area,
           candidate: {
@@ -45,7 +79,7 @@ export function* placementCandidates(twin: Twin, asset: Asset): Generator<{ area
               ...asset.network,
               area: zone,
               level,
-              conduit: zone === asset.network.area ? asset.network.conduit : null,
+              conduit: !passive && zone === asset.network.area ? asset.network.conduit : null,
             },
           },
         };

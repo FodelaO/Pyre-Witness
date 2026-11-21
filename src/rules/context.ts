@@ -42,6 +42,9 @@ export interface RuleContext {
   visitorEntries(asset: Asset): readonly EntryPoint[];
   physicalEntries(asset: Asset): readonly EntryPoint[];
   links(asset: Asset): readonly Asset[];
+  hasNetworkLink(asset: Asset): boolean;
+  hasPowerLink(asset: Asset): boolean;
+  hasCyberSurface(asset: Asset): boolean;
   hasDeclaredLocalLink(asset: Asset): boolean;
   hasActiveLocalLink(asset: Asset): boolean;
   hasDisabledLink(aId: string, bId: string): boolean;
@@ -110,14 +113,16 @@ function indexTwin(twin: Twin): RuleContext {
   const activeLocalLinks = new Set<string>();
   const declaredZoneLinks = new Map<string, Set<string>>();
   const disabledLinks = new Map<string, Set<string>>();
+  const powerLinked = new Set<string>();
   const activeConnections: [from: Asset, to: Asset][] = [];
 
   for (const asset of twin.assets) {
     addToIndex(zoneAssets, asset.network.area, asset);
-    if (asset.criticality >= 4 || asset.safetyCritical) highConsequenceTargets.set(asset.id, asset);
-    if (asset.network.level === 3.5) dmzZones.add(asset.network.area);
-    if (asset.network.level <= 3) otZones.add(asset.network.area);
     for (const link of asset.physical.connections) {
+      if (link.medium === "power" && link.active !== false && link.to !== asset.id && assetById.has(link.to)) {
+        powerLinked.add(asset.id);
+        powerLinked.add(link.to);
+      }
       if (link.medium !== "network" || link.to === asset.id) continue;
       const peer = assetById.get(link.to);
       if (!peer) continue;
@@ -166,6 +171,9 @@ function indexTwin(twin: Twin): RuleContext {
   }
 
   const links = (asset: Asset) => activePeers.get(asset.id) ?? NO_LINKS;
+  const hasNetworkLink = (asset: Asset) => activePeers.has(asset.id);
+  // Placement metadata alone can describe an offline asset's location.
+  const hasCyberSurface = (asset: Asset) => Boolean(asset.cyber) || hasNetworkLink(asset);
   const isEnforced = (conduit: Conduit) => enforcedConduits.has(conduit);
 
   function crossingConduits(a: Asset, b: Asset): readonly Conduit[] {
@@ -177,8 +185,13 @@ function indexTwin(twin: Twin): RuleContext {
 
   const networked = new Set<string>();
   for (const asset of twin.assets) {
+    if (hasCyberSurface(asset)) {
+      if (asset.criticality >= 4 || asset.safetyCritical) highConsequenceTargets.set(asset.id, asset);
+      if (asset.network.level === 3.5) dmzZones.add(asset.network.area);
+      if (asset.network.level <= 3) otZones.add(asset.network.area);
+    }
     const conduit = asset.network.conduit ? conduitById.get(asset.network.conduit) : undefined;
-    if (asset.network.ip || asset.network.protocols?.length || activePeers.has(asset.id)
+    if (asset.network.ip || asset.network.protocols?.length || hasNetworkLink(asset)
       || (conduit && otherZone(conduit, asset.network.area)) || asset.cyber?.cloudConnected || asset.cyber?.remoteAccess) {
       networked.add(asset.id);
     }
@@ -224,7 +237,8 @@ function indexTwin(twin: Twin): RuleContext {
   return {
     ...spatialEvidence(twin),
     twin, assetById, areaById, conduitById, zoneAssets, highConsequenceTargets, networkPairs,
-    paths: [], links, crossingConduits, isEnforced,
+    paths: [], links, hasNetworkLink, hasPowerLink: (asset) => powerLinked.has(asset.id), hasCyberSurface,
+    crossingConduits, isEnforced,
     isNetworked: (asset) => networked.has(asset.id),
     hasDeclaredLocalLink: (asset) => declaredLocalLinks.has(asset.id),
     hasActiveLocalLink: (asset) => activeLocalLinks.has(asset.id),

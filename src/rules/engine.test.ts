@@ -222,7 +222,7 @@ describe("Inspector against the plant twin", () => {
   });
 
   it("explains each rule and uses only canonical MITRE ICS techniques in findings and steps", () => {
-    expect(RULES).toHaveLength(13);
+    expect(RULES).toHaveLength(16);
     for (const rule of RULES) {
       expect(explainRule(rule.id.toLowerCase())).toMatchObject({ title: rule.title, references: rule.references });
     }

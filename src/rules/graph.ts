@@ -114,6 +114,7 @@ export function buildGraph(ctx: RuleContext, findings: readonly RuleFinding[]): 
   for (const [zone, members] of ctx.zoneAssets) {
     if (!zone.trim()) continue;
     const configured = members.filter((asset) => {
+      if (!ctx.hasCyberSurface(asset)) return false;
       // A drawn but intentionally disabled local link takes precedence over
       // inferring an alternate attachment from network configuration alone.
       if (ctx.hasDeclaredLocalLink(asset) && !ctx.hasActiveLocalLink(asset)) return false;
@@ -157,7 +158,7 @@ export function buildGraph(ctx: RuleContext, findings: readonly RuleFinding[]): 
 
   for (const finding of findings) {
     const asset = ctx.assetById.get(finding.assetId);
-    if (!asset) continue;
+    if (!asset || !ctx.hasCyberSurface(asset)) continue;
     switch (finding.ruleId) {
       case "RF-01":
         for (const entry of ctx.rfEntries(asset)) {

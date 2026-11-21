@@ -8,10 +8,17 @@ function formatReference({ framework, clause }: ComplianceClause): string {
   return `${framework} ${clause}`;
 }
 
+function requireClause(id: string): ComplianceClause {
+  const entry = clauseById(id);
+  if (!entry) throw new Error(`Unknown rule compliance clause: ${id}`);
+  return entry;
+}
+
 export function complianceReferences(...ids: string[]): string[] {
-  return ids.map((id) => {
-    const entry = clauseById(id);
-    if (!entry) throw new Error(`Unknown rule compliance clause: ${id}`);
-    return formatReference(entry);
-  });
+  return ids.map((id) => formatReference(requireClause(id)));
+}
+
+/** Use the catalogue's framework label when a specific clause has no catalogue entry. */
+export function complianceDocument(relatedClauseId: string): string {
+  return requireClause(relatedClauseId).framework;
 }

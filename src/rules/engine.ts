@@ -3,12 +3,14 @@ import { applyEffect } from "@/twin/effects";
 import type { AreaId, Asset, AttackPath, PurdueLevel, RiskReport, RuleFinding, Twin } from "@/twin/types";
 import { compareText, createContext } from "./context";
 import { buildGraph } from "./graph";
+import { isPassiveObject } from "./objects";
 import { findPaths } from "./paths";
-import { placementCandidates } from "./placement";
+import { checkPlacementHome, placementCandidates } from "./placement";
 import { placementFindings, safetyFindings, sortFindings } from "./registry";
 import { scoreRisk } from "./score";
 
 export { explainRule } from "./registry";
+export { isPlantHome } from "./placement";
 
 // The store publishes immutable twin snapshots. Re-reading a snapshot retains its original report and timestamp.
 const reports = new WeakMap<Twin, RiskReport>();
@@ -55,7 +57,8 @@ export function evaluatePlacement(twin: Twin, asset: Asset): { findings: RuleFin
   const baseline = baselineFindings(twin, asset.id);
   const { ctx, direct, paths } = assess(withCandidate(twin, asset), asset.id);
   const findings = direct.filter((finding) => concernsPlacement(finding, asset.id, baseline));
-  return { findings: sortFindings([...findings, ...safetyFindings({ ...ctx, paths })]), paths };
+  const home = checkPlacementHome(asset, ctx.areaById.get(asset.physical.area));
+  return { findings: sortFindings([...findings, ...safetyFindings({ ...ctx, paths }), ...home]), paths };
 }
 
 interface RankedPlacement {
@@ -68,7 +71,8 @@ interface RankedPlacement {
 
 export function rankPlacements(twin: Twin, asset: Asset): RankedPlacement[] {
   const baseline = baselineFindings(twin, asset.id);
-  const ranked = Array.from(placementCandidates(twin, asset), ({ area, candidate }) => {
+  const passive = isPassiveObject(asset, createContext(withCandidate(twin, asset)));
+  const ranked = Array.from(placementCandidates(twin, asset, passive), ({ area, candidate }) => {
     const { ctx, direct, graph, paths } = assess(withCandidate(twin, candidate));
     const { score } = scoreRisk(ctx, direct, paths);
     const candidatePaths = findPaths(ctx, graph, asset.id);
@@ -78,14 +82,23 @@ export function rankPlacements(twin: Twin, asset: Asset): RankedPlacement[] {
     ]);
     return {
       placement: { area: area.id, level: candidate.network.level, networkArea: candidate.network.area, score, blocking },
+      preferredOffice: passive && area.id === "corporate_office" && blocking.length === 0,
       publicExposure: Number(area.attrs.publicAccess || area.attrs.outdoor),
       levelChange: Math.abs(asset.network.level - candidate.network.level),
       distanceMoved: Math.hypot(asset.physical.x - candidate.physical.x, asset.physical.y - candidate.physical.y),
     };
   });
-  return ranked.sort((a, b) => a.placement.score - b.placement.score
-    || a.placement.blocking.length - b.placement.blocking.length || a.publicExposure - b.publicExposure
+  return ranked.sort((a, b) => Number(a.placement.blocking.length > 0) - Number(b.placement.blocking.length > 0)
+    || Number(b.preferredOffice) - Number(a.preferredOffice)
+    || a.placement.score - b.placement.score || a.placement.blocking.length - b.placement.blocking.length
+    || a.publicExposure - b.publicExposure
     || a.levelChange - b.levelChange || a.distanceMoved - b.distanceMoved
     || compareText(a.placement.area, b.placement.area) || a.placement.level - b.placement.level
     || compareText(a.placement.networkArea, b.placement.networkArea)).map(({ placement }) => placement);
+}
+
+/** Returns the best modeled option and whether its findings permit placement. */
+export function bestPlacement(twin: Twin, asset: Asset): { placement: RankedPlacement | null; compliant: boolean } {
+  const placement = rankPlacements(twin, asset)[0] ?? null;
+  return { placement, compliant: placement !== null && placement.blocking.length === 0 };
 }

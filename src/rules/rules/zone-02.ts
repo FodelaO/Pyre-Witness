@@ -26,7 +26,7 @@ function zoneProfiles(ctx: RuleContext): Map<string, ZoneProfile> {
       hasSafetyCritical: false, hasOtherAssets: false, hasOt: false, hasExternal: false,
     };
     for (const asset of zoneAssets) {
-      if (!ctx.isNetworked(asset)) continue;
+      if (!ctx.hasCyberSurface(asset) || !ctx.isNetworked(asset)) continue;
       profile.assets.push(asset);
       if (asset.criticality < profile.minCriticality) profile.minCriticality = asset.criticality;
       if (asset.criticality > profile.maxCriticality) profile.maxCriticality = asset.criticality;

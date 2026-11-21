@@ -67,7 +67,8 @@ describe("Independent Inspector safeguards", () => {
 
   it("keeps the removable-media finding for a portable USB drive", () => {
     const drive: Asset = {
-      ...panel, id: "MEDIA", name: "Portable storage", cyber: undefined,
+      ...panel, id: "MEDIA", name: "Portable storage",
+      cyber: { ...panel.cyber!, ports: [], radios: [], removableStorage: true },
       physical: { ...panel.physical, kind: "usb_drive" },
     };
     const twin = fixture(drive);

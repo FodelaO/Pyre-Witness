@@ -3,6 +3,7 @@ import { UNITS_PER_METRE } from "@/twin/geometry";
 import type { Asset, Severity } from "@/twin/types";
 import { complianceReferences } from "../compliance";
 import type { Rule, RuleEvidence } from "../context";
+import { isPassiveObject } from "../objects";
 
 const PASSIVE_KINDS = new Set(["vertical_tank", "bullet_tank", "valve", "heat_exchanger"]);
 const HIGH_PRESSURE = /\bip\s*6k?9k?\b/i;
@@ -22,17 +23,20 @@ export default {
   references: complianceReferences(
     "fda-21cfr117-40", "ehedg-doc-8", "ehedg-doc-13", "3a-sanitary-standards", "iec60529-ip-code", "iso20653-ip69k",
   ),
-  description: "Washdown placements need documented hygienic material and suitable enclosure protection. Explicitly non-food-grade equipment within 5 m of open product is flagged.",
+  description: "Equipment in washdown areas needs documented hygienic material and suitable enclosure protection. Explicitly non-food-grade items within 5 m of open product are flagged.",
   check(ctx): RuleEvidence[] {
     const findings: RuleEvidence[] = [];
     for (const asset of ctx.twin.assets) {
       const washdown = ctx.areasFor(asset).some((area) => area.attrs.washdown);
+      const nonFoodGradeNearProduct = asset.specs?.foodGrade === false && ctx.nearFoodContact(asset, 5 * UNITS_PER_METRE);
+      if (!washdown && !nonFoodGradeNearProduct) continue;
+      const passive = isPassiveObject(asset, ctx);
       const details: string[] = [];
       let severity: Severity = 2;
-      if (washdown) {
+      if (washdown && !passive) {
         const ipRating = asset.specs?.ipRating ?? "";
         const rating = NEGATIVE.test(ipRating) ? "" : ipRating;
-        if ((needsEnclosureRating(asset) || ctx.isNetworked(asset)) && !HIGH_PRESSURE.test(rating)) {
+        if ((needsEnclosureRating(asset) || ctx.isNetworked(asset) || ctx.hasPowerLink(asset)) && !HIGH_PRESSURE.test(rating)) {
           if (WATER_JET.test(rating)) {
             details.push("IP66 documents water-jet resistance. Confirm IP69/IP69K for this high-pressure washdown area.");
           } else {
@@ -46,8 +50,8 @@ export default {
           severity = 3;
         }
       }
-      if (asset.specs?.foodGrade === false && ctx.nearFoodContact(asset, 5 * UNITS_PER_METRE)) {
-        details.push("Equipment documented as non-food-grade is within 5 m of an open-product area.");
+      if (nonFoodGradeNearProduct) {
+        details.push(`${passive ? "An object" : "Equipment"} documented as non-food-grade is within 5 m of an open-product area.`);
         severity = 4;
       }
       if (details.length) {
@@ -55,7 +59,9 @@ export default {
           assetId: asset.id,
           severity,
           detail: details.join(" "),
-          fix: "Use equipment rated for the cleaning regime and hygienic requirements, or relocate it away from washdown and open product.",
+          fix: passive
+            ? "Store the object in a designated area away from open product."
+            : "Use equipment rated for the cleaning regime and hygienic requirements, or relocate it away from washdown and open product.",
         });
       }
     }
