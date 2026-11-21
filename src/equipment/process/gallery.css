@@ -1,0 +1,13 @@
+/* Review surface and the gallery-only motion control. */
+.pw-equipment-gallery-grid {
+  background-color: var(--pw-floor);
+  background-image:
+    linear-gradient(var(--pw-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pw-grid) 1px, transparent 1px);
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+[data-gallery-motion="paused"] svg * {
+  animation-play-state: paused !important;
+}

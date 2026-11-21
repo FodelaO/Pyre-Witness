@@ -1,0 +1,62 @@
+/* Motion for liquid surfaces, agitation, carbonation, and conveyor bottles. */
+.pw-vessel-liquid {
+  transition: transform 650ms ease-in-out;
+}
+
+.pw-vessel-shimmer {
+  opacity: 0.4;
+  animation: pw-vessel-shimmer 3.4s linear infinite;
+}
+
+@keyframes pw-vessel-shimmer {
+  to {
+    stroke-dashoffset: -26;
+  }
+}
+
+.pw-vessel-agitator {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pw-vessel-agitator 2s linear infinite;
+}
+
+@keyframes pw-vessel-agitator {
+  to {
+    transform: rotateY(360deg);
+  }
+}
+
+.pw-vessel-bubble {
+  opacity: 0.6;
+  animation: pw-vessel-bubble 2.4s linear infinite;
+}
+
+@keyframes pw-vessel-bubble {
+  0% {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  25%,
+  75% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+}
+
+/* Advance one bottle pitch so the clipped conveyor stream loops without a jump. */
+.pw-conveyor-bottles {
+  animation: pw-conveyor-bottles 0.95s linear infinite;
+}
+
+@keyframes pw-conveyor-bottles {
+  to { transform: translateX(20px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pw-conveyor-bottles {
+    animation: none;
+  }
+}
