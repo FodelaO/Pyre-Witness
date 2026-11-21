@@ -1,69 +1,37 @@
-# Demo video (task: demo-video)
+# Pyre Witness demo video
 
-## Output (final cut, recorded 2026-11-21 14:44-14:47 EST from the final build)
+The PLC cut was recorded on November 21, 2026 from `http://localhost:4120`, build marker `15:29:05`. `demo/out/pyre-witness-demo.mp4` is **58.000000 seconds**. FFprobe reports H.264 High, 1920 × 1080, 30 fps, 1,740 frames and yuv420p. The previous 58.166667-second cut is preserved as `demo/out/pyre-witness-demo.prev.mp4`.
 
-- `demo/out/pyre-witness-demo.mp4`. ffprobe gives **58.166667 s** (1745 frames at 30 fps), H.264 High, 1920x1080, yuv420p, faststart, no audio, 16,741,612 bytes.
-- `demo/out/contact-sheet.jpg`: one frame every 3 s, 4 columns.
-- `demo/out/timeline.json`: the exact timeline. `demo/out/manifest.json`: each take with its source URL, fps and timing marks.
-- Every take was recorded **only from http://localhost:4120**, after `.agents/demo-build-live` appeared (14:43:27). The assembler refuses any take whose manifest `url` is not 4120.
-- **One real capture** was used: a single Gemini run, not retried. Nothing is mocked or injected, and every answer on screen comes from that run.
+## Shot list
 
-## Shot list (times in the cut; 0.15 s crossfades between shots)
+| Video time | Speed | On-screen action |
+| --- | --- | --- |
+| 00:00–00:04 | Still | Title card. “Snap any device. See where it belongs and what risk it brings.” |
+| 00:04–00:14 | 1× | Upload and submit the real Siemens SIMATIC S7-300 photo. The enlarged inset shows the uploaded image. The pin was set just inside Filler 3 near the visitor side of the packaging approach. The pin flow briefly opens 2D before the take and automatically returns to 3D. |
+| 00:14–00:15 | 4× | Four seconds of waiting for the real pipeline, marked `x4` in the video. |
+| 00:15–00:18 | 1× | Scout reads the image and displays its evidence beside the pinned spot. |
+| 00:18–00:22 | 1× | The rules engine checks the plant and stamps the drawing. |
+| 00:22–00:26 | 1× replay | PLC-901 drops into the plant. This replays the actual landing from slightly earlier in the same take. |
+| 00:26–00:29.33 | 1× | The check flags exposed ports near visitor access. The rail also shows the washdown and unmanaged-device findings. |
+| 00:29.33–00:32.67 | 1× | The app estimates $34k per event at the pin and $12k at the recommended placement. |
+| 00:32.67–00:36 | 1× | Click `Move there` to relocate PLC-901 to water treatment. Risk drops from 47 to 46. |
+| 00:36–00:45 | 1× | Show the 3D process view and pick finished syrup tank TK-203. The simulated readings are 62% full and 21.9 °C. |
+| 00:45–00:54 | 1× | Open live monitoring from the green dot. A CISA result is matched to the plant firewall at $7.7k estimated per event. An openFDA orange juice recall is matched to the filler at $3M estimated per comparable event. |
+| 00:54–00:58 | Still | End card with the crew's jobs and `github.com/FodelaO/Pyre-Witness`. |
 
-| Cut time (s) | Beat | Caption | Speed | What really happens |
-|---|---|---|---|---|
-| 0.00-4.00 | Title card | (tagline) | still | `demo/assets/title-card.png` with "Snap any device. See where it belongs in your plant and what risk it brings." |
-| 3.85-7.18 | Capture: input | Pin by Filler 3, describe the device | **x3** | Click `Pin location`, then the floor beside FIL-3 (the pin reads "Filler 3"). Click `Describe device` and type the description with the real keyboard: "Wi-Fi IP camera with a default password sticker (admin/admin), cloud app, microSD slot". Click `Analyze`. |
-| 7.18-10.66 | Capture: crew | The crew works it on Gemini 4 | **x9** | The real pipeline runs: Decisions gate, Scout (Hydrogen), Inspector (rules engine), Architect (Carbon), Chief (Neon). CAM-901 lands at the pin and risk goes 46 → 51 inside this sped-up piece. Analyze to answer took 30.4 s real time. |
-| 10.66-14.48 | Capture: answer | CAM-901: where it goes, never here, T0860 | **x3** | The cursor tours the rail: Where it goes = Corporate office L4 ("Rules engine cleared"). Never here = Filler 3 L2. Risks include T0860 Wireless Compromise. Attack paths: 18 as dropped. |
-| 14.48-16.71 | Capture: loss | Loss here $290k, there $2.7k per event | real time + 0.8 s freeze on the last frame | The app's line "Here $290k · There $2.7k est. per event". |
-| 16.71-20.95 | Escalation | $290k crosses the threshold: alert raised | real time | The app's own escalation card: "Threshold crossed · $290k est. per event · CAM-901 at Filler 3 · Internet -> CAM-901 -> SW-F3 -> FIL-3 · Call on-call". Defaults are $100k / 60. No call was placed and no phone was paired. Shown in chronological order: it fired when the device landed, before `Move there`. |
-| 20.95-27.05 | Move there | Move there: risk 51 → 47 | real time + 0.5 s freeze | Click `Move there`. CAM-901 slides to the Corporate office and the button reads "At recommended location". The panel shows "Moved · est. loss now $2.7k" and risk drops 51 → 47. The escalation card resolves and the chip returns to "Armed". |
-| 26.90-34.50 | Lens | Keys 1 · 2 · 3: Material, Both, Data / Show more: the loss, itemized | real time | Keys `2` and `3` pressed on the focused lens slider. Click HMI-F3, then `Show more` on its $29k figure: the itemized calculation with asset drawings. A hard cut skips about 0.8 s between the click on HMI-F3 and `Show more`. |
-| 34.35-40.22 | 2D / 3D | 2D \| 3D: the same live plant | real time | Click `3D`, one slow drag orbit with the real mouse, click `2D`. |
-| 40.07-46.20 | Threat watch | Live advisories, matched to your assets / A sector recall, priced here: $3M | real time | Data lens rail. CISA ICS advisories matched to FW-DMZ / FW-EDGE ($7.7k est. per event). Then the openFDA recall "Voila! juice 100% SQUEEZED ORANGE": "Sector recall · what the same failure would cost here", FIL-3 / PLC-BL, $3M est. per comparable event. |
-| 46.05-50.65 | /proof | Run 4 vs one Gemini call: +1.8 pp / Full table, losses included | real time | Click `Proof`. The comparison card shows Run 4, n=71, +1.8 pp with Wilson intervals. Then `Full baseline comparison` opens, including the rows where the baseline wins (radio recall 100% vs 33.3%). |
-| 50.50-53.30 | Transcript | T: every prompt and response | real time | `T` opens the run transcript of this capture: description, Decisions gate, Scout steps. Recorded right after the capture, before /proof, and placed after /proof in the cut. |
-| 53.15-58.17 | End card | (none) | still | Decisions gate · Hydrogen perception · Carbon reasoning · Neon briefing · Rules engine is not a model · github.com/FodelaO/Pyre-Witness |
+The final video uses straight cuts through pauses and holds the caption across related views. `demo/out/timeline.json` records exact frame boundaries. `demo/out/manifest.json` records the build, take times, model classification and visible values. The video has no audio.
 
-Every sped-up piece shows its factor on screen (amber `x3 speed` / `x9 speed` badge). The two freezes (0.8 s and 0.5 s) hold the last frame still so a number can be read; they are not speed changes.
+## Photo and recording notes
 
-## What the real capture answered (from the rail, `demo/out/shots/capture-answer.txt`)
+- `eval/dataset/images/photo-032.jpg` shows a Siemens SIMATIC S7-300 PLC panel. Run 4 and Run 5 each classified this file as `plc_cabinet`. The recording used one real photo Analyze request. The live result classified it as a Siemens SIMATIC S7-300 PLC (CPU 314C-2 DP). Analyze to completion took 18.55 seconds. The photo is credited during upload and displayed at preview scale. [GiovanniLibonati, Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Plcmundi_clp_tipical_aplication.jpg) · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0).
+- The rules engine reported zero new attack paths for this PLC. The as-dropped panel said “passed placement” while the answer warned “Never here” and listed three findings. The cut shows the checked risks and the visible plant topology.
+- The panel's feed status showed it was checked at 15:38 EST. The selected CISA entry displayed an age of nine days and the openFDA recall 24 days. The figures are the app's estimated losses for its simulated plant. The feed fetched during filming includes older active notices.
+- The first attempt to frame the tank after the move failed to find its 3D label. The 3D process and watch footage came from a fresh live page on the same build marker. The browser runner used its installed WebGL2 headless-shell fallback after installed Chrome failed to launch in this session.
 
-Wi-Fi IP camera (Wi-Fi, microSD, default credentials seen, cloud-connected, removable storage). Could not determine: vendor, model, power, IP rating. Where it goes: Corporate office, L4 (Rules engine cleared). Never here: Filler 3, L2 ("Unverified washdown/hygienic rating and cloud Wi-Fi exposes PLC-F3."). 5 risks, including T0860 Wireless Compromise and "T1694.001 Default Credentials". Attack paths: 18 as dropped, 0 at the recommendation. Chief: "Placement: Corporate office, Purdue 4. Rules engine: Placement cleared. Caution: verify Wireless and cloud exposure near safety PLC." Risk went 46 → 51 → 47.
+## Refresh and verification
 
-## Re-cut
+`bash demo/loop.sh` polls the build marker and renders the newest pending build when the ten-minute cooldown expires. `bash demo/loop.sh --once` performs one refresh with the same cooldown. The watcher re-records the process and news and reuses the successful PLC take from the same New York calendar day. A fresh capture is explicit with `--once --with-capture`. `--once --no-record` recuts the verified takes already recorded for the current build. Each attempt appends its time, marker, render duration, and outcome to `demo/out/loop.log`. Successful attempts also log the media duration.
 
-```
-node demo/make.mjs --no-record          # re-assemble from the 4120 takes (no model calls)
-node demo/make.mjs                      # re-record the cheap shots on 4120, reuse the capture
-node demo/make.mjs --with-capture       # also redo the ONE real capture (spends a capture)
-node demo/record.mjs --url=http://localhost:4119 --dry-capture --only capture,lens   # rehearsal, stops before Analyze
-```
+The assembly validates the complete candidate with `ffprobe` and stages its review artifacts before replacing the video. The release was rendered through `bash demo/loop.sh --once --no-record`, decoded end to end, and reviewed in `demo/out/contact-sheet.jpg` and at the title and speed-label frames. The nine captions contain at most eight words and hold for at least three seconds each. A failed test render retained the prior output. Successive marker changes during cooldown queued the newest build. `npm run typecheck` passed. Vitest passed 783 tests and skipped 3.
 
-Rehearsal takes (any `--url` other than 4120) assemble to `demo/out/rehearsal-NOT-FINAL.mp4` and `contact-sheet-rehearsal.jpg`, never to the deliverable.
-
-## Changes made this session (all under `demo/`)
-
-- `lib/browser.mjs`: uses the installed Chrome headless on its default ANGLE Metal GPU path. `demo/fpsprobe.mjs` measured three options. The suggested SwiftShader flags gave **2-3 fps** (the 3D drag took 50 s). The bundled Chromium gave 0 screencast frames of the 3D canvas. Chrome default gave 54-57 fps with WebGL2.
-- `lib/app.mjs`: the default URL is 4120 (`--url=` only for rehearsals), new selectors (describe textarea, placement loss line, escalation card, 2D/3D switch, watch desk rows), and the `--dry-capture` flag.
-- `record.mjs`: stores the source `url` per take and deletes this run's own temporary screencast JPEGs once each take is encoded. The last render had died with "No space left on device". JPEG quality is 88.
-- `assemble.mjs`: renders to `*.partial.mp4`, probes it, and only then renames it to the deliverable, so an interrupted render can no longer leave a corrupt `pyre-witness-demo.mp4`. It also refuses takes that were not recorded from 4120.
-- `shots/capture.mjs` (rewritten: Describe device, landing, escalation, tour, loss, move), `shots/view3d.mjs` (new), `shots/lens.mjs`, `shots/watch.mjs`, `shots/proof.mjs`, `shots/transcript.mjs` (rewritten), `shots/index.mjs` (new order and end card text). `shots/sim.mjs` is kept but is not in this cut.
-- Helpers: `explore2.mjs`, `explore3.mjs` (screenshots, no captures), `fpsprobe.mjs`, `frames.mjs` (frame strips for review).
-
-## Things in the app that looked wrong while recording
-
-1. **"T1694.001 Default Credentials"** is in the capture's risk list. That is not an ATT&CK for ICS ID; ICS Default Credentials is T0812. Check whether it passed `isKnownTechnique`. It is visible in the rail during the answer beat (small).
-2. **The page stalled after `Move there`.** A 3.2 s wait in the recorder took about 33 s of wall time. The UI had already updated (risk 47 within about 2.6 s), but the main thread or compositor was blocked for half a minute after the move. This is worth profiling before the live demo.
-3. **Two tooltips at once.** In the Data lens on 4119, "Describe dev…" and "Upload photos" tooltips overlapped at the bottom-left dock (`demo/out/explore2/03-data.png`).
-4. The escalation card writes the path with ASCII arrows ("Internet -> CAM-901 -> SW-F3 -> FIL-3") while the rest of the UI uses "→".
-5. The lens switched to `Both` by itself when the capture answer arrived. It may be intended, but it was unexpected.
-6. Minor: the transcript take was captured at only 17 fps (the machine was busy). It is a static drawer, so it is not noticeable.
-
-## Known gaps
-
-- The CAM-901 landing moment is inside the x9 crew piece. My landing detector only saw the new floor asset when the answer arrived, so the "lands" beat did not get its own real-time piece.
-- I could not remove the old 4119 takes in `demo/out/shots/` (deletion was denied). New takes overwrote the same filenames, and the manifest's `url` check keeps old takes out of the cut. `demo/out/rehearsal-NOT-FINAL.mp4` also remains.
-- My first exploration run used an unescaped URL path and may have created a stray folder `/Users/pablo/Gemini%20Hackathon/demo/out/explore2/` outside the repo. I could not check because listing outside the repo is blocked.
-- No audio track.
+Changes are under `demo/` and this log. No shared contract changes were needed.

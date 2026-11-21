@@ -22,6 +22,7 @@ export const sel = {
   placementLoss: (page) => page.locator("#pw-results [data-placement-loss]:visible").first(),
   escalation: (page) => page.locator("section.pw-es-alert:visible").first(),
   toggle3d: (page, label) => page.locator(".pw3d-toggle button", { hasText: label }).first(),
+  plant3d: (page) => page.locator(".pw3d-stage canvas:visible"),
   watchDesk: (page) => page.locator("section.pw-signal-desk:visible").first(),
   recallRow: (page) => page.locator("section.pw-signal-desk li:visible").filter({ has: page.locator(".pw-signal-recall-note") }).first(),
   advisoryRow: (page) => page.locator("section.pw-signal-desk li:visible").filter({ hasNot: page.locator(".pw-signal-recall-note") }).first(),
@@ -56,7 +57,9 @@ export async function require(locator, what, timeout = 8000) {
 export async function openApp(page) {
   await page.goto(BASE_URL + "/", { waitUntil: "load", timeout: 90000 });
   await require(sel.lens(page), "lens toggle (Material / Both / Data)", 60000);
-  await page.waitForTimeout(4000); // lazy slots mount, crew starts its idle patrol
+  await require(sel.plant3d(page), "live 3D plant (WebGL2)", 20000);
+  await require(page.locator('html[data-theme="light"] .pw3d-toggle [aria-checked="true"]').filter({ hasText: "3D" }),
+    "light theme and 3D as the default");
 }
 
 export async function lensValue(page) {

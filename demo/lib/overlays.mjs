@@ -37,15 +37,19 @@ export async function withRenderer(fn) {
 }
 
 /** Lower-left caption plate. `badge` (e.g. "x6 speed") is drawn as an amber pill after the text. */
-export function captionHtml(text, badge) {
-  return `<div style="position:absolute;left:206px;bottom:92px;display:flex;align-items:center;gap:18px;
-      padding:16px 26px 17px 22px;border-radius:12px;background:rgba(6,10,18,.84);
+export function captionHtml(text, badge, credit, photo) {
+  return `<div style="position:absolute;left:32px;bottom:83px;display:flex;align-items:center;gap:18px;
+      padding:13px 22px 14px 18px;border-radius:10px;background:rgba(6,10,18,.9);
       border:1px solid rgba(255,255,255,.12);box-shadow:0 12px 32px rgba(0,0,0,.4);
-      font:600 40px/1.1 ${SANS};color:#eef2f7;letter-spacing:-.2px">
-    <span style="width:4px;height:40px;border-radius:2px;background:#f26a21"></span>
+      font:600 38px/1.1 ${SANS};color:#eef2f7;letter-spacing:-.2px">
+    <span style="width:4px;height:34px;border-radius:2px;background:#f26a21"></span>
     <span>${esc(text)}</span>
     ${badge ? `<span style="font:600 26px/1 ${MONO};color:#0b0f17;background:#f5b544;border-radius:8px;padding:8px 12px">${esc(badge)}</span>` : ""}
-  </div>`;
+  </div>${credit ? `<div style="position:absolute;left:32px;bottom:54px;padding:3px 9px;
+    border-radius:4px;background:#081019;color:#eef2f7;font:500 16px/1.3 ${SANS}">${esc(credit)}</div>` : ""}
+    ${photo ? `<img alt="" style="position:absolute;left:32px;top:115px;width:316px;object-fit:contain;
+    border:3px solid #fff;border-radius:8px;box-shadow:0 8px 24px #181a2a33"
+    src="data:image/jpeg;base64,${readFileSync(photo).toString("base64")}">` : ""}`;
 }
 
 /** Title card: the provided artwork with its tagline replaced by the storyboard line. */

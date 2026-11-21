@@ -1,152 +1,153 @@
-// Assembles the cut from the recorded shots: title card -> shots in STORYBOARD order -> end card,
-// 150 ms crossfades, captions burned in from Playwright-rendered PNGs (app typeface). Each shot's
-// `edit(marks)` returns pieces of the raw clip; a piece with `fit` is sped up by an integer factor
-// so it fits, and that factor is shown on screen ("x6 speed"). Writes demo/out/pyre-witness-demo.mp4
-// (H.264, yuv420p, 30 fps, faststart, no audio) and FAILS if ffprobe reports more than 60.0 s.
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+// Cuts and validates a complete 1080p candidate before replacing the published video.
+import { copyFileSync, existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { contactSheet } from "./contact-sheet.mjs";
 import { BASE_URL } from "./lib/app.mjs";
 import { captionHtml, endCardHtml, titleCardHtml, withRenderer } from "./lib/overlays.mjs";
-import { probeDuration, run } from "./lib/proc.mjs";
-import { loadShot, readManifest } from "./record.mjs";
-import { END, STORYBOARD, TITLE } from "./shots/index.mjs";
+import { run } from "./lib/proc.mjs";
+import { buildMarker, loadShot, readManifest, usableTake } from "./record.mjs";
+import { CAPTURE_GROUP, END, STORYBOARD, TITLE } from "./shots/index.mjs";
 
 const DEMO = fileURLToPath(new URL(".", import.meta.url));
 const OUT = join(DEMO, "out");
-// Only takes from the final build (port 4120) produce the deliverable; rehearsals get their own name.
-const NAME = BASE_URL === "http://localhost:4120" ? "pyre-witness-demo" : "rehearsal-NOT-FINAL";
-const FINAL = join(OUT, `${NAME}.mp4`);
-const PARTIAL = join(OUT, `${NAME}.partial.mp4`);
-const XFADE = 0.15;
-const MAX_SECONDS = 60.0;
-const enc = ["-c:v", "libx264", "-preset", "medium", "-crf", "14", "-pix_fmt", "yuv420p", "-r", "30", "-an"];
+const LIVE = BASE_URL === "http://localhost:4120";
+const NAME = LIVE ? "pyre-witness-demo" : "rehearsal-NOT-FINAL";
+const FPS = 30;
+const CAP = 60;
+const encode = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "17", "-profile:v", "high",
+  "-pix_fmt", "yuv420p", "-r", String(FPS), "-color_range", "tv", "-an"];
 const ff = (args) => run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", ...args]);
-const r3 = (x) => Number(x.toFixed(3));
+const seconds = (frameCount) => frameCount / FPS;
 
-/** Turns a shot's pieces into concrete [from,to,speed] spans, capped at the shot's budget. */
-function plan(shot, rec) {
-  const raw = shot.edit ? shot.edit(rec.marks ?? [], rec.seconds) : [{ from: 0, to: rec.seconds, caption: shot.caption }];
-  let total = 0;
-  const pieces = [];
-  for (const p of raw) {
-    const from = Math.max(0, p.from), to = Math.min(rec.seconds, p.to);
-    if (!(to - from > 0.15)) continue;
-    const speed = p.fit ? Math.max(1, Math.ceil((to - from) / p.fit - 1e-6)) : 1;
-    let out = (to - from) / speed + (p.hold ?? 0); // `hold` freezes the last frame (e.g. to read a number)
-    if (shot.budget && total + out > shot.budget) out = Math.max(0, shot.budget - total);
-    if (out < 0.2) break;
-    pieces.push({ from: r3(from), to: r3(Math.min(to, from + out * speed)), speed, out: r3(out), caption: p.caption, badge: speed > 1 ? `x${speed} speed` : null });
-    total += out;
+async function verify(file, expectedFrames) {
+  const raw = await run("ffprobe", ["-v", "error", "-show_entries",
+    "format=duration:stream=codec_type,codec_name,width,height,nb_frames", "-of", "json", file], { capture: true });
+  const { streams, format } = JSON.parse(raw);
+  const video = streams.find((stream) => stream.codec_type === "video");
+  const duration = Number(format.duration);
+  if (video?.codec_name !== "h264" || video.width !== 1920 || video.height !== 1080
+    || Number(video.nb_frames) !== expectedFrames || !(duration > 0 && duration < CAP)) {
+    throw new Error(`Candidate failed ffprobe verification: ${JSON.stringify({ video, duration, expectedFrames })}`);
   }
-  return pieces;
+  return duration;
 }
 
-async function pieceClip(src, piece, capPng, out) {
-  const { from, to, speed, out: d } = piece;
-  const fadeOut = Math.max(0.5, d - 0.4);
-  const filter =
-    `[0:v]trim=start=${from}:end=${to},setpts=(PTS-STARTPTS)/${speed},fps=30,tpad=stop_mode=clone:stop_duration=2,trim=duration=${d}[v];` +
-    `[1:v]format=rgba,fade=t=in:st=0.12:d=0.25:alpha=1,fade=t=out:st=${fadeOut}:d=0.25:alpha=1,trim=duration=${d},setpts=PTS-STARTPTS[c];` +
-    `[v][c]overlay=0:0:shortest=1,format=yuv420p[o]`;
-  await ff(["-i", src, "-loop", "1", "-framerate", "30", "-t", String(d), "-i", capPng, "-filter_complex", filter, "-map", "[o]", "-t", String(d), ...enc, out]);
-}
-
-async function stillClip(png, seconds, out) {
-  await ff(["-loop", "1", "-framerate", "30", "-t", String(seconds), "-i", png, "-vf", "scale=1920:1080,format=yuv420p", ...enc, out]);
+async function renderPiece(piece, output) {
+  const frames = String(piece.frames);
+  if (!piece.source) {
+    await ff(["-loop", "1", "-framerate", String(FPS), "-i", piece.image, "-vf", "scale=1920:1080,format=yuv420p",
+      "-frames:v", frames, ...encode, output]);
+    return;
+  }
+  const span = Math.min(piece.to - piece.from, seconds(piece.frames) * piece.speed);
+  const base = `[0:v]setpts=(PTS-STARTPTS)/${piece.speed},fps=${FPS},tpad=stop_mode=clone:stop_duration=12[v]`;
+  await ff(["-ss", String(piece.from), "-t", String(span), "-i", piece.source,
+    "-loop", "1", "-framerate", String(FPS), "-i", piece.image,
+    "-filter_complex_threads", "2", "-filter_complex", `${base};[v][1:v]overlay=0:0:shortest=1,format=yuv420p[out]`,
+    "-map", "[out]", "-frames:v", frames, ...encode, output]);
 }
 
 export async function assemble() {
   const manifest = readManifest();
-  const dirs = { caps: join(OUT, "captions"), segs: join(OUT, "segments"), cards: join(OUT, "cards") };
-  Object.values(dirs).forEach((d) => mkdirSync(d, { recursive: true }));
+  const build = LIVE ? buildMarker() : null;
+  const stage = mkdtempSync(join(OUT, ".render-"));
+  try {
+    const shots = [];
+    for (const id of STORYBOARD) {
+      const take = manifest.shots[id];
+      if (!usableTake(take)) throw new Error(`Missing today's verified take for ${id}`);
+      if (CAPTURE_GROUP.includes(id)) {
+        if (take.batch !== manifest.shots.capture.batch) throw new Error(`${id} is from a different capture`);
+      } else if (LIVE && take.build !== build) throw new Error(`${id} was recorded against a different build marker`);
+      const shot = await loadShot(id);
+      shots.push({ id, take, edits: shot.edit(take.marks, take.seconds) });
+    }
 
-  const shots = [];
-  const skipped = [];
-  for (const id of STORYBOARD) {
-    const shot = await loadShot(id);
-    const rec = manifest.shots[id];
-    if (rec?.status === "recorded" && rec.url !== BASE_URL) skipped.push({ id, reason: `recorded from ${rec.url ?? "an older server"}, not ${BASE_URL}` });
-    else if (rec?.status === "recorded" && existsSync(rec.file)) shots.push({ shot, rec, pieces: plan(shot, rec) });
-    else skipped.push({ id, reason: rec?.reason ?? "not recorded" });
-  }
-  if (!shots.length) throw new Error("no recorded shots; run node demo/record.mjs first");
-
-  // Overlays: cards and one caption PNG per piece.
-  const titlePng = join(dirs.cards, "title.png"), endPng = join(dirs.cards, "end.png");
-  await withRenderer(async (render) => {
-    await render(titleCardHtml(join(DEMO, "assets", "title-card.png"), TITLE.tagline), titlePng, false);
-    await render(endCardHtml(join(DEMO, "assets", "end-card.png"), END.jobs, END.note, END.url), endPng, false);
-    for (const { shot, pieces } of shots) {
-      for (const [i, p] of pieces.entries()) {
-        p.png = join(dirs.caps, `${shot.id}-${i}.png`);
-        await render(captionHtml(p.caption, p.badge), p.png);
+    const pieces = [];
+    let cursor = 0;
+    let planned = 0;
+    function add(label, edit, source) {
+      const start = cursor;
+      planned += edit.duration;
+      cursor = Math.round(planned * FPS);
+      const frames = cursor - start;
+      if (!(frames > 0) || (source && !(edit.to - edit.from > 0.1))) throw new Error(`Invalid footage range for ${label}`);
+      pieces.push({ label, source, ...edit, speed: edit.speed ?? 1, frames, start: seconds(start), end: seconds(cursor) });
+    }
+    add("title", { duration: TITLE.seconds });
+    for (const { id, take, edits } of shots) {
+      for (const edit of edits) {
+        if (edit.caption.trim().split(/\s+/).length > 8) throw new Error(`Caption exceeds eight words: ${edit.caption}`);
+        add(id, { ...edit, to: Math.min(edit.to, take.seconds) }, take.file);
       }
     }
-  });
+    add("end", { duration: END.seconds });
+    if (!(seconds(cursor) < CAP)) throw new Error("Planned cut reaches the 60-second cap");
 
-  // One clip per shot (its pieces concatenated with hard cuts inside the shot).
-  const segments = [];
-  const title = join(dirs.segs, "00-title.mp4");
-  await stillClip(titlePng, TITLE.seconds, title);
-  segments.push({ file: title, d: TITLE.seconds, label: "title card", pieces: [] });
-  for (const [i, { shot, rec, pieces }] of shots.entries()) {
-    const parts = [];
-    for (const [j, p] of pieces.entries()) {
-      const f = join(dirs.segs, `${i + 1}-${shot.id}-${j}.mp4`);
-      await pieceClip(rec.file, p, p.png, f);
-      parts.push(f);
+    await withRenderer(async (render) => {
+      const plates = new Map();
+      for (const [index, piece] of pieces.entries()) {
+        const png = join(stage, `${index}.png`);
+        if (piece.label === "title") {
+          await render(titleCardHtml(join(DEMO, "assets", "title-card.png"), TITLE.tagline), png, false);
+          piece.image = png;
+        } else if (piece.label === "end") {
+          await render(endCardHtml(join(DEMO, "assets", "end-card.png"), END.jobs, END.note, END.url), png, false);
+          piece.image = png;
+        } else {
+          const badge = piece.speed > 1 ? `x${piece.speed}` : null;
+          const key = JSON.stringify([piece.caption, badge, piece.credit, piece.photo]);
+          if (!plates.has(key)) {
+            await render(captionHtml(piece.caption, badge, piece.credit, piece.photo), png);
+            plates.set(key, png);
+          }
+          piece.image = plates.get(key);
+        }
+      }
+    });
+
+    const segments = [];
+    for (const [index, piece] of pieces.entries()) {
+      const output = join(stage, `${index}.mp4`);
+      await renderPiece(piece, output);
+      segments.push(`file '${basename(output)}'`);
     }
-    const file = join(dirs.segs, `${String(i + 1).padStart(2, "0")}-${shot.id}.mp4`);
-    if (parts.length === 1) await ff(["-i", parts[0], "-c", "copy", file]);
-    else {
-      const inputs = parts.flatMap((p) => ["-i", p]);
-      const filter = parts.map((_, k) => `[${k}:v]`).join("") + `concat=n=${parts.length}:v=1:a=0[o]`;
-      await ff([...inputs, "-filter_complex", filter, "-map", "[o]", ...enc, file]);
+    const list = join(stage, "shots.ffconcat");
+    writeFileSync(list, ["ffconcat version 1.0", ...segments, ""].join("\n"));
+    const candidate = join(stage, "candidate.mp4");
+    await ff(["-f", "concat", "-safe", "0", "-i", list, "-map", "0:v", "-c", "copy", "-movflags", "+faststart", candidate]);
+    const duration = await verify(candidate, cursor);
+    const sheet = await contactSheet(candidate, 3, 4, join(stage, "contact-sheet.jpg"));
+    const timeline = pieces.map(({ image: _image, ...piece }) => piece);
+    const outTimeline = join(stage, "timeline.json");
+    writeFileSync(outTimeline, JSON.stringify({ duration, fps: FPS, build, captureBuild: manifest.shots.capture.build, timeline }, null, 2) + "\n");
+
+    if (LIVE && buildMarker() !== build) throw new Error("Port 4120 build marker changed before publication");
+    const file = join(OUT, `${NAME}.mp4`);
+    if (LIVE && existsSync(file)) {
+      const previous = join(stage, "previous.mp4");
+      copyFileSync(file, previous);
+      renameSync(previous, join(OUT, `${NAME}.prev.mp4`));
     }
-    segments.push({ file, d: await probeDuration(file), label: shot.id, pieces });
+    const finalSheet = join(OUT, LIVE ? "contact-sheet.jpg" : "contact-sheet-rehearsal.jpg");
+    renameSync(sheet, finalSheet);
+    renameSync(outTimeline, join(OUT, LIVE ? "timeline.json" : "timeline-rehearsal.json"));
+    renameSync(candidate, file);
+    return { file, duration, timeline, sheet: finalSheet };
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
   }
-  const end = join(dirs.segs, "99-end.mp4");
-  await stillClip(endPng, END.seconds, end);
-  segments.push({ file: end, d: END.seconds, label: "end card", pieces: [] });
-
-  // Crossfade chain.
-  let filter = "", prev = "[0:v]", length = segments[0].d;
-  const timeline = [{ label: segments[0].label, start: 0, pieces: [] }];
-  for (let i = 1; i < segments.length; i++) {
-    const offset = length - XFADE;
-    const outLabel = i === segments.length - 1 ? "[vout]" : `[x${i}]`;
-    filter += `${prev}[${i}:v]xfade=transition=fade:duration=${XFADE}:offset=${offset.toFixed(3)}${outLabel};`;
-    timeline.push({ label: segments[i].label, start: r3(offset), pieces: segments[i].pieces });
-    prev = outLabel;
-    length = offset + segments[i].d;
-  }
-  filter += `[vout]scale=out_range=tv,format=yuv420p[final]`;
-  await ff([...segments.flatMap((s) => ["-i", s.file]), "-filter_complex", filter, "-map", "[final]",
-    "-c:v", "libx264", "-preset", "slow", "-crf", "17", "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", "30",
-    "-color_range", "tv", "-movflags", "+faststart", "-an", PARTIAL]);
-
-  // Probe the finished temp file first; only a complete, in-limit cut replaces the deliverable.
-  const duration = await probeDuration(PARTIAL);
-  if (!(duration > 0)) throw new Error("render produced an unreadable file");
-  if (duration <= MAX_SECONDS) renameSync(PARTIAL, FINAL);
-  timeline.forEach((t, i) => { t.end = r3(i + 1 < timeline.length ? timeline[i + 1].start + XFADE : duration); });
-  // Absolute piece times for the report.
-  for (const t of timeline) { let at = t.start; for (const p of t.pieces) { p.at = r3(at); at += p.out; delete p.png; } }
-  writeFileSync(join(OUT, "timeline.json"), JSON.stringify({ duration, timeline, skipped }, null, 2));
-  if (!(duration <= MAX_SECONDS)) throw new Error(`cut is ${duration.toFixed(3)} s, over the ${MAX_SECONDS} s limit`);
-  return { file: FINAL, duration, timeline, skipped };
 }
 
 export function printTimeline(cut) {
-  for (const t of cut.timeline) {
-    console.log(`  ${t.start.toFixed(2).padStart(6)}-${t.end.toFixed(2).padStart(6)}  ${t.label}`);
-    for (const p of t.pieces) console.log(`           @${p.at.toFixed(2).padStart(6)} ${p.out.toFixed(2)}s ${p.speed > 1 ? `x${p.speed}` : "real-time"}  "${p.caption}"`);
+  for (const { label, start, end, caption, speed } of cut.timeline) {
+    console.log(`  ${start.toFixed(2)}–${end.toFixed(2)}  ${caption ?? label}${speed > 1 ? ` (x${speed})` : ""}`);
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const r = await assemble();
-  console.log(`${r.file}  ${r.duration.toFixed(3)} s`);
-  printTimeline(r);
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const cut = await assemble();
+  console.log(cut.file, cut.duration.toFixed(6), "s");
+  printTimeline(cut);
 }

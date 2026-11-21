@@ -1,46 +1,17 @@
-# Pyre Witness demo storyboard (60 s maximum)
+# Pyre Witness demo
 
-> **Final cut (2026-11-21, 58.17 s, recorded from the final build on port 4120):** the shot list, with
-> timestamps and which parts are real time and which are sped up, is in `docs/log/demo-video.md`. The
-> cut order is in `demo/shots/index.mjs`. The sections below are the earlier v0 plan and are kept for history.
+The cut is 58 seconds. Large captions stay at the lower left for at least three seconds. The only accelerated footage is waiting for the live assessment and it carries an `x4` label. The plant and its process readings are simulated. The photo assessment and news footage come from the running app on port 4120.
 
-This storyboard is the source of truth for the cut. Shot modules live in `demo/shots/*.mjs`, and their order is set in `demo/shots/index.mjs`. Every shot is a real interaction with the running app at http://localhost:4119. Shots marked PENDING are recorded only once the feature they need works for real.
+| Video time | Shot |
+| --- | --- |
+| 00:00–00:04 | Title card. “Snap any device. See where it belongs and what risk it brings.” |
+| 00:04–00:14 | Upload a Siemens SIMATIC S7-300 photo. The location is pinned on the filler side of the packaging approach. The app returns to 3D after setting the pin. |
+| 00:14–00:26 | Scout reads the real photo and the rules engine checks the placement. Show the controller dropping onto the 3D plant. |
+| 00:26–00:36 | Show the checked risk and event loss in plain words. Move the controller to the checked destination and show the resulting estimate and score. |
+| 00:36–00:45 | Show the running 3D plant, select the finished syrup tank and read its simulated level and temperature. |
+| 00:45–00:54 | Open monitoring from the green dot. Hold on a priced CISA advisory and a priced FDA beverage recall. |
+| 00:54–00:58 | End card with the model jobs and repository URL. |
 
-## Cut v0 (recorded 2026-11-21, 37.6 s)
+The uploaded image is `eval/dataset/images/photo-032.jpg`. Run 4 and Run 5 both record `physical_kind: plc_cabinet` for that file. The photo credit appears during upload. [GiovanniLibonati, *Plcmundi clp tipical aplication.jpg*](https://commons.wikimedia.org/wiki/File:Plcmundi_clp_tipical_aplication.jpg) · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0).
 
-Each crossfade between shots lasts 0.15 s. Captions fade in after 0.25 s and fade out before each cut.
-
-| # | Shot id | Time in cut (s) | Length | Caption (7 words max) | Real interaction |
-|---|---|---|---|---|---|
-| 0 | title | 0.00-2.00 | 2.0 | (none) | `demo/assets/title-card.png` |
-| 1 | hook | 1.85-7.85 | 6.0 | A living twin of bottling Line 3 | The floor runs live: pipes animate and the crew walks on idle patrol. The cursor glides to Filler 3 (`FIL-3`) and clicks it, and the app opens its selection card. |
-| 2 | linked | 7.70-15.20 | 7.5 | Floor and Purdue map stay linked | Click **Split**, then click `PLC-F3` on the floor. The Purdue node and the inspector highlight it. Then click `HMI-F3` on the Purdue map, and the floor highlights it. |
-| 3 | scenario | 15.05-22.55 | 7.5 | Simulate a CIP caustic crossover | Click **CIP Crossover** in the Simulate dock at 4× speed. The deterministic replay runs and the ZSC-311 permissive contains it at 00:12. Four mitigations appear in the panel, awaiting approval. |
-| 4 | mitigate | 22.40-29.40 | 7.0 | Approve the fix, rerun: contained sooner | Approve **Isolate CIP branch**, then click **Rerun**. The replay is now contained at 00:06 by CIP branch isolation. |
-| 5 | risk | 29.25-34.75 | 5.5 | Approve isolation: plant risk drops | Approve **Isolate controller access**. The rules engine re-scores the plant from 46 (Elevated) to 22 (Guarded), shown as -24 in the top bar. |
-| 6 | end | 34.60-37.60 | 3.0 | (none) | `demo/assets/end-card.png` |
-
-## Target arc (full cut, once the pending shots exist)
-
-| Slot | Seconds | Shot | Caption idea |
-|---|---|---|---|
-| 0-6 | 6 | hook | A living twin of bottling Line 3 |
-| 6-24 | 18 | **capture** (PENDING) | Snap a device, the crew investigates |
-| 24-32 | 8 | **landing** (PENDING) | New device, new attack path |
-| 32-38 | 6 | **recommended-move** (PENDING) | Move it where it belongs: risk drops |
-| 38-43 | 5 | linked (trimmed) | Floor and Purdue map stay linked |
-| 43-52 | 9 | scenario + mitigate (trimmed) | Simulate, approve, rerun: contained |
-| 52-57 | 5 | **threat-watch** / **proof** (PENDING) | Daily threat watch, measured accuracy |
-| 57-60 | 3 | end card | |
-
-The full cut will need cuts to fit 60 s. Shorten the scenario, mitigate and linked shots, and fold the risk shot into the move shot.
-
-## Pending shots
-
-| Shot | Needs |
-|---|---|
-| capture | `GEMINI_API_KEY` in `.env` and a real, openly licensed device photo in `eval/dataset/images/`. That folder does not exist yet. The take uses the capture dock's **Upload** control, then **Analyze**, and the crew walks on real pipeline events. |
-| landing | The real `/api/analyze` result: the device lands on the floor with a red outline, a new attack path and a risk jump. |
-| recommended-move | A real assessment that includes a recommended placement. The take moves the device there and shows the risk drop. |
-| threat-watch | `GEMINI_API_KEY`. The take records a real watch run (**Run now**) and its human-approval step. |
-| proof | A real evaluation report. `/proof` currently says "No evaluation report yet" and needs `npm run eval` with the key and a labeled dataset. |
+`demo/out/timeline.json` records frame-accurate times and speeds. `demo/out/manifest.json` records the source URL, build marker, and observed facts for each take.

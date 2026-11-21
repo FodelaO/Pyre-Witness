@@ -12,11 +12,11 @@ export async function startScreencast(page, dir) {
   let pending = Promise.resolve();
   cdp.on("Page.screencastFrame", (frame) => {
     const file = join(dir, `${String(frames.length).padStart(5, "0")}.jpg`);
-    frames.push({ file, t: frame.metadata.timestamp });
+    frames.push({ file, t: frame.metadata.timestamp ?? Date.now() / 1000 });
     writeFileSync(file, Buffer.from(frame.data, "base64"));
     pending = cdp.send("Page.screencastFrameAck", { sessionId: frame.sessionId }).catch(() => {});
   });
-  await cdp.send("Page.startScreencast", { format: "jpeg", quality: 88, maxWidth: 1920, maxHeight: 1080, everyNthFrame: 1 });
+  await cdp.send("Page.startScreencast", { format: "jpeg", quality: 84, maxWidth: 1920, maxHeight: 1080, everyNthFrame: 2 });
   const startedAt = Date.now() / 1000;
   return {
     async stop() {
@@ -43,7 +43,7 @@ export async function encodeFrames({ frames, stoppedAt }, dir, outFile) {
   await run("ffmpeg", [
     "-y", "-hide_banner", "-loglevel", "error", "-safe", "0", "-f", "concat", "-i", list,
     "-vf", "scale=1920:1080:flags=lanczos:out_range=tv,fps=30,format=yuv420p",
-    "-c:v", "libx264", "-preset", "medium", "-crf", "14", "-an", outFile,
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "15", "-an", outFile,
   ]);
   const span = (stoppedAt - frames[0].t).toFixed(2);
   return { frameCount: frames.length, seconds: Number(span), avgFps: Number((frames.length / span).toFixed(1)) };

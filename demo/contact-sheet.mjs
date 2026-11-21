@@ -6,13 +6,13 @@ import { probeDuration, run } from "./lib/proc.mjs";
 
 const OUT = fileURLToPath(new URL("./out/", import.meta.url));
 
-export async function contactSheet(video = join(OUT, "pyre-witness-demo.mp4"), every = 3, cols = 4) {
+export async function contactSheet(video = join(OUT, "pyre-witness-demo.mp4"), every = 3, cols = 4, destination) {
   const duration = await probeDuration(video);
   const count = Math.max(1, Math.ceil(duration / every));
   const rows = Math.ceil(count / cols);
-  const out = join(OUT, "contact-sheet.jpg");
+  const out = destination ?? join(OUT, video.includes("rehearsal") ? "contact-sheet-rehearsal.jpg" : "contact-sheet.jpg");
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", video,
-    "-vf", `fps=1/${every},scale=640:360:flags=lanczos,pad=648:368:4:4:color=0x1b2230,tile=${cols}x${rows}:color=0x1b2230`,
+    "-vf", `select='isnan(prev_selected_t)+gte(t-prev_selected_t,${every})',scale=640:360:flags=lanczos,pad=648:368:4:4:color=0x1b2230,tile=${cols}x${rows}:color=0x1b2230`,
     "-frames:v", "1", "-q:v", "3", out]);
   return out;
 }

@@ -1,0 +1,27 @@
+// Exploration helper: /proof page full screenshots + section headings, then transcript drawer on /.
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+const { chromium } = createRequire(process.cwd() + "/package.json")("playwright");
+const BASE = process.env.DEMO_URL ?? "http://localhost:4119";
+const OUT = fileURLToPath(new URL("./out/explore2/", import.meta.url));
+const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--hide-scrollbars"] });
+const page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 }, colorScheme: "dark" })).newPage();
+const t0 = Date.now();
+await page.goto(BASE + "/proof", { waitUntil: "load", timeout: 120000 });
+await page.getByRole("heading", { name: "Proof it works" }).waitFor({ timeout: 90000 });
+console.log("proof loaded", (Date.now() - t0) / 1000);
+await page.waitForTimeout(2500);
+await page.screenshot({ path: OUT + "10-proof.png" });
+const heads = await page.$$eval("h1,h2,h3", (els) => els.map((e) => e.tagName + " " + e.innerText.replace(/\s+/g, " ").slice(0, 90) + " @y=" + Math.round(e.getBoundingClientRect().top + scrollY)));
+console.log(heads.join("\n"));
+const tables = await page.$$eval("table", (els) => els.map((e) => "TABLE @y=" + Math.round(e.getBoundingClientRect().top + scrollY) + ": " + e.innerText.replace(/\s+/g, " ").slice(0, 300)));
+console.log(tables.join("\n"));
+await page.screenshot({ path: OUT + "11-proof-full.png", fullPage: true });
+await page.goto(BASE + "/", { waitUntil: "load" });
+await page.locator(".lens-toggle").first().waitFor({ timeout: 90000 });
+await page.waitForTimeout(3000);
+await page.mouse.click(1200, 880);
+await page.keyboard.press("t");
+await page.waitForTimeout(1500);
+await page.screenshot({ path: OUT + "12-transcript.png" });
+await browser.close();

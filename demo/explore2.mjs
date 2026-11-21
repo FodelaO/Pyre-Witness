@@ -1,0 +1,32 @@
+// Exploration helper (no captures, no Analyze): loads the app, screenshots key states, dumps controls.
+//   DEMO_URL=http://localhost:4120 node demo/explore2.mjs
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+const { chromium } = createRequire(process.cwd() + "/package.json")("playwright");
+const BASE = process.env.DEMO_URL ?? "http://localhost:4119";
+const OUT = fileURLToPath(new URL("./out/explore2/", import.meta.url));
+const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--hide-scrollbars"] });
+const page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 }, colorScheme: "dark" })).newPage();
+page.on("pageerror", (e) => console.log("[pageerror]", e.message.slice(0, 160)));
+const t0 = Date.now();
+await page.goto(BASE + "/", { waitUntil: "load", timeout: 120000 });
+await page.locator(".lens-toggle").first().waitFor({ timeout: 90000 });
+console.log("loaded", (Date.now() - t0) / 1000);
+await page.waitForTimeout(5000);
+await page.screenshot({ path: OUT + "01-home.png" });
+const buttons = await page.$$eval("button, a", (els) => els.filter((e) => e.offsetParent).map((e) => (e.getAttribute("aria-label") || e.innerText || "").replace(/\s+/g, " ").trim().slice(0, 50) + " <" + e.className.toString().slice(0, 40) + ">"));
+console.log(buttons.join("\n"));
+await page.locator('.pw-capture-toolbar button[aria-label="Describe device"]').click();
+await page.waitForTimeout(800);
+await page.screenshot({ path: OUT + "02-describe.png" });
+await page.keyboard.press("Escape");
+await page.locator(".lens-toggle").first().focus();
+await page.keyboard.press("3");
+await page.waitForTimeout(2500);
+await page.screenshot({ path: OUT + "03-data.png" });
+console.log("watch text:", (await page.locator(".pw-signal-desk").first().innerText().catch(() => "none")).slice(0, 1500));
+await page.locator(".pw3d-toggle button", { hasText: "3D" }).first().click().catch((e) => console.log("no 3D", e.message));
+await page.waitForTimeout(3000);
+await page.screenshot({ path: OUT + "04-3d.png" });
+await page.locator(".pw3d-toggle button", { hasText: "2D" }).first().click().catch(() => {});
+await browser.close();
