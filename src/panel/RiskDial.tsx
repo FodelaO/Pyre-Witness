@@ -1,7 +1,7 @@
 /** Sticky plant risk arc and a bounded, session-only score history. */
 "use client";
 
-import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Gauge, Minus } from "lucide-react";
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { useEffect, type ReactNode } from "react";
 import { create } from "zustand";
@@ -73,7 +73,7 @@ export function RiskDial({ action }: { action?: ReactNode }) {
   return (
     <section className="pw-panel-dial" data-band={band} aria-labelledby="pw-panel-risk-title">
       <div className="pw-panel-dial-head">
-        <h2 id="pw-panel-risk-title">Plant risk</h2>
+        <h2 id="pw-panel-risk-title"><Gauge size={16} aria-hidden />Plant risk</h2>
         {action}
       </div>
       <div className="pw-panel-dial-body">

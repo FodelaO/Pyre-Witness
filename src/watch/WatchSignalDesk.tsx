@@ -2,7 +2,7 @@
 "use client";
 
 import { ArrowUpRight, ChevronDown, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useEconomicTwin } from "@/econ/useEconomicTwin";
 import { useTwinStore } from "@/twin/store";
 import type { Twin } from "@/twin/types";
@@ -11,7 +11,8 @@ import { LIVE_SOURCE_LABELS, liveItemKey, type LiveItem, type LiveSourceResult }
 import { rankWatchItems, type WatchRelevance } from "./relevance";
 import type { WatchReport } from "./types";
 import type { useWatchLive } from "./useWatchLive";
-import { WatchLiveLoss } from "./WatchLiveLoss";
+import { WatchAlertCard, WatchAlertIcon } from "./WatchAlertCard";
+import { useWatchLiveEstimate } from "./WatchLiveLoss";
 import "./watchSignals.css";
 
 const sources = Object.keys(LIVE_SOURCE_LABELS) as LiveItem["source"][];
@@ -59,7 +60,8 @@ function SignalRow({ row, isNew, twin, highlight }: {
   const primary = assetIds[0];
   const key = liveItemKey(item);
   const select = (id: string) => useTwinStore.getState().select(id);
-  const rowTitle = recall ? `${item.title} · ${item.firm} · ${item.summary}` : item.title;
+  const asset = twin.assets.find(({ id }) => id === primary);
+  const estimate = useWatchLiveEstimate(twin, row);
   const { show, clear } = highlight;
   useEffect(() => () => clear(key), [clear, key]);
 
@@ -70,28 +72,31 @@ function SignalRow({ row, isNew, twin, highlight }: {
       onFocus={() => show(key, assetIds)}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget) && !event.currentTarget.matches(":hover")) clear(key);
-      }}
-      onClick={() => select(primary)}>
-      <div className="pw-signal-row-meta">
-        <span>{LIVE_SOURCE_LABELS[item.source]}</span><span aria-hidden>·</span><time dateTime={item.published}>{age}</time>
-        {item.source === "cisa-ics" && /^ICS[AM]/.test(item.id) && <span>· {item.id}</span>}
-        {isNew && <span className="pw-signal-new">new</span>}
-        {triage && <span className="pw-signal-triage" title={`Decisions triage · ${triage}`}>Decisions triage</span>}
-      </div>
-      <a className="pw-signal-title" href={item.url} target="_blank" rel="noopener noreferrer" title={rowTitle}>
-        <span>{item.title}</span><ArrowUpRight size={12} aria-hidden />
-      </a>
-      {recall && <div className="pw-signal-recall-note">Sector recall · what the same failure would cost here</div>}
-      <div className="pw-signal-chips" aria-label="Match evidence and assets">
-        {assetIds.map((id, index) => {
-          const label = !recall && index === 0 ? reasons[0] : id;
-          const asset = twin.assets.find((entry) => entry.id === id);
-          return <button key={id} type="button" className="pw-signal-chip" data-watch-select={id} title={`${label} · ${asset?.name ?? id}`}
-            onClick={(event) => { event.stopPropagation(); select(id); }}>{label}</button>;
-        })}
-        {reasons.slice(recall ? 0 : 1).map((reason) => <span className="pw-signal-chip" key={reason}>{reason}</span>)}
-      </div>
-      <WatchLiveLoss row={row} twin={twin} />
+      }}>
+      <WatchAlertCard title={item.title} asset={asset} estimate={estimate} comparable={recall}
+        tone={row.knownExploited || (row.cvss ?? 0) >= 9 ? "alert" : "warn"}>
+        <div className="pw-signal-row-meta">
+          <span>{LIVE_SOURCE_LABELS[item.source]}</span><span aria-hidden>·</span><time dateTime={item.published}>{age}</time>
+          {item.source === "cisa-ics" && /^ICS[AM]/.test(item.id) && <span>· {item.id}</span>}
+          {isNew && <span className="pw-signal-new">new</span>}
+          {triage && <span className="pw-signal-triage">Decisions triage · {triage}</span>}
+        </div>
+        <a className="pw-panel-link" href={item.url} target="_blank" rel="noopener noreferrer">
+          {item.title}<ArrowUpRight size={12} aria-hidden />
+        </a>
+        {recall && <div className="pw-signal-recall-note">Sector recall · modeled comparable event</div>}
+        {recall && item.firm && <p>{item.firm}</p>}
+        {item.summary && <p>{item.summary}</p>}
+        <div className="pw-signal-chips" aria-label="Match evidence and assets">
+          {assetIds.map((id, index) => {
+            const label = (!recall && index === 0 ? reasons[0] : id) ?? id;
+            const linked = twin.assets.find((entry) => entry.id === id);
+            return <button key={id} type="button" className="pw-signal-chip" data-watch-select={id} title={`${label} · ${linked?.name ?? id}`}
+              onClick={() => select(id)}>{label}</button>;
+          })}
+          {reasons.slice(recall ? 0 : 1).map((reason) => <span className="pw-signal-chip" key={reason}>{reason}</span>)}
+        </div>
+      </WatchAlertCard>
     </li>
   );
 }
@@ -118,13 +123,14 @@ function OtherItems({ rows, added }: { rows: WatchRelevance[]; added: Set<string
   );
 }
 
-export function WatchSignalDesk({ live, feed, label, report, reviewing, onReview }: {
+export function WatchSignalDesk({ live, feed, label, report, reviewing, onReview, children }: {
   live: ReturnType<typeof useWatchLive>;
   feed: WatchFeedStatus;
   label: string;
   report?: WatchReport;
   reviewing: boolean;
   onReview: () => void;
+  children?: ReactNode;
 }) {
   const { snapshot, checking, error, nextAt, checkNow } = live;
   const highlight = useRowHighlight();
@@ -143,29 +149,38 @@ export function WatchSignalDesk({ live, feed, label, report, reviewing, onReview
     <section className="pw-signal-desk" aria-label="Plant intelligence" aria-busy={checking}>
       <div className="pw-signal-header">
         <div className="pw-signal-live" aria-live="polite" title={title}>
-          <strong>{label}</strong>{check && <> · checked <time dateTime={new Date(check.checkedAt).toISOString()}>{checked}</time>{sourceCount}</>}
+          Simulated plant inventory
         </div>
         <button type="button" className="pw-panel-button pw-signal-run" disabled={checking} onClick={() => { void checkNow(); onReview(); }}>
           <RefreshCw size={12} aria-hidden />Run now
         </button>
       </div>
-      <div className="pw-signal-subhead">
-        <div className="pw-signal-sources" aria-label="Source health">
-          {sources.map((source) => <FeedIndicator key={source} source={source} result={checks?.find((entry) => entry.source === source)} />)}
-        </div>
-        {nextAt && <span>Next <time dateTime={new Date(nextAt).toISOString()}>{clock.format(nextAt)}</time></span>}
-      </div>
       {error && <div className="pw-signal-basis" role="status">{error}</div>}
-      <div className="pw-signal-basis">Inventory assumed (simulated plant) · matched by rule</div>
-      {(headline || reviewing) && <div className="pw-signal-chief" title={headline} aria-live="polite">
-        <strong>Chief</strong> · {headline ?? "Reviewing advisories…"}
-      </div>}
       {matched.length > 0 && <ul className="pw-signal-list" aria-label="Matched to this plant">
         {matched.map((row) => <SignalRow key={liveItemKey(row.item)} row={row} twin={twin} highlight={highlight}
           isNew={snapshot?.added.has(liveItemKey(row.item)) ?? false} />)}
       </ul>}
-      {check && feed === "live" && !matched.length && <div className="pw-signal-empty">No current matches for this plant.</div>}
-      <OtherItems rows={other} added={snapshot?.added} />
+      {check && feed === "live" && !matched.length && <div className="pw-signal-empty">
+        {!check.sources.some(({ error }) => Boolean(error)) && <WatchAlertIcon tone="ok" />}
+        No current matches for this plant.
+      </div>}
+      <details className="pw-watch-notes pw-signal-evidence">
+        <summary>See more</summary>
+        <div>
+          <div className="pw-signal-basis">{title} · matched by rule</div>
+          <div className="pw-signal-subhead">
+            <div className="pw-signal-sources" aria-label="Source health">
+              {sources.map((source) => <FeedIndicator key={source} source={source} result={checks?.find((entry) => entry.source === source)} />)}
+            </div>
+            {nextAt && <span>Next <time dateTime={new Date(nextAt).toISOString()}>{clock.format(nextAt)}</time></span>}
+          </div>
+          {(headline || reviewing) && <div className="pw-signal-chief" aria-live="polite">
+            <strong>Chief</strong> · {headline ?? "Reviewing advisories…"}
+          </div>}
+          <OtherItems rows={other} added={snapshot?.added} />
+          {children}
+        </div>
+      </details>
     </section>
   );
 }

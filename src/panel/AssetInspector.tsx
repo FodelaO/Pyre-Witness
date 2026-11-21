@@ -2,6 +2,7 @@
 "use client";
 
 import { Activity, Cloud, Crosshair, HardDrive, LockKeyhole, MapPin, Radio, Shield, ShieldAlert, Unplug } from "lucide-react";
+import { LossGlyph } from "@/econ/LossGlyph";
 import { FindingLoss } from "@/econ/mountsFindings";
 import { formatTelemetry, telemetryNumber, withTelemetryUnit } from "@/floor/telemetryFormat";
 import type { LensMode } from "@/layers/lensStore";
@@ -74,13 +75,15 @@ export function AssetInspector({ mode }: { mode: LensMode }) {
   const showData = mode !== "material";
   if (!asset && selectedArea) return (
     <>
-      <PanelHeading icon={MapPin}>Selected area</PanelHeading>
+      <PanelHeading icon={Crosshair}>Asset inspector</PanelHeading>
       <div className="pw-panel-asset-identity">
         <h3>{selectedArea.name}</h3><p>{selectedArea.statusNote ?? kindLabel(selectedArea.kind)}</p>
       </div>
-      {showData && <div className="pw-panel-chips" aria-label="Typical Purdue levels">
-        {selectedArea.typicalLevels.map((level) => <PurdueBadge key={level} level={level} />)}
-      </div>}
+      {showData && <Disclosure key={selectedArea.id} className="pw-rail-more" label="See more">
+        <div className="pw-panel-chips" aria-label="Typical Purdue levels">
+          {selectedArea.typicalLevels.map((level) => <PurdueBadge key={level} level={level} />)}
+        </div>
+      </Disclosure>}
     </>
   );
   if (!asset) return (
@@ -98,34 +101,39 @@ export function AssetInspector({ mode }: { mode: LensMode }) {
   return (
     <>
       <PanelHeading icon={Crosshair} aside={<span className="pw-panel-chip pw-mono">{asset.id}</span>}>Asset inspector</PanelHeading>
-      <div className="pw-panel-asset-identity"><h3>{asset.name}</h3><p>{kindLabel(asset.physical.kind)}</p></div>
-      <dl className="pw-panel-facts">
-        {showMaterial && <><dt>Floor</dt><dd>{area ? (
-          <button type="button" className="pw-panel-link" onClick={() => select(area.id)}>{area.name}</button>
-        ) : readableId(asset.physical.area)}</dd></>}
-        {showData && <><dt>Network</dt><dd><PurdueBadge level={asset.network.level} />{asset.network.area}</dd>
-        {asset.network.conduit && <><dt>Conduit</dt><dd>{conduit?.name ?? asset.network.conduit}</dd></>}</>}
-        <dt>Criticality</dt><dd><span className="pw-mono">{asset.criticality}/5</span>{asset.safetyCritical ? "Safety critical" : ""}</dd>
-      </dl>
-      {showData && asset.cyber && <CyberFlags cyber={asset.cyber} />}
-      {showMaterial && (telemetry.length > 0 || showLevel) && (
-        <div className="pw-panel-subsection">
-          <h3><Activity size={13} aria-hidden />Telemetry</h3>
-          <ul className="pw-panel-telemetry">
-            {telemetry.map((point) => <TelemetryRow key={point.tag} point={point} />)}
-            {showLevel && <TelemetryRow point={{ label: "Level", value: level, unit: "%" }} />}
-          </ul>
-        </div>
-      )}
-      {(assetFindings.length > 0 || mode === "data") && (
-        <div className="pw-panel-subsection">
-          <h3><ShieldAlert size={13} aria-hidden />Rules engine findings <span className="pw-mono pw-panel-muted">{assetFindings.length}</span></h3>
-          {assetFindings.length ? (
-            <ul className="pw-panel-list">{assetFindings.map((finding, index) => <FindingRow key={`${finding.ruleId}-${index}`} finding={finding} />)}</ul>
-          ) : <p className="pw-panel-muted">No cyber findings for this node.</p>}
-        </div>
-      )}
-      {showData && <AssetDataEvidence assetId={asset.id} findings={findings} />}
+      <div className="pw-inspector-asset">
+        <div className="pw-inspector-drawing"><LossGlyph kind={asset.physical.kind} size={96} /></div>
+        <div className="pw-panel-asset-identity"><h3>{asset.name}</h3><p>{kindLabel(asset.physical.kind)}</p></div>
+      </div>
+      <Disclosure key={asset.id} className="pw-rail-more" label="See more">
+        <dl className="pw-panel-facts">
+          {showMaterial && <><dt>Floor</dt><dd>{area ? (
+            <button type="button" className="pw-panel-link" onClick={() => select(area.id)}><MapPin size={12} aria-hidden />{area.name}</button>
+          ) : readableId(asset.physical.area)}</dd></>}
+          {showData && <><dt>Network</dt><dd><PurdueBadge level={asset.network.level} />{asset.network.area}</dd>
+          {asset.network.conduit && <><dt>Conduit</dt><dd>{conduit?.name ?? asset.network.conduit}</dd></>}</>}
+          <dt>Criticality</dt><dd><span className="pw-mono">{asset.criticality}/5</span>{asset.safetyCritical ? "Safety critical" : ""}</dd>
+        </dl>
+        {showData && asset.cyber && <CyberFlags cyber={asset.cyber} />}
+        {showMaterial && (telemetry.length > 0 || showLevel) && (
+          <div className="pw-panel-subsection">
+            <h3><Activity size={13} aria-hidden />Telemetry</h3>
+            <ul className="pw-panel-telemetry">
+              {telemetry.map((point) => <TelemetryRow key={point.tag} point={point} />)}
+              {showLevel && <TelemetryRow point={{ label: "Level", value: level, unit: "%" }} />}
+            </ul>
+          </div>
+        )}
+        {(assetFindings.length > 0 || mode === "data") && (
+          <div className="pw-panel-subsection">
+            <h3><ShieldAlert size={13} aria-hidden />Rules engine findings <span className="pw-mono pw-panel-muted">{assetFindings.length}</span></h3>
+            {assetFindings.length ? (
+              <ul className="pw-panel-list">{assetFindings.map((finding, index) => <FindingRow key={`${finding.ruleId}-${index}`} finding={finding} />)}</ul>
+            ) : <p className="pw-panel-muted">No cyber findings for this node.</p>}
+          </div>
+        )}
+        {showData && <AssetDataEvidence assetId={asset.id} findings={findings} />}
+      </Disclosure>
     </>
   );
 }

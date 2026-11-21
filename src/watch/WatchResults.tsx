@@ -2,11 +2,14 @@
 "use client";
 
 import { useTwinStore } from "@/twin/store";
+import { LossFigure } from "@/econ/LossFigure";
 import { threatKey, WATCH_SOURCES } from "./sources";
 import type { Candidate, ThreatItem, WatchFinding, WatchReport } from "./types";
-import { WatchAdvisoryLoss } from "./WatchLiveLoss";
+import { WatchAlertCard } from "./WatchAlertCard";
+import { useWatchAdvisoryEstimates } from "./WatchLiveLoss";
 
 const chip = "rounded border border-pw-line-strong px-1.5 py-0.5 font-mono text-[10px]";
+const noAssets: readonly string[] = [];
 
 interface Row {
   threat: ThreatItem;
@@ -33,19 +36,18 @@ function ThreatRow({ row }: { row: Row }) {
   const { threat, assetIds, finding } = row;
   const triage = finding?.triage ?? row.disposition;
   const evidence = [WATCH_SOURCES[threat.source].label, ...threat.cves, triage].filter(Boolean).join(" · ");
-  // Several advisories can share one product title, so the identifier is what tells the rows apart.
-  const extra = threat.cves.length - 1;
+  const { twin, estimates } = useWatchAdvisoryEstimates(threat, triage === "excluded" ? noAssets : assetIds);
+  const [estimate, ...others] = estimates;
+  const asset = twin.assets.find(({ id }) => id === estimate?.asset.id);
   return (
     <li className="min-w-0 space-y-1 border-t border-pw-line py-2" data-watch-source={threat.source}>
-      {(threat.cves.length > 0 || triage) && (
-        <div className="pw-watch-evidence pw-mono">
-          {threat.cves[0] && <span>{threat.cves[0]}{extra > 0 && ` +${extra}`}</span>}
-          {triage && <span data-triage={triage}>{triage}</span>}
-        </div>
-      )}
-      <a className="block min-w-0 text-pw-text hover:text-pw-info [overflow-wrap:anywhere]" href={threat.url}
-        target="_blank" rel="noopener noreferrer" title={evidence} aria-label={`${threat.title} · ${evidence}`}>{threat.title}</a>
-      {assetIds.length > 0 && row.disposition !== "excluded" && <WatchAdvisoryLoss item={threat} assetIds={assetIds} />}
+      <WatchAlertCard title={threat.title} tone={threat.source === "cisa-kev" && triage !== "excluded" ? "alert" : "warn"}
+        asset={asset} estimate={estimate}>
+        <p className="pw-watch-evidence pw-mono">{evidence}</p>
+        <a className="pw-panel-link" href={threat.url} target="_blank" rel="noopener noreferrer">{threat.title}</a>
+        {finding?.why && <p>{finding.why}</p>}
+        {others.map((value) => <LossFigure key={value.asset.id} estimate={value} qualifier="per event" />)}
+      </WatchAlertCard>
     </li>
   );
 }

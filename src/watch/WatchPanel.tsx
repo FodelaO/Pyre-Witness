@@ -117,7 +117,7 @@ export default function WatchPanel({ open, reveal = 0, onOpenChange }: { open: b
   const partial = feedState === "live" && live.snapshot?.check.sources.some(({ error }) => Boolean(error));
   const dot = partial ? "Partial" : presentation.dot;
   return (
-    <details id="pw-watch" className="pw-watch pw-panel-disclosure" open={open}
+    <details id="pw-watch" className="pw-watch pw-panel-disclosure pw-rail-section" data-pane="watch" open={open}
       onToggle={(event) => { if (event.target === event.currentTarget) onOpenChange(event.currentTarget.open); }}>
       <summary ref={summary}>
         <span><Radar size={16} aria-hidden />Threat watch</span>
@@ -126,17 +126,18 @@ export default function WatchPanel({ open, reveal = 0, onOpenChange }: { open: b
       </summary>
       <div className="pw-watch-body">
         <WatchSignalDesk live={live} feed={feed} label={presentation.label} report={review.report}
-          reviewing={review.status === "running"} onReview={() => void runNow()} />
-        <WatchRun run={review} />
-        <details className="pw-watch-notes">
-          <summary>Antigravity comparison</summary>
-          <div className="pw-watch-managed">
-            <button type="button" className="pw-panel-button" disabled={managed.status === "running"} onClick={() => void runNow("managed")}>
-              Run Google-hosted watch
-            </button>
-            {managed.status !== "idle" && <WatchRun run={managed} managed />}
-          </div>
-        </details>
+          reviewing={review.status === "running"} onReview={() => void runNow()}>
+          <WatchRun run={review} />
+          <details className="pw-watch-notes">
+            <summary>Antigravity comparison</summary>
+            <div className="pw-watch-managed">
+              <button type="button" className="pw-panel-button" disabled={managed.status === "running"} onClick={() => void runNow("managed")}>
+                Run Google-hosted watch
+              </button>
+              {managed.status !== "idle" && <WatchRun run={managed} managed />}
+            </div>
+          </details>
+        </WatchSignalDesk>
       </div>
     </details>
   );
