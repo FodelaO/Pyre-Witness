@@ -8,7 +8,8 @@ import { LossGlyph } from "@/econ/LossGlyph";
 import { useTwinStore } from "@/twin/store";
 import type { EquipmentKind } from "@/twin/types";
 import { MitigationQueue } from "./MitigationQueue";
-import { Disclosure, formatNumber, kindLabel, PanelHeading } from "./PanelParts";
+import { Disclosure, kindLabel, PanelHeading } from "./PanelParts";
+import { riskDelta as formatRiskDelta } from "./riskNumber";
 
 interface TodoAsset {
   id: string;
@@ -48,7 +49,7 @@ function TodoCard({ item }: { item: Todo }) {
   const [message, setMessage] = useState("");
   const { riskDelta, lossDeltaPerYear } = item.predicted;
   const title = item.title.trim().split(/\s+/).slice(0, 4).join(" ");
-  const risk = `${riskDelta > 0 ? "+" : riskDelta < 0 ? "−" : ""}${formatNumber(Math.abs(riskDelta))}`;
+  const risk = formatRiskDelta(riskDelta);
   const drawings = item.purchase ? [item.purchase] : item.assets;
   const where = item.purchase?.where ?? item.where ?? destinationName ?? destination;
 
@@ -76,7 +77,7 @@ function TodoCard({ item }: { item: Todo }) {
           aria-label={`Approve ${title}`}><Check size={14} aria-hidden />{pending ? "Approving…" : "Approve"}</button>
       </div>
       <div className="pw-todo-meta">
-        <span className="pw-todo-metric" data-benefit={riskDelta < 0} title="Predicted risk score change">{risk} risk</span>
+        <span className="pw-todo-metric" data-benefit={riskDelta < 0 && risk !== "0"} title="Predicted risk score change">{risk} risk</span>
         <span className="pw-todo-metric" data-benefit={lossDeltaPerYear < 0} title="Predicted annual loss change · simulated plant">
           {lossDeltaPerYear > 0 ? "+" : ""}{formatUsd(lossDeltaPerYear)}/yr
         </span>

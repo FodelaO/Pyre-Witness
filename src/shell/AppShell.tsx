@@ -8,8 +8,9 @@ import CrewDock from "@/crew/CrewDock";
 import { useCrewConnection } from "@/crew/crewStore";
 import EscalationCall from "@/escalation/EscalationCall";
 import PlantFloor from "@/floor/PlantFloor";
-import { LENS_MODES, useLensStore, type LensMode } from "@/layers/lensStore";
+import { LENS_MODES, useLensStore } from "@/layers/lensStore";
 import SidePanel from "@/panel/SidePanel";
+import { useWatchReview } from "@/panel/useWatchReview";
 import { useRunStore } from "@/pipeline/runStore";
 import PurdueMap from "@/purdue/PurdueMap";
 import { startSimRuntime } from "@/sim/runtime";
@@ -61,12 +62,7 @@ export default function AppShell() {
   const [captureOpen, setCaptureOpen] = useState(false);
   const [modelerOpen, setModelerOpen] = useState(false);
   const [captureEditor, setCaptureEditor] = useState<HTMLDivElement | null>(null);
-  const [watchChoices, setWatchChoices] = useState<Partial<Record<LensMode, boolean>>>({});
-  const [watchReveal, setWatchReveal] = useState(0);
-  const watchOpen = watchChoices[mode] ?? mode === "data";
-  const setWatchOpen = useCallback((open: boolean) => {
-    if (open !== watchOpen) setWatchChoices((choices) => ({ ...choices, [mode]: open }));
-  }, [mode, watchOpen]);
+  const { watchOpen, setWatchOpen, reviewsOpen, setReviewsOpen, watchReveal, toggleShortcut } = useWatchReview(mode);
   const narrow = useSyncExternalStore(subscribeDrawerWidth, drawerWidth, () => false);
   const previewModel = modelerOpen && mode !== "data" && !captureOpen && (!narrow || drawerOpen);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -146,15 +142,13 @@ export default function AppShell() {
   }
 
   function toggleWatch(trigger: HTMLButtonElement) {
-    const open = !watchOpen || captureOpen || (!drawerOpen && narrow);
-    if (open) {
+    const next = toggleShortcut({ narrow, drawerOpen, captureOpen });
+    if (next.open) {
       drawerTrigger.current = trigger;
       if (pinning) useDropStore.getState().disarm();
       setCaptureOpen(false);
-      setDrawerOpen(narrow);
-      setWatchReveal((n) => n + 1);
     }
-    setWatchOpen(open);
+    setDrawerOpen(next.drawerOpen);
   }
 
   function handleDrawerKeys(event: KeyboardEvent<HTMLElement>) {
@@ -213,6 +207,7 @@ export default function AppShell() {
           <Slot name="Results">
             <SidePanel captureOpen={captureOpen} setCaptureEditor={setCaptureEditor}
               modelerOpen={modelerOpen} onModelerOpen={setModelerOpen} previewModel={previewModel}
+              reviewsOpen={reviewsOpen} setReviewsOpen={setReviewsOpen}
               watchOpen={watchOpen} watchReveal={watchReveal} onWatchOpen={setWatchOpen} />
           </Slot>
         </aside>

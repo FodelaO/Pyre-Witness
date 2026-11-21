@@ -54,12 +54,14 @@ type Props = {
   modelerOpen: boolean;
   onModelerOpen: (open: boolean) => void;
   previewModel: boolean;
+  reviewsOpen: boolean;
+  setReviewsOpen: (open: boolean) => void;
   watchOpen: boolean;
   watchReveal: number;
   onWatchOpen: (open: boolean) => void;
 };
 
-export default function SidePanel({ captureOpen, setCaptureEditor, modelerOpen, onModelerOpen, previewModel, watchOpen, watchReveal, onWatchOpen }: Props) {
+export default function SidePanel({ captureOpen, setCaptureEditor, modelerOpen, onModelerOpen, previewModel, reviewsOpen, setReviewsOpen, watchOpen, watchReveal, onWatchOpen }: Props) {
   const mode = useLensStore((state) => state.mode);
   const run = useRunStore();
   const { runId, status, stage, events, gate, error, summary, profile, assessment, placedAssetId } = run;
@@ -67,7 +69,6 @@ export default function SidePanel({ captureOpen, setCaptureEditor, modelerOpen, 
   const todos = useTodos();
   const { panel: watchPanel, count: watchCount } = useWatchAdvisoryCount();
   const reducedMotion = useReducedMotion() === true;
-  const [reviewsOpen, setReviewsOpen] = useState(false);
   const [reviewTab, setReviewTab] = useState<RiskReviewTab>("todo");
   const firstReview = useRef<HTMLDivElement>(null);
   const lastWatchReveal = useRef(0);
@@ -94,7 +95,6 @@ export default function SidePanel({ captureOpen, setCaptureEditor, modelerOpen, 
   useEffect(() => {
     if (watchReveal !== lastWatchReveal.current) {
       lastWatchReveal.current = watchReveal;
-      setReviewsOpen(true);
       setReviewTab("watch");
       firstReview.current?.parentElement?.scrollTo({ top: 0 });
     } else if (watchOpen && (!reviewsOpen || reviewTab !== "watch")) {
