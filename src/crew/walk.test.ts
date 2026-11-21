@@ -2,6 +2,9 @@
 import { describe, expect, it } from "vitest";
 import { areaById, areaCenter, containsPoint, distance, type Point } from "@/twin/geometry";
 import { SEED_TWIN } from "@/twin/seed";
+import { DEFAULT_DROP } from "@/twin/dropPoint";
+import type { Asset } from "@/twin/types";
+import { avatarBounds, collides, equipmentBounds, MAX_AVATAR_SCALE } from "./floorLayout";
 import { BADGE_SEPARATION, planWalk } from "./walk";
 import { timeWalk, walkPosition, walksConflict } from "./walkTiming";
 
@@ -59,6 +62,26 @@ describe("crew walking", () => {
       for (const neighbor of slots) expect(distance(slot, neighbor)).toBeGreaterThanOrEqual(BADGE_SEPARATION);
       slots.push(slot);
     }
+  });
+
+  it("reserves the full badge and nameplate when two crew inspect the same office point", () => {
+    const corporate = areaById(twin, "corporate_office")!;
+    const stop = { point: areaCenter(corporate), area: corporate.id };
+    const first = planWalk(twin, areaCenter(office), [stop])!.at(-1)!;
+    const second = planWalk(twin, areaCenter(office), [stop], [first])!.at(-1)!;
+    expect(collides(avatarBounds(first, MAX_AVATAR_SCALE), avatarBounds(second, MAX_AVATAR_SCALE), 4)).toBe(false);
+  });
+
+  it("stands to the side of a dropped camera with its equipment tag clear", () => {
+    const drop = DEFAULT_DROP;
+    const camera: Asset = { ...twin.assets[0], id: "CAM-901", origin: "added", physical: {
+      ...twin.assets[0].physical, x: drop.x, y: drop.y, area: drop.area, kind: "ip_camera", rotation: 0, scale: 1,
+    } };
+    const stop = { point: drop, area: drop.area, beside: true, clearance: "device" as const, device: camera };
+    const slot = planWalk(twin, areaCenter(office), [stop])!.at(-1)!;
+    expect(slot.x).not.toBe(drop.x);
+    expect(slot.y).toBe(drop.y);
+    expect(collides(avatarBounds(slot, MAX_AVATAR_SCALE), equipmentBounds(camera, 2.3), 8)).toBe(false);
   });
 
   it("keeps constant speed through turns, caps long walks and teleports for reduced motion", () => {

@@ -1,0 +1,194 @@
+/* Crew presence instruments for the floor-stage rail. */
+.pw-crew-stage {
+  display: grid;
+  block-size: 100%;
+  min-block-size: 0;
+  grid-template-columns: 188px minmax(0, 1fr);
+}
+
+.pw-crew-stage-dock { align-self: center; min-inline-size: 0; padding-inline: 8px 2px; }
+.pw-crew-stage-drawing { position: relative; min-inline-size: 0; min-block-size: 0; }
+
+.pw-crew-dock {
+  inline-size: min(100%, 188px);
+  min-inline-size: 0;
+  padding: 5px;
+  border: 1px solid var(--pw-line-strong);
+  border-radius: 9px;
+  background: var(--pw-panel);
+  color: var(--pw-text);
+  box-shadow: 0 8px 24px #0004;
+}
+
+.pw-crew-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 3px 4px 6px;
+}
+
+.pw-crew-dock-header h2 {
+  margin: 0;
+  color: var(--pw-text-dim);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.pw-crew-dock-transcript {
+  display: inline-flex;
+  min-block-size: 25px;
+  align-items: center;
+  gap: 5px;
+  padding-inline: 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--pw-text-dim);
+  cursor: pointer;
+}
+
+.pw-crew-dock-transcript:is(:hover, :focus-visible) {
+  border-color: var(--pw-line-strong);
+  background: var(--pw-panel-2);
+  color: var(--pw-text);
+}
+
+.pw-crew-dock-transcript kbd {
+  min-inline-size: 13px;
+  padding: 0 2px;
+  border: 1px solid var(--pw-line-strong);
+  border-radius: 3px;
+  font: 600 9px/12px var(--font-geist-mono), ui-monospace, monospace;
+  text-align: center;
+}
+
+.pw-crew-dock-cards { display: grid; gap: 3px; }
+
+.pw-crew-dock-card {
+  position: relative;
+  display: grid;
+  min-inline-size: 0;
+  min-block-size: 58px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border: 1px solid var(--pw-line);
+  border-radius: 6px;
+  background: var(--pw-floor);
+  text-align: start;
+  cursor: pointer;
+  transition: background var(--pw-ease, 175ms ease-out), border-color var(--pw-ease, 175ms ease-out);
+}
+
+.pw-crew-dock-card:is(:hover, :focus-visible) {
+  border-color: var(--pw-line-strong);
+  background: var(--pw-panel-2);
+}
+
+.pw-crew-dock-card:focus-visible, .pw-crew-dock-transcript:focus-visible { outline-offset: 0; }
+
+.pw-crew-dock-card[data-active] {
+  border-color: color-mix(in srgb, var(--crew-color), var(--pw-line) 52%);
+  background: color-mix(in srgb, var(--crew-color) 9%, var(--pw-floor));
+  box-shadow: inset 2px 0 var(--crew-color);
+}
+
+.pw-crew-dock-face { position: relative; inline-size: 38px; block-size: 38px; }
+
+.pw-crew-dock-face img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--crew-color), var(--pw-line) 50%);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.pw-crew-dock-ring {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid transparent;
+  border-radius: 50%;
+}
+
+.pw-crew-dock-card[data-state="walking"] .pw-crew-dock-ring { border: 1px dashed var(--crew-color); }
+
+.pw-crew-dock-card[data-active] .pw-crew-dock-ring {
+  border-block-start-color: var(--crew-color);
+  border-inline-end-color: var(--crew-color);
+  animation: pw-crew-dock-progress 1.5s linear infinite;
+}
+
+@keyframes pw-crew-dock-progress { to { transform: rotate(1turn); } }
+
+.pw-crew-dock-state {
+  position: absolute;
+  right: -2px;
+  bottom: -1px;
+  display: grid;
+  inline-size: 13px;
+  block-size: 13px;
+  place-items: center;
+  border: 1px solid var(--pw-line-strong);
+  border-radius: 50%;
+  background: var(--pw-panel);
+  color: var(--pw-text-dim);
+}
+
+.pw-crew-dock-card:is([data-active], [data-state="walking"]) .pw-crew-dock-state { color: var(--crew-color); }
+.pw-crew-dock-card[data-state="done"] .pw-crew-dock-state { color: var(--pw-ok); }
+.pw-crew-dock-card[data-state="error"] .pw-crew-dock-state { color: var(--pw-alarm); }
+.pw-crew-dock-readout { display: grid; min-inline-size: 0; gap: 1px; }
+
+.pw-crew-dock-identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.pw-crew-dock-identity strong { font-weight: 680; }
+.pw-crew-dock-identity svg { flex: none; color: var(--pw-text-dim); }
+.pw-crew-dock-card[data-active] .pw-crew-dock-identity svg { color: var(--crew-color); }
+.pw-crew-dock-engine { color: var(--pw-text-dim); font-size: 9px; line-height: 12px; }
+
+.pw-crew-dock-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 10px;
+  line-height: 13px;
+}
+
+.pw-crew-dock-message, .pw-crew-dock-engine {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pw-crew-dock-message { flex: 1; }
+.pw-crew-dock-card[data-state="idle"] .pw-crew-dock-message { color: var(--pw-text-dim); }
+.pw-crew-dock-latency { flex: none; color: var(--pw-text-dim); font-size: 9px; }
+.pw-crew-dock-card[data-attention] :is(.pw-crew-dock-message, .pw-crew-dock-state) { color: var(--pw-attention); }
+.pw-crew-dock-card[data-attention] .pw-crew-dock-message { white-space: normal; }
+
+@media (width < 760px) {
+  .pw-crew-stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .pw-crew-stage-dock { padding: 5px 8px 0; }
+  .pw-crew-stage-dock .pw-crew-dock { inline-size: 100%; }
+  .pw-crew-stage-dock .pw-crew-dock-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (width < 590px) {
+  .pw-crew-stage-dock .pw-crew-dock-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pw-crew-dock-card[data-active] .pw-crew-dock-ring { animation: none; }
+}

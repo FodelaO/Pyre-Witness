@@ -1,60 +1,63 @@
-/** Draws compact speech beside an avatar and keeps it within the floor canvas. */
+/** Presents a timed crew announcement or a pinned, dismissible Chief briefing. */
+import { useEffect, useRef } from "react";
+import { X } from "lucide-react";
 import type { Point } from "@/twin/geometry";
-import type { Speech } from "./crewStore";
+import type { AvatarState } from "./crewStore";
+import type { Box } from "./floorLayout";
+import type { CrewMember } from "./types";
+import { useCalloutScroll } from "./useCalloutScroll";
 
-function wrap(text: string, columns: number, maxLines: number): string[] {
-  const lines: string[] = [];
-  let remaining = text.trim().replace(/\s+/g, " ");
-  while (remaining.length > columns && lines.length < maxLines - 1) {
-    const space = remaining.lastIndexOf(" ", columns);
-    const end = space > 0 ? space : columns;
-    lines.push(remaining.slice(0, end));
-    remaining = remaining.slice(end).trimStart();
-  }
-  if (remaining.length > columns) remaining = `${remaining.slice(0, columns - 1).trimEnd()}…`;
-  if (remaining) lines.push(remaining);
-  return lines;
+function duration(ms: number): string {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
 }
 
-function briefingLines(text: string): string[] {
-  const original = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (original.length < 2) return wrap(text, 54, 3);
-  return original.slice(0, 3).flatMap((line) => wrap(line, 54, 1));
+function Elapsed({ at }: { at: number }) {
+  const time = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const tick = () => { if (time.current) time.current.textContent = duration(Date.now() - at); };
+    tick();
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
+  }, [at]);
+  return <span ref={time} className="pw-crew-bubble-time" aria-label="Elapsed time" />;
 }
 
-export default function Bubble({ point, canvas, speech }: {
-  point: Point;
-  canvas: { w: number; h: number };
-  speech: Speech;
+export default function Bubble({ anchor, box, scale, avatar, member, dismiss }: {
+  anchor: Point;
+  box: Box;
+  scale: number;
+  avatar?: AvatarState;
+  member: CrewMember;
+  dismiss: () => void;
 }) {
-  const briefing = speech.kind === "briefing";
-  const patrol = speech.kind === "patrol";
+  const speech = avatar?.speech;
+  const pinned = speech?.kind === "briefing";
+  const body = useCalloutScroll<HTMLDivElement>(pinned);
+  if (!avatar || !speech?.text.trim()) return null;
+  const { speechEngine, speechStartedAt, speechLatencyMs } = avatar;
   const thought = speech.kind === "thought";
-  const heading = patrol ? "idle patrol" : thought ? "Architect · working" : null;
-  const fontSize = briefing ? 16 : 13;
-  const lineHeight = briefing ? 22 : 17;
-  const lines = briefing ? briefingLines(speech.text) : wrap(speech.text, thought ? 43 : 34, 2);
-  if (!lines.length) return null;
-  const width = Math.max(heading ? 148 : 91, ...lines.map((line) => line.length * fontSize * 0.62 + 24));
-  const height = lines.length * lineHeight + (heading ? 27 : 15);
-  const x = Math.max(8, Math.min(canvas.w - width - 8, point.x - width / 2));
-  const canFitBelow = point.y + 23 + height <= canvas.h - 8;
-  const above = point.y >= height + 30 && !(speech.kind === "inspection" && canFitBelow);
-  const y = above ? point.y - 23 - height : Math.min(point.y + 23, canvas.h - height - 8);
-  const edge = above ? y + height : y;
-  const tailX = Math.max(x + 13, Math.min(x + width - 13, point.x));
-  const tailY = above ? point.y - 17 : point.y + 17;
+  const patrol = speech.kind === "patrol";
+  const heading = pinned ? "Chief briefing" : patrol ? "idle patrol" : member.name;
+  const cx = Math.min(box.x + box.w - 5, Math.max(box.x + 5, anchor.x));
+  const cy = Math.min(box.y + box.h - 5, Math.max(box.y + 5, anchor.y));
 
   return (
-    <g className="pw-crew-bubble" data-kind={speech.kind} aria-label={heading ? `${heading}, ${speech.text}` : speech.text}>
-      <rect x={x} y={y} width={width} height={height} rx={briefing ? 9 : 6} />
-      <path d={`M ${tailX - 5} ${edge} L ${point.x} ${tailY} L ${tailX + 5} ${edge}`} />
-      {heading && <text className="pw-crew-bubble-heading" x={x + 12} y={y + 15}>{heading}</text>}
-      <text className="pw-crew-bubble-copy" x={x + 12} fontSize={fontSize}>
-        {lines.map((line, index) => (
-          <tspan key={index} x={x + 12} y={y + (heading ? 32 : fontSize + 6) + index * lineHeight}>{line}</tspan>
-        ))}
-      </text>
+    <g className="pw-crew-bubble" data-kind={speech.kind} data-status={avatar.status} data-attention={speech.attention || undefined} aria-label={`${heading} · ${speech.text}`}>
+      <line className="pw-crew-bubble-line" x1={anchor.x} y1={anchor.y} x2={cx} y2={cy} />
+      <g transform={`translate(${box.x} ${box.y}) scale(${scale})`}>
+        <foreignObject width={box.w / scale} height={box.h / scale}>
+          <div ref={body} className="pw-crew-bubble-card">
+            <div className="pw-crew-bubble-header">
+              <strong>{heading}</strong>
+              {!patrol && <span>{speechEngine ?? member.engine}</span>}
+              {speechStartedAt != null ? <Elapsed at={speechStartedAt} />
+                : speechLatencyMs != null && <span className="pw-crew-bubble-time">{duration(speechLatencyMs)}</span>}
+              {pinned && <button type="button" onClick={dismiss} aria-label="Dismiss Chief briefing" title="Dismiss briefing"><X size={15} /></button>}
+            </div>
+            <div key={thought ? speech.text : speech.kind} className="pw-crew-bubble-copy" title={speech.text} tabIndex={pinned ? 0 : undefined}>{speech.text}</div>
+          </div>
+        </foreignObject>
+      </g>
     </g>
   );
 }

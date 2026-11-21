@@ -1,17 +1,21 @@
 /** Plans orthogonal walks through room entrances and reserves separate standing slots. */
 import { areaById, distance, type Point } from "@/twin/geometry";
-import type { AreaId, Twin } from "@/twin/types";
+import type { AreaId, Asset, Twin } from "@/twin/types";
+import { avatarBounds, collides, equipmentBounds, MAX_AVATAR_SCALE } from "./floorLayout";
+import { deskScale, isDesk } from "./officeLayout";
 
 export interface WalkStop {
   point: Point;
   area?: AreaId;
   beside?: boolean;
+  clearance?: "device";
+  device?: Asset;
 }
 
 type Bounds = Twin["plant"]["building"];
-export const BADGE_SEPARATION = 37;
+export const BADGE_SEPARATION = 54;
 const FLOOR_INSET = 18;
-const SLOT_STEP = 40;
+const SLOT_STEP = 68;
 
 function clamp(value: number, low: number, high: number): number {
   return Math.max(low, Math.min(high, value));
@@ -34,15 +38,30 @@ function same(a: Point, b: Point): boolean {
 function roomSlots(twin: Twin, stop: WalkStop, occupied: Point[]): Point[] {
   const floor = inset(twin.plant.building, FLOOR_INSET);
   const area = stop.area ? areaById(twin, stop.area) : undefined;
+  const office = areaById(twin, "crew_office");
   const room = area && !area.attrs.outdoor ? inset(area.bounds, FLOOR_INSET) : floor;
   const candidates: Point[] = [];
   const center = within(within(stop.point, room), floor);
+  const footprint = (point: Point) => avatarBounds(point,
+    office && isDesk(point, twin.plant.building, office) ? deskScale(office) : MAX_AVATAR_SCALE);
+  const reservedSlots = occupied.map(footprint);
+  const device = stop.clearance && (twin.assets.find((asset) => asset.origin === "added" && distance(asset.physical, stop.point) < 12) ?? stop.device);
+  const taggedDevice = device ? equipmentBounds(device, 2.3)
+    : stop.clearance ? { x: stop.point.x - 85, y: stop.point.y - 38, w: 170, h: 114 } : null;
   const add = (dx: number, dy: number) => {
     const point = within(within({ x: center.x + dx, y: center.y + dy }, room), floor);
     if (stop.beside && distance(point, center) < FLOOR_INSET) return;
-    if (occupied.some((neighbor) => distance(point, neighbor) < BADGE_SEPARATION)) return;
+    const bounds = footprint(point);
+    if (reservedSlots.some((neighbor) => collides(bounds, neighbor, 4))
+      || taggedDevice && collides(bounds, taggedDevice, 8)) return;
     if (!candidates.some((candidate) => same(candidate, point))) candidates.push(point);
   };
+  if (stop.clearance) {
+    for (const offset of [148, 192, 236]) {
+      add(offset, 0);
+      add(-offset, 0);
+    }
+  }
   if (!stop.beside) add(0, 0);
   for (const offset of [SLOT_STEP, SLOT_STEP * 2, SLOT_STEP * 3]) {
     add(0, -offset);

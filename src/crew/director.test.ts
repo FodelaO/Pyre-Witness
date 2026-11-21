@@ -56,6 +56,16 @@ describe("crew director", () => {
         activity: { crew: "architect", text: "Packaging · Purdue L2" } } });
   });
 
+  it.each([false, true])("emits an attention cue for an unavailable, permissive gate during perception=%s", (reading) => {
+    const next = cursor();
+    next({ ...run, type: "run.started", input: { kind: "text", label: "Gauge" }, dropPoint: DEFAULT_DROP });
+    if (reading) next({ ...run, type: "perception.started", model: MODEL_IDS.perception });
+    expect(next({ ...run, type: "gate.done", model: MODEL_IDS.decisions, latencyMs: 36,
+      gate: { proceed: true, reason: "Gate unavailable: continued without it", answers: {} } })).toMatchObject({
+      kind: "step", cue: { status: reading ? "working" : "done", activity: { attention: true, text: "Gate unavailable: continued" } },
+    });
+  });
+
   it("visits each reported path node and the conduit enforcer before showing the check result", () => {
     const path: AttackPath = {
       id: "path-fixture", title: "Nearby RF -> HMI-F3 -> SCADA-03", entry: "parking_rf", target: "SCADA-03",
@@ -75,9 +85,12 @@ describe("crew director", () => {
       inspection: "recommendation", activity: { text: `Recommendation path · ${path.title}`, engine: "rules engine" },
       stops: ["parking_rf", "HMI-F3", "SW-OT", "SCADA-03"].map((id) => ({ point: nodePosition(twin, id) })),
       inspect: nodePosition(twin, "SCADA-03"),
+      visual: { kind: "trace", id: "path-fixture", phase: "recommendation" },
     } });
     expect(next({ ...run, type: "selfcheck.done", latencyMs: 10, result }))
-      .toMatchObject({ cue: { activity: { text: "Recommendation · 1 finding", engine: "rules engine", latencyMs: 10 } } });
+      .toMatchObject({ cue: { activity: { text: "Recommendation · 1 finding", engine: "rules engine", latencyMs: 10 },
+        visual: { kind: "check", passed: false, stamps: [{ ruleId: "fixture", assetId: "HMI-F3", point: nodePosition(twin, "HMI-F3") }] },
+      } });
     expect(next({ ...run, type: "revision.started", model: MODEL_IDS.reasoning, reason: result.disagreements[0] }))
       .toMatchObject({ cue: { activity: { text: "Reconsidering · Placement rule applies" } } });
     expect(next({ ...run, type: "revision.done", model: MODEL_IDS.reasoning, latencyMs: 800, assessment }))
@@ -115,6 +128,33 @@ describe("crew director", () => {
     expect(next({ ...run, type: "summary.started", model: MODEL_IDS.chief })).toMatchObject({ cue: {
       status: "working", activity: { crew: "chief", text: "Writing the briefing…", engine: MODEL_IDS.chief },
     } });
+  });
+
+  it("uses real Scout evidence, names the next handoff and ranks only an identified device", () => {
+    const next = cursor();
+    next({ ...run, type: "run.started", input: { kind: "photo", label: "Photo" }, dropPoint: DEFAULT_DROP });
+    expect(next({ ...run, type: "perception.started", model: MODEL_IDS.perception }))
+      .toMatchObject({ cue: { activity: { eventType: "perception.started" }, visual: { kind: "capture" } } });
+    expect(next({ ...run, type: "perception.done", model: MODEL_IDS.perception, latencyMs: 124, profile: {
+      ...profile, radios: ["bluetooth"], ports: ["RS-485"],
+    } })).toMatchObject({ cue: { visual: { kind: "evidence", device: "Pressure gauge", drop: DEFAULT_DROP, chips: [
+      { kind: "shape", text: "Round enclosure" }, { kind: "label", text: "Label reads 0–10 bar" },
+      { kind: "port", text: "Two ports" }, { kind: "port", text: "RS-485" }, { kind: "radio", text: "bluetooth" },
+    ] } } });
+    const running = next({ ...run, type: "reasoning.started", candidateArea: null, model: MODEL_IDS.reasoning });
+    expect(running).toMatchObject({ cue: { handoffFrom: "scout", visual: { kind: "ranked",
+      areas: [expect.any(String), expect.any(String), expect.any(String)],
+    } } });
+    expect(next({ ...run, type: "reasoning.thought", text: "## Fit\n**Next** [room](https://example.test) with `markup`" }))
+      .toMatchObject({ activity: { text: "Fit Next room with markup" } });
+    expect(next({ ...run, type: "reasoning.done", model: MODEL_IDS.reasoning, latencyMs: 30, assessment }))
+      .toMatchObject({ cue: { visual: { kind: "proposal", area: "packaging", from: DEFAULT_DROP,
+        to: areaCenter(areaById(twin, "packaging")!) } } });
+    expect(next({ ...run, type: "selfcheck.started", engine: "rules engine", phase: "post-revision" }))
+      .toMatchObject({ cue: { handoffFrom: "architect", inspection: "post-revision" } });
+    expect(next({ ...run, type: "selfcheck.done", phase: "post-revision", latencyMs: 5,
+      result: { passed: true, findings: [], paths: [], disagreements: [], revised: true },
+    })).toMatchObject({ cue: { visual: { kind: "check", phase: "post-revision", passed: true, stamps: [] } } });
   });
 
   it("checks the moved device before the proposal and sends Inspector to the proposed room afterward", () => {

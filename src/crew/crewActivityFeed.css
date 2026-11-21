@@ -1,0 +1,64 @@
+/* Compact one-line step links in the crew activity feed. */
+.pw-crew-feed {
+  min-inline-size: 0;
+  padding: 12px 14px 14px;
+  border-block-start: 1px solid var(--pw-line);
+}
+
+.pw-crew-feed-actions { display: flex; justify-content: flex-end; padding-block-end: 4px; }
+
+.pw-crew-feed-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  color: var(--pw-text-dim);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pw-crew-feed-list {
+  max-block-size: 208px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  outline-offset: 2px;
+  list-style: none;
+}
+
+.pw-crew-feed-entry {
+  block-size: 26px;
+  border-block-end: 1px solid var(--pw-line);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pw-crew-feed-entry > button {
+  display: grid;
+  inline-size: 100%;
+  block-size: 100%;
+  grid-template-columns: 47px 5px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  border-radius: 3px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.pw-crew-feed-entry > button > time { font-size: 9px; color: var(--pw-text-dim); }
+.pw-crew-feed-actions button:is(:hover, :focus-visible),
+.pw-crew-feed-entry > button:is(:hover, :focus-visible) { background: var(--pw-panel-2); color: var(--pw-text); }
+.pw-crew-feed-entry > button:focus-visible { outline-offset: -2px; }
+.pw-crew-feed-dot { inline-size: 5px; block-size: 5px; border-radius: 50%; }
+.pw-crew-feed-line { display: flex; align-items: center; min-inline-size: 0; gap: 6px; }
+.pw-crew-feed-message { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.pw-crew-feed-engine, .pw-crew-feed-latency, .pw-crew-feed-patrol { flex: none; color: var(--pw-text-dim); font-size: 9px; }
+.pw-crew-feed-entry[data-kind="patrol"] { color: var(--pw-text-dim); }
+.pw-crew-feed-entry[data-kind="patrol"] .pw-crew-feed-dot { opacity: .55; }
+.pw-crew-feed-entry[data-kind="sim"] .pw-crew-feed-patrol { color: var(--pw-attention); }
+.pw-crew-feed-entry[data-attention] .pw-crew-feed-message { color: var(--pw-attention); }
+.pw-crew-feed-entry[data-attention] :is(.pw-crew-feed-engine, .pw-crew-feed-latency) { display: none; }
+.pw-crew-feed-empty { margin: 8px 0 0; color: var(--pw-text-dim); font-size: 11px; }
