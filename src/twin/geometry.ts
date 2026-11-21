@@ -49,6 +49,10 @@ export function areasAt(twin: Twin, x: number, y: number): Area[] {
 /**
  * The area an asset dropped at (x, y) belongs to: the smallest non-context area containing the
  * point, otherwise the smallest context area (corridor, parking lot), otherwise undefined.
+ *
+ * NOTE: this is the asset's HOME area (physical.area). Overlay zones such as nh3_hazard and
+ * washdown also apply at that point: anything that reasons about hazard / washdown / public
+ * access must use areasAt(twin, x, y) and merge the attrs, never only the home area.
  */
 export function areaAt(twin: Twin, x: number, y: number): Area | undefined {
   const hits = areasAt(twin, x, y).sort((a, b) => a.bounds.w * a.bounds.h - b.bounds.w * b.bounds.h);
@@ -70,8 +74,8 @@ export function metres(units: number): number {
 
 export function clampToArea(area: Area, x: number, y: number, pad = 18): Point {
   const b = area.bounds;
-  return {
-    x: Math.min(Math.max(x, b.x + pad), b.x + b.w - pad),
-    y: Math.min(Math.max(y, b.y + pad), b.y + b.h - pad),
-  };
+  // An area narrower than two paddings has no padded interior: use its centre line.
+  const clamp = (value: number, start: number, size: number) =>
+    size < 2 * pad ? start + size / 2 : Math.min(Math.max(value, start + pad), start + size - pad);
+  return { x: clamp(x, b.x, b.w), y: clamp(y, b.y, b.h) };
 }

@@ -4,7 +4,15 @@
  */
 import { create } from "zustand";
 import { pipelineBus } from "./bus";
-import type { Assessment, DeviceProfile, GateResult, PipelineEvent, PipelineStage, SelfCheckResult } from "./types";
+import type {
+  Assessment,
+  CaptureImage,
+  DeviceProfile,
+  GateResult,
+  PipelineEvent,
+  PipelineStage,
+  SelfCheckResult,
+} from "./types";
 
 export interface RunState {
   status: "idle" | "running" | "done" | "error";
@@ -20,9 +28,12 @@ export interface RunState {
   error: { stage: string; message: string } | null;
   /** Id of the asset this run placed on the twin, once placed. */
   placedAssetId: string | null;
+  /** First captured photo of this run (set by the pipeline client), for the device card and fit preview. */
+  captureThumbnail: CaptureImage | null;
 
   ingest: (event: PipelineEvent) => void;
   setPlacedAsset: (id: string | null) => void;
+  setCaptureThumbnail: (image: CaptureImage | null) => void;
   reset: () => void;
 }
 
@@ -38,17 +49,35 @@ const EMPTY = {
   summary: null,
   error: null,
   placedAssetId: null,
+  captureThumbnail: null,
 };
 
 export const useRunStore = create<RunState>((set, get) => ({
   ...EMPTY,
 
   ingest: (event) => {
+    // Late events from a cancelled or superseded run must not touch the current one.
+    if (event.type !== "run.started" && event.runId !== get().runId) return;
     const base = { events: [...get().events, event] };
     switch (event.type) {
       case "run.started":
-        set({ ...EMPTY, status: "running", runId: event.runId, events: [event] });
+        set({
+          ...EMPTY,
+          status: "running",
+          runId: event.runId,
+          events: [event],
+          // A reassess run skips perception: keep what we already know about the device.
+          ...(event.mode === "reassess"
+            ? {
+                profile: get().profile,
+                gate: get().gate,
+                placedAssetId: get().placedAssetId,
+                captureThumbnail: get().captureThumbnail,
+              }
+            : { captureThumbnail: get().status === "idle" ? get().captureThumbnail : null }),
+        });
         break;
+      case "link.started":
       case "link.fetched":
         set({ ...base, stage: "link" });
         break;
@@ -82,6 +111,9 @@ export const useRunStore = create<RunState>((set, get) => ({
       case "revision.done":
         set({ ...base, assessment: event.assessment });
         break;
+      case "summary.started":
+        set({ ...base, stage: "summary" });
+        break;
       case "summary.done":
         set({ ...base, stage: "summary", summary: event.text });
         break;
@@ -98,6 +130,8 @@ export const useRunStore = create<RunState>((set, get) => ({
   },
 
   setPlacedAsset: (id) => set({ placedAssetId: id }),
+
+  setCaptureThumbnail: (image) => set({ captureThumbnail: image }),
 
   reset: () => set({ ...EMPTY }),
 }));

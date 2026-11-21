@@ -236,6 +236,12 @@ export interface Asset {
   /** Consequence if compromised or failed. 5 = safety critical. */
   criticality: 1 | 2 | 3 | 4 | 5;
   safetyCritical?: boolean;
+  /**
+   * Independent safeguards installed on or for this asset that do not depend on the network,
+   * e.g. "hardwired-interlock", "emergency-ventilation", "port-lock", "locked-cabinet",
+   * "independent-gas-detection". Rules and simulations treat a matching safeguard as a control.
+   */
+  protections?: string[];
   origin: "seed" | "added";
   /** For added devices: green (recommended) / red (unsafe) outline on the floor. */
   placement?: "recommended" | "unsafe" | "neutral";
@@ -370,6 +376,8 @@ export type MitigationEffect =
   | { type: "remove_asset"; assetId: string }
   | { type: "enforce_conduit"; conduitId: string; enforcedBy: string; allows: string[] }
   | { type: "set_area_attr"; areaId: AreaId; patch: Partial<AreaAttrs> }
+  /** Physical change: install an independent safeguard on an asset (see Asset.protections). */
+  | { type: "add_protection"; assetId: string; protection: string }
   | { type: "note"; text: string };
 
 export interface Mitigation {

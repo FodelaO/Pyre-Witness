@@ -203,7 +203,14 @@ interface Base {
  * all driven by these — never by timers.
  */
 export type PipelineEvent =
-  | (Base & { type: "run.started"; input: { kind: CaptureInput["kind"]; label: string }; dropPoint: DropPoint | null })
+  | (Base & {
+      type: "run.started";
+      input: { kind: CaptureInput["kind"]; label: string };
+      dropPoint: DropPoint | null;
+      /** "reassess" = a placed device was moved: perception is skipped and the profile is kept. Default "analyze". */
+      mode?: "analyze" | "reassess";
+    })
+  | (Base & { type: "link.started"; url: string })
   | (Base & { type: "link.fetched"; latencyMs: number; snapshot: Pick<LinkSnapshot, "url" | "title" | "imageUrl"> })
   | (Base & { type: "gate.started"; model: string })
   | (Base & { type: "gate.done"; model: string; latencyMs: number; gate: GateResult })
@@ -217,6 +224,7 @@ export type PipelineEvent =
   | (Base & { type: "selfcheck.done"; latencyMs: number; result: SelfCheckResult })
   | (Base & { type: "revision.started"; model: string; reason: string })
   | (Base & { type: "revision.done"; model: string; latencyMs: number; assessment: Assessment })
+  | (Base & { type: "summary.started"; model: string })
   | (Base & { type: "summary.done"; model: string; latencyMs: number; text: string })
   | (Base & { type: "run.completed"; totalMs: number })
   | (Base & { type: "run.error"; stage: PipelineStage | "unknown"; message: string });

@@ -16,12 +16,18 @@ export interface TwinState {
   baselineScore: number;
   selectedId: string | null;
   hoveredId: string | null;
+  /**
+   * Extra ids to highlight together on both views (every node of a hovered attack path, the
+   * members of an area...). Asset ids, entry-point ids or area ids. Views treat these like hover.
+   */
+  highlightIds: string[];
   view: ViewMode;
   mitigations: Mitigation[];
 
   /** Linked selection: both views read and write this. */
   select: (id: string | null) => void;
   hover: (id: string | null) => void;
+  setHighlight: (ids: string[]) => void;
   setView: (view: ViewMode) => void;
 
   addAsset: (asset: Asset) => void;
@@ -52,11 +58,13 @@ export const useTwinStore = create<TwinState>((set, get) => ({
   baselineScore: seedRisk.score,
   selectedId: null,
   hoveredId: null,
+  highlightIds: [],
   view: "floor",
   mitigations: [],
 
   select: (id) => set({ selectedId: id }),
   hover: (id) => set({ hoveredId: id }),
+  setHighlight: (ids) => set({ highlightIds: ids }),
   setView: (view) => set({ view }),
 
   addAsset: (asset) => {
@@ -77,16 +85,29 @@ export const useTwinStore = create<TwinState>((set, get) => ({
     set({
       ...withRisk(applyEffects(twin, [{ type: "remove_asset", assetId: id }])),
       selectedId: get().selectedId === id ? null : get().selectedId,
+      hoveredId: get().hoveredId === id ? null : get().hoveredId,
     });
   },
 
-  setTwin: (twin) => set(withRisk(twin)),
+  setTwin: (twin) => {
+    const ids = new Set(twin.assets.map((a) => a.id));
+    const keep = (id: string | null) => (id && ids.has(id) ? id : null);
+    set({ ...withRisk(twin), selectedId: keep(get().selectedId), hoveredId: keep(get().hoveredId) });
+  },
 
   patchTwinQuiet: (fn) => set({ twin: fn(get().twin) }),
 
   proposeMitigations: (items) => {
-    const known = new Set(get().mitigations.map((m) => m.id));
-    set({ mitigations: [...get().mitigations, ...items.filter((m) => !known.has(m.id))] });
+    // Models reuse generic ids ("M1") across runs: make every proposal's id unique instead of
+    // dropping later ones, and never trust an incoming status (only a human click can apply).
+    const taken = new Set(get().mitigations.map((m) => m.id));
+    const fresh = items.map((item) => {
+      let id = item.id;
+      for (let n = 2; taken.has(id); n += 1) id = `${item.id}-${n}`;
+      taken.add(id);
+      return { ...item, id, status: "proposed" as const, riskDelta: item.riskDelta };
+    });
+    set({ mitigations: [...get().mitigations, ...fresh] });
   },
 
   decideMitigation: (id, decision) => {
@@ -107,5 +128,12 @@ export const useTwinStore = create<TwinState>((set, get) => ({
   },
 
   reset: () =>
-    set({ ...withRisk(SEED_TWIN), selectedId: null, hoveredId: null, mitigations: [], baselineScore: seedRisk.score }),
+    set({
+      ...withRisk(SEED_TWIN),
+      selectedId: null,
+      hoveredId: null,
+      highlightIds: [],
+      mitigations: [],
+      baselineScore: seedRisk.score,
+    }),
 }));
