@@ -4,7 +4,7 @@ import { MODEL_IDS } from "@/gemini/models";
 import { geminiClients } from "@/gemini/transport";
 import type { Twin } from "@/twin/types";
 import { groundReport } from "./groundReport";
-import { collectEvidence, modelError, watchProgress } from "./progress";
+import { collectEvidence, modelError, watchProgress, type WatchFeedSnapshot } from "./progress";
 import { assessThreats } from "./reassess";
 import { askDecisionsBatch, triageCandidates, type TriagedCandidate } from "./triage";
 import type { Candidate, WatchEvent, WatchReport } from "./types";
@@ -17,9 +17,10 @@ export async function runWatch(
   emit: (event: WatchEvent) => void = () => {},
   signal: AbortSignal = new AbortController().signal,
   runId: string = randomUUID(),
+  feeds?: WatchFeedSnapshot,
 ): Promise<WatchReport> {
   const progress = watchProgress(runId, emit);
-  const { sources, candidates, unmatchedNews, risk, warnings } = await collectEvidence(twin, progress, signal);
+  const { sources, candidates, unmatchedNews, risk, warnings } = await collectEvidence(twin, progress, signal, feeds);
   let reviewed = candidates;
   const complete = (headline: string, items: WatchReport["items"] = [], recommendations: WatchReport["recommendations"] = []): WatchReport => ({
     date: progress.date, runId, mode: "local", finishedAt: Date.now(), headline, items, recommendations,

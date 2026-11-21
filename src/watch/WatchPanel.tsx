@@ -2,7 +2,7 @@
 "use client";
 
 import { ChevronDown, Radar } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MitigationQueue } from "@/panel/MitigationQueue";
 import { watchStatus } from "@/shell/watchStatus";
 import { useTwinStore } from "@/twin/store";
@@ -26,6 +26,16 @@ const feedPresentation = {
   stale: { label: "Stale", dot: "Partial" },
   offline: { label: "Feed offline", dot: "Feed offline" },
 } as const;
+
+function CheckedAge({ checkedAt }: { checkedAt: number }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const minutes = Math.max(0, Math.floor((now - checkedAt) / 60_000));
+  return <time dateTime={new Date(checkedAt).toISOString()}>{minutes ? `checked ${minutes} min ago` : "checked just now"}</time>;
+}
 
 export function WatchRun({ run, managed = false }: { run: WatchRunState; managed?: boolean }) {
   const keyMissing = run.stages.some(({ state, detail }) => state === "failed" && /GEMINI_API_KEY/i.test(detail));
@@ -121,7 +131,9 @@ export default function WatchPanel({ open, reveal = 0, onOpenChange }: { open: b
       onToggle={(event) => { if (event.target === event.currentTarget) onOpenChange(event.currentTarget.open); }}>
       <summary ref={summary}>
         <span><Radar size={16} aria-hidden />Threat watch</span>
-        <span className="pw-watch-state"><i className="pw-status-dot" data-status={dot} aria-hidden />{presentation.label}</span>
+        <span className="pw-watch-state"><i className="pw-status-dot" data-status={dot} aria-hidden />{presentation.label}
+          {review.cached && review.checkedAt !== undefined && <><span aria-hidden>·</span><CheckedAge checkedAt={review.checkedAt} /></>}
+        </span>
         <ChevronDown size={14} className="pw-panel-disclosure-caret" aria-hidden />
       </summary>
       <div className="pw-watch-body">

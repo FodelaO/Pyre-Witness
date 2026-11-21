@@ -60,6 +60,10 @@ export function restoreWatchReport(date: string, mode: WatchReport["mode"]): Wat
     return;
   }
 
+  return restoreWatchProposals(report);
+}
+
+export function restoreWatchProposals(report: WatchReport): WatchReport {
   const { twin, risk, mitigations, proposeMitigations } = useTwinStore.getState();
   const live = new Map(mitigations.map((item) => [item.id, item]));
   const assets = new Set(twin.assets.map(({ id }) => id));

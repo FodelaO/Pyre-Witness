@@ -8,15 +8,16 @@ import { matchThreats } from "./match";
 import { threatKey, WATCH_SOURCES } from "./sources";
 import type { WatchEvent, WatchEventData, WatchStage } from "./types";
 
+export type WatchFeedSnapshot = Awaited<ReturnType<typeof loadFeeds>> & { startedAt: number };
+
 export function watchProgress(runId: string, emit: (event: WatchEvent) => void) {
   const now = Date.now();
   const date = new Date(now).toISOString().slice(0, 10);
   const stages: WatchStage[] = [];
   const send = (event: WatchEventData) => emit({ ...event, runId, at: Date.now() });
 
-  const begin = (name: WatchStage["name"]) => {
+  const begin = (name: WatchStage["name"], start = performance.now()) => {
     send({ type: "working", name });
-    const start = performance.now();
     return (state: WatchStage["state"], detail: string, model?: string) => {
       const stage = { name, state, detail, model, ms: Math.round(performance.now() - start) };
       stages.push(stage);
@@ -28,9 +29,11 @@ export function watchProgress(runId: string, emit: (event: WatchEvent) => void) 
   return { now, date, stages, send, begin };
 }
 
-export async function collectEvidence(twin: Twin, progress: ReturnType<typeof watchProgress>, signal: AbortSignal) {
-  const endFeeds = progress.begin("feeds");
-  const { sources, items } = await loadFeeds(progress.now, (result) => progress.send({ type: "source", result }));
+export async function collectEvidence(twin: Twin, progress: ReturnType<typeof watchProgress>, signal: AbortSignal, feeds?: WatchFeedSnapshot) {
+  const endFeeds = progress.begin("feeds", feeds?.startedAt);
+  const sendSource = (result: WatchFeedSnapshot["sources"][number]) => progress.send({ type: "source", result });
+  const { sources, items } = feeds ?? await loadFeeds(progress.now, sendSource);
+  if (feeds) sources.forEach(sendSource);
   signal.throwIfAborted();
   const failures = sources.filter(({ error }) => error);
   endFeeds(failures.length === sources.length ? "failed" : "done", `${items.length} recent items · ${failures.length} sources unavailable`);

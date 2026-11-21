@@ -100,7 +100,7 @@ export interface WatchReport {
 }
 
 export const WATCH_FORCE_HEADER = "x-pyre-watch-force";
-export const WATCH_REVIEW_CACHE_MS = 5 * 60_000;
+export const WATCH_REVIEW_CACHE_MS = 15 * 60_000;
 
 export interface WatchRunResult {
   report: WatchReport;

@@ -17,13 +17,14 @@ const report = (runId: string, finishedAt: number): WatchReport => ({
   candidates: [], items: [], recommendations: [], sources: [], stages: [], warnings: [],
 });
 const event = (sse: string): WatchEvent => JSON.parse(sse.split("\n")[0].slice(6));
+const readFeeds = async () => ({ sources: [], items: [] });
 
 describe("local watch admission", () => {
   it("reuses a fresh report and only manual refreshes spend a budget slot", async () => {
     let now = start;
     const limit = createRateLimit(2, 10 * 60_000, () => now);
     const run = vi.fn<WatchRunner>(async (_twin, _emit, _signal, runId) => report(runId, now));
-    const post = createWatchRunHandler(limit, run, undefined, () => now);
+    const post = createWatchRunHandler(limit, run, undefined, () => now, readFeeds);
     const first = event(await (await post(request())).text());
     expect(first).toMatchObject({ type: "done", cached: false, checkedAt: start });
     now += 60_000;
@@ -43,7 +44,7 @@ describe("local watch admission", () => {
   it("streams the previous report immediately when an automatic review is due", async () => {
     let now = start;
     const run = vi.fn<WatchRunner>(async (_twin, _emit, _signal, runId) => report(runId, now));
-    const post = createWatchRunHandler(createRateLimit(2, 10 * 60_000, () => now), run, undefined, () => now);
+    const post = createWatchRunHandler(createRateLimit(2, 10 * 60_000, () => now), run, undefined, () => now, readFeeds);
     const first = event(await (await post(request())).text());
     now += WATCH_REVIEW_CACHE_MS;
     let release!: () => void;
@@ -69,7 +70,7 @@ describe("local watch admission", () => {
     let release!: () => void;
     const hold = new Promise<void>((resolve) => { release = resolve; });
     const run = vi.fn<WatchRunner>(async (_twin, _emit, _signal, runId) => { await hold; return report(runId, start); });
-    const post = createWatchRunHandler(createRateLimit(1, 600_000, () => start), run, undefined, () => start);
+    const post = createWatchRunHandler(createRateLimit(1, 600_000, () => start), run, undefined, () => start, readFeeds);
     const first = await post(request());
     const joins = Array.from({ length: 11 }, () => post(request()));
     let joinedEarly = false;
@@ -88,7 +89,7 @@ describe("local watch admission", () => {
   it("validates input and origin before serving a cache and keeps reports twin-specific", async () => {
     let now = start;
     const run = vi.fn<WatchRunner>(async (_twin, _emit, _signal, runId) => report(runId, now));
-    const post = createWatchRunHandler(createRateLimit(1, 600_000, () => now), run, undefined, () => now);
+    const post = createWatchRunHandler(createRateLimit(1, 20 * 60_000, () => now), run, undefined, () => now, readFeeds);
     expect((await post(request({}, {}))).status).toBe(400);
     await (await post(request())).text();
     now += WATCH_REVIEW_CACHE_MS;

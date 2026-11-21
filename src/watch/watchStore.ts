@@ -9,9 +9,9 @@ import type { LiveSourceResult } from "./liveTypes";
 import { WATCH_SOURCES } from "./sources";
 import { readWatchStream, WatchRateLimitError } from "./streamClient";
 import { cueWatchMatches, publishReviewedWatchResolutions } from "./watchResolutions";
-import { WATCH_REVIEW_CACHE_MS, type Candidate, type ManagedWatchProgress, type ThreatItem, type WatchEvent, type WatchReport, type WatchRunResult, type WatchStage } from "./types";
+import type { Candidate, ManagedWatchProgress, ThreatItem, WatchEvent, WatchReport, WatchRunResult, WatchStage } from "./types";
 import {
-  LAST_WATCH_DAY, rememberWatchDecision, restoreWatchReport, saveWatchReport, watchDecision, writeWatchStorage,
+  LAST_WATCH_DAY, rememberWatchDecision, restoreWatchProposals, restoreWatchReport, saveWatchReport, watchDecision, writeWatchStorage,
 } from "./watchCache";
 
 export const watchDay = () => new Date().toISOString().slice(0, 10);
@@ -89,11 +89,7 @@ export const useWatchStore = create<WatchState>((set, get) => ({
       const managed = restoreWatchReport(date, "managed");
       if (managed) set({ managed: finished({ report: managed, cached: true, checkedAt: managed.finishedAt }) });
     }
-    const report = restoreWatchReport(date, "local");
-    if (report) {
-      set((state) => localReview(state, finished({ report, cached: true, checkedAt: report.finishedAt })));
-    }
-    if (!report || Date.now() - report.finishedAt >= WATCH_REVIEW_CACHE_MS) void get().runReview("local", false);
+    void get().runReview("local", false);
   },
   runNow: (mode = "local") => get().runReview(mode, true),
   runReview: async (mode, force) => {
@@ -108,7 +104,8 @@ export const useWatchStore = create<WatchState>((set, get) => ({
     const replace = (run: WatchRunState) => set((state) => mode === "local" ? localReview(state, run) : { managed: run });
     const update = (patch: Partial<WatchRunState>) => replace({ ...get()[key], ...patch });
     const { twin, risk } = useTwinStore.getState();
-    replace({ ...empty, report: before.report, status: "running", working: mode === "local" ? "feeds" : "managed" });
+    replace({ ...empty, report: before.report, cached: before.cached, checkedAt: before.checkedAt,
+      status: "running", working: mode === "local" ? "feeds" : "managed" });
     function accept(result: WatchRunResult) {
       let { report } = result;
       let message = result.note;
@@ -116,9 +113,8 @@ export const useWatchStore = create<WatchState>((set, get) => ({
       const store = useTwinStore.getState();
       if (report.recommendations.length > 0) {
         if (store.risk === risk) {
-          const restored = result.cached ? restoreWatchReport(report.date, mode) : undefined;
-          if (restored) report = restored;
-          else if (!result.cached || before.report?.runId !== report.runId) store.proposeMitigations(report.recommendations);
+          if (result.cached) report = restoreWatchProposals(report);
+          else store.proposeMitigations(report.recommendations);
         } else {
           message = message ?? "Twin changed during this run. Refresh before reviewing proposals.";
         }
