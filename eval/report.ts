@@ -9,6 +9,7 @@ import { summarize, summarizeCalls, type Summary } from "./metrics";
 import type { ModalitySummary } from "./modality";
 import type { PipelineEvidence } from "./pipelineEvidence";
 import type { ScoringAudit } from "./scoringAudit";
+import type { VersionDelta } from "./versionDelta";
 import type { ProviderCalls } from "./types";
 import { GROUPS, type EvaluatedItem, type EvaluationItem, type Group, type Side } from "./types";
 
@@ -28,6 +29,7 @@ export interface EvaluationReport {
   runId: string;
   label?: string;
   fingerprint?: string;
+  pipelineFingerprint?: string;
   concurrency?: number;
   baselineContract?: string;
   baselineFrom?: string;
@@ -56,6 +58,7 @@ export interface EvaluationReport {
   fairComparison?: FairComparison;
   pipelineEvidence?: PipelineEvidence;
   scoringAudit?: ScoringAudit;
+  versionDelta?: VersionDelta;
 }
 
 type HistorySource = Pick<EvaluationReport, "label" | "concurrency" | "dataset" | "overall" | "cases">;
@@ -73,7 +76,7 @@ export function summarizeRun({ label, concurrency, dataset, overall, cases }: Hi
 export type RunMilestone = ReturnType<typeof summarizeRun>;
 
 type ReportOptions = Pick<EvaluationReport, "runId" | "startedAt" | "sides" | "reused">
-  & Partial<Pick<EvaluationReport, "label" | "fingerprint" | "concurrency" | "baselineContract" | "baselineFrom" | "objectAssessment" | "models" | "thinking" | "date" | "comparison" | "modality" | "modalityFrom" | "fairComparison" | "pipelineEvidence" | "scoringAudit">>
+  & Partial<Pick<EvaluationReport, "label" | "fingerprint" | "pipelineFingerprint" | "concurrency" | "baselineContract" | "baselineFrom" | "objectAssessment" | "models" | "thinking" | "date" | "comparison" | "modality" | "modalityFrom" | "fairComparison" | "pipelineEvidence" | "scoringAudit" | "versionDelta">>
   & { dataset: Omit<DatasetProgress, "evaluated" | "attempted"> & { attempted?: DatasetProgress["attempted"] };
     judgeCalls?: (ProviderCalls | undefined)[]; items?: readonly EvaluationItem[]; history?: RunMilestone[] };
 

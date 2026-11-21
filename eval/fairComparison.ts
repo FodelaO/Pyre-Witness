@@ -2,7 +2,7 @@
 import { diagnoseBaseline } from "./baselineDiagnosis";
 import { BASELINE_CONTRACT } from "./baselineContract";
 import { mapForMetric, METRIC_KEYS, metricCounts, metricName, type Metric } from "./metrics";
-import { systemEvents } from "./pipelineEvidence";
+import { rulesRevision } from "./pipelineEvidence";
 import type { readRunSnapshot } from "./runSnapshot";
 import { combineCounts, pairedBootstrap, proportion, type Proportion } from "./statistics";
 import { SIDES, type EvaluatedItem, type JudgeArtifact, type Side } from "./types";
@@ -44,9 +44,8 @@ export function joinBaseline(system: Snapshot, baseline: Snapshot): EvaluatedIte
 
 function reviewRevisions(rows: readonly EvaluatedItem[]): Proportion {
   return proportion(rows.flatMap(({ observations: { system } }) => {
-    const events = systemEvents(system);
-    if (!events.some((event) => event.type === "selfcheck.done" && event.phase === "recommendation")) return [];
-    return [{ numerator: Number(events.some(({ type }) => type === "revision.started")), n: 1 }];
+    const revised = rulesRevision(system);
+    return revised === null ? [] : [{ numerator: Number(revised), n: 1 }];
   }));
 }
 

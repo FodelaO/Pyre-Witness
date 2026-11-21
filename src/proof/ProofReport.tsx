@@ -14,6 +14,7 @@ import { ModalityCard, ModalityMeasurements } from "./ModalityCard";
 import { ProofAccuracy } from "./ProofAccuracy";
 import { PipelineEvidenceStrip } from "./PipelineEvidenceStrip";
 import { FairMetrics } from "./FairMetrics";
+import { VersionDeltaNotice, VersionDeltaTable } from "./VersionDelta";
 
 function proportionText({ value, n, interval }: Proportion) {
   return value === null ? "—" : `${formatPercent(value)} [${interval?.map(formatPercent).join("–")}] (n=${n})`;
@@ -37,6 +38,7 @@ export function ProofReport({ report }: { report: EvaluationReport }) {
           : report.baselineFrom && <span>Original baseline receipts</span>}
         {report.pipelineEvidence && <span>One development set we iterated on. No held-out set yet.</span>}
       </div>
+      {report.versionDelta && <VersionDeltaNotice delta={report.versionDelta} />}
       {partial && <p className="pw-proof-partial">
         Partial results · {sides.map((side) => `${SIDE_NAME[side]} ${dataset.attempted[side]}/${dataset.selected}`).join(" · ")}.
         {" "}Faster cases may finish first.
@@ -50,6 +52,7 @@ export function ProofReport({ report }: { report: EvaluationReport }) {
         <ModalityCard report={report} />
       </div>
       <PipelineEvidenceStrip report={report} />
+      {report.versionDelta && <VersionDeltaTable delta={report.versionDelta} />}
       {report.fairComparison && <FairMetrics comparison={report.fairComparison} />}
       <ModalityMeasurements report={report} />
       <details className="pw-judge-details" id="all-measurements">
@@ -93,6 +96,7 @@ export function ProofReport({ report }: { report: EvaluationReport }) {
             );
           })}
           <p className="pw-proof-judge">Offline judge <code>{models.judge}</code>{report.judgeCalls.n > 0 && <> · {report.judgeCalls.total} separate calls</>}</p>
+          {report.pipelineFingerprint && <p className="pw-proof-judge">Pipeline SHA-256 <code>{report.pipelineFingerprint}</code></p>}
         </aside>
         </div>
         <details className="pw-proof-breakdown" open>

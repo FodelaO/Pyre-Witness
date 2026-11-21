@@ -7,6 +7,18 @@ export function systemEvents(observation?: Observation): readonly PipelineEvent[
   return observation && "raw" in observation && Array.isArray(observation.raw) ? observation.raw : [];
 }
 
+export function scoutStageMs(observation?: Observation): number | null {
+  const scout = systemEvents(observation).findLast((event) => event.type === "perception.done");
+  const value = scout?.latencyMs;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+export function rulesRevision(observation?: Observation): boolean | null {
+  const events = systemEvents(observation);
+  if (!events.some((event) => event.type === "selfcheck.done" && event.phase === "recommendation")) return null;
+  return events.some(({ type }) => type === "revision.started");
+}
+
 export function summarizePipelineEvidence(rows: readonly EvaluatedItem[]) {
   const observations = rows.flatMap(({ observations: { system } }) => system ? [system] : []);
   const streams = observations.map(systemEvents);

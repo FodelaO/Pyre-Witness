@@ -8,6 +8,8 @@ import { HEADLINES, METRICS, METRIC_KEYS, NEGATIVE_METRICS, metricName, type Met
 import type { EvaluationReport } from "./report";
 import type { PairedDifference, Proportion } from "./statistics";
 import { GROUPS, SIDES } from "./types";
+import { FOCUS_METRICS, type VersionDelta } from "./versionDelta";
+import { measured as measuredDelta, regressionText, versionDeltaTable } from "./versionDeltaFormat";
 
 const SIDE = { baseline: "Baseline", system: "System" } as const;
 const pct = (value: number) => `${(100 * value).toFixed(1)}%`;
@@ -135,6 +137,23 @@ export function markdownSummary(report: EvaluationReport): string {
   const isRun4 = report.label === "run-4";
   const traces = report.pipelineEvidence?.requestTraces;
   const systemCost = traces?.shorterCounters ? `${traces.perCapture.toFixed(2)} recorded request traces per capture` : `${system.calls.mean?.toFixed(2) ?? "unavailable"} HTTP attempts per capture`;
+  if (report.versionDelta) {
+    const versions = report.versionDelta;
+    const regressions = regressionText(versions);
+    const connectivityTie = (["radiosRecall", "cloudAccuracy"] as const).every((key) => {
+      const value = versions.rows.find((row) => row.key === key)?.answered.after;
+      const reference = fair.answered.metrics[key].baseline;
+      return value?.value != null && value.value === reference.value && value.n === reference.n;
+    });
+    return [
+      `Run 5 recorded ${fair.all.n}/${report.dataset.selected} captures against the saved Hydrogen baseline, with ${fair.answered.n} answered by both and ${system.failures} system execution errors${regressions ? `, and regressed on ${regressions}` : ""}.`,
+      `Plant-area accuracy for Hydrogen versus Pyre Witness was ${ratio(fair.answered.metrics.physicalAreaAccuracy.baseline)} versus ${ratio(fair.answered.metrics.physicalAreaAccuracy.system)} on shared answers (Wilson 95% intervals, exact McNemar ${exactP(fair.areaTest.p)}) and ${pairAllArea(fair)} across all attempts.`,
+      `On the common answered captures from Runs 4 and 5, radio recall moved ${versionMovement(versions, "radiosRecall")} and cloud flag accuracy moved ${versionMovement(versions, "cloudAccuracy")}${connectivityTie ? ", matching Hydrogen’s observed rates on both metrics" : ""}.`,
+      `On that same cohort, device category accuracy moved ${versionMovement(versions, "categoryAccuracy")} and blinded device-type naming agreement moved ${versionMovement(versions, "deviceTypeMatch")}.`,
+      `Against Hydrogen on shared answers, key-risk recall was ${pair("riskRecall")} (Pyre Witness minus Hydrogen ${pairedPoints(fair.riskDifference.answered)}, paired bootstrap 95%) and forbidden placements were ${pair("neverPlaceViolation")} (exact McNemar ${exactP(exact("neverPlaceViolation"))}).`,
+      `Across published Scout profiles, p50 latency moved ${versionMovement(versions, "scoutP50", "all")} and p95 moved ${versionMovement(versions, "scoutP95", "all")}, with Run 5 end-to-end p50 ${latency(system.latencyMs.p50)} and p95 ${latency(system.latencyMs.p95)} at ${report.concurrency} workers.`,
+    ].join("\n") + "\n";
+  }
   return [
     `${report.label?.replace(/^run-(\d+)$/, "Run $1") ?? "Pyre Witness"} and the ${report.label === "run-3" ? "fresh" : "saved fair"} single-call Hydrogen baseline recorded ${fair.all.n}/${report.dataset.selected} comparable captures, with ${fair.answered.n} answered by both and ${baseline.failures} baseline errors versus ${system.failures} Pyre Witness errors.`,
     `On captures both sides answered, plant-area accuracy was ${ratio(fair.answered.metrics.physicalAreaAccuracy.baseline)} for Hydrogen and ${ratio(fair.answered.metrics.physicalAreaAccuracy.system)} for Pyre Witness (Wilson 95% intervals, exact paired McNemar ${exactP(fair.areaTest.p)}).`,
@@ -145,8 +164,33 @@ export function markdownSummary(report: EvaluationReport): string {
   ].join("\n") + "\n";
 }
 
+function pairAllArea(fair: NonNullable<EvaluationReport["fairComparison"]>) {
+  return SIDES.map((side) => ratio(fair.all.metrics.physicalAreaAccuracy[side])).join(" versus ");
+}
+
+function versionMovement(delta: VersionDelta, key: string, scope: "answered" | "all" = "answered") {
+  const row = delta.rows.find((entry) => entry.key === key);
+  return row ? `from ${measuredDelta(row[scope].before, row.unit)} to ${measuredDelta(row[scope].after, row.unit)}` : "unavailable";
+}
+
+function versionComparison(report: EvaluationReport) {
+  const delta = report.versionDelta;
+  if (!delta) return [];
+  return ["## Run 4 vs Run 5", "",
+    `The table joins ${delta.n.all} captured inputs by fingerprint. Its common cohort comprises the ${delta.n.answered} inputs answered by both system versions and the saved Hydrogen baseline. Device-type naming uses jointly scorable judgments in the common cohort. Output-dependent denominators use the opportunities recorded for each version.`, "",
+    "Scout latency comes from the published `perception.done.latencyMs` event and includes the Scout request, validation and post-processing. Missing events contribute no latency. Common p50 and p95 use the same inputs with both timings recorded. Run 4 used six workers and Run 5 used four. The timing difference reflects both collection conditions and pipeline changes.", "",
+    ...FOCUS_METRICS.map((key) => {
+      const row = delta.rows.find((entry) => entry.key === key)!;
+      return `- **${row.label}** moved ${versionMovement(delta, key, row.unit === "ms" ? "all" : "answered")}.`;
+    }), "",
+    ...versionDeltaTable(delta), "",
+    `Key-risk recall change from Run 4 to Run 5 with paired bootstrap 95% intervals. Common answers ${pairedPoints(delta.risk.answered)}. All attempts ${pairedPoints(delta.risk.all)}.`, "",
+    "Run 4’s incomplete HTTP counters make its HTTP-cost deltas unavailable. The request-trace row uses the same event definition for both runs. This comparison uses the same development set and scoring definitions as the previous run.", "",
+  ];
+}
+
 function runTimeline(report: EvaluationReport) {
-  const rows = ["run-1", "run-2", "run-3", "run-4"].map((label, index) => {
+  const rows = ["run-1", "run-2", "run-3", "run-4", "run-5"].map((label, index) => {
     const observed = report.timeline?.find((entry) => entry.label === label);
     return observed?.paired
       ? `| Run ${index + 1} | ${observed.paired}/${observed.selected} | ${observed.concurrency ?? "—"} | ${observed.latencyMs.p50 === null ? "—" : ms(observed.latencyMs.p50)} | ${observed.timeouts} | ${observed.failures} | ${observed.gateFailures} | ${index >= 2 ? observed.gateFallbacks : "—"} | ${observed.placements} |`
@@ -162,6 +206,7 @@ function runTimeline(report: EvaluationReport) {
     "Run 2 used compact prompts, Carbon low, an as-dropped rules check before reasoning and targeted revision. Run 3 measured gate failure isolation and retry with backoff.", "",
     ...(fair ? [`The fair baseline after Run 3 answered ${fair.baselineAnswers}/${fair.baselineAttempts}. It kept the original Hydrogen request and accepted otherwise valid answers that exceeded local length caps. Run 4 reuses these receipts.`, ""] : []),
     "Run 4 evaluates Scout’s function-first equipment-kind guide and a final risk list that combines Architect risks, rules-engine findings and Scout evidence on the same development set.", "",
+    "Run 5 separates Scout’s capability evidence from enabled state, fills connectivity only from explicit evidence, and sorts merged risks before capping the list.", "",
   ];
 }
 
@@ -359,6 +404,7 @@ export function markdownReport(report: EvaluationReport): string {
     "# Pyre Witness evaluation", "",
     `${report.date} · Run \`${report.label ?? report.runId}\` · ${dataset.evaluated} / ${dataset.selected} ${paired ? "paired captures" : "captures"} · ${dataset.available} available`,
     "",
+    ...(report.versionDelta && regressionText(report.versionDelta) ? [`**Observed regressions.** ${regressionText(report.versionDelta)}.`, ""] : []),
     `Recorded attempts · ${coverage}. System collection ${(report.wallClockMs / 60_000).toFixed(1)} min${report.concurrency ? ` at ${report.concurrency} capture workers` : ""}.${fair ? "" : ` ${report.reused} reused artifacts.`}`,
     "",
     ...(isPartial ? ["Partial cohort. Faster cases may finish first. Metrics use completed pairs and include attempts that returned errors.", ""] : []),
@@ -373,6 +419,7 @@ export function markdownReport(report: EvaluationReport): string {
         : [`System results use \`${report.label}\` at launch fingerprint \`${report.fingerprint}\`. Baseline output, offline type judgments and verdicts are reused from \`${fair.label}\` at fingerprint \`${fair.fingerprint}\`. This run made zero baseline model calls.`, ""]),
     ] : []),
     "All comparisons use one development set that informed the iterations. No held-out set has been evaluated.", "",
+    ...(report.pipelineFingerprint ? [`Pipeline source SHA-256 at collection launch \`${report.pipelineFingerprint}\`.`, ""] : []),
     `System thinking levels · perception ${report.thinking.perception}, reasoning ${report.thinking.reasoning}, briefing ${report.thinking.chief}. Offline judge recorded ${report.judgeCalls.total} HTTP attempts across ${report.judgeCalls.n} judgment receipts.`,
     "", ...(report.fingerprint ? [`Source and dataset fingerprint \`${report.fingerprint}\`.`, ""] : []),
     ...dataset.warnings.flatMap((warning) => [`> ${warning}`, ""]),
@@ -382,6 +429,7 @@ export function markdownReport(report: EvaluationReport): string {
       `${report.label === "run-4" ? "A disk write failure interrupted the system and offline-judge HTTP counters. Run 4 resumed from its saved receipts. " : ""}On ${traces.shorterCounters} captures the independent trace records more requests than the HTTP counter. The system trace records ${traces.total} Gemini request entries over ${traces.n} saved captures (${traces.perCapture.toFixed(2)} per capture). Request traces include recorded provider calls and can include calls interrupted before an HTTP attempt. The quality scores and elapsed times use the saved outcomes.`, "",
     ] : []),
     ...(!fair ? completedAccuracy(report) : []),
+    ...versionComparison(report),
     ...runTimeline(report),
     ...scoringChanges(report),
     ...(report.pipelineEvidence?.n ? ["## Deterministic pipeline evidence", "",

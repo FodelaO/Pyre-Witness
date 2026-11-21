@@ -23,6 +23,9 @@
 .pw-judge-lead, .pw-judge-note, .pw-judge-method { color: var(--pw-text-dim); font-size: .74rem; line-height: 1.4; }
 .pw-judge-lead { margin-top: 5px; }
 .pw-judge-note { margin-top: 8px; }
+.pw-proof-version-notice { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px; margin: 7px 0 9px; color: var(--pw-text-dim); font-size: .74rem; }
+.pw-proof-version-notice strong { color: var(--pw-text); }
+.pw-proof-judge code { overflow-wrap: anywhere; }
 .pw-judge-evidence { margin-top: 12px; }
 .pw-judge-evidence dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 9px 0 0; }
 .pw-judge-evidence dl div { border-left: 1px solid var(--pw-line); padding-left: 9px; }

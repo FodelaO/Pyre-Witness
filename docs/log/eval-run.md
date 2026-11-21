@@ -1,5 +1,24 @@
 # Pyre Witness evaluation runs
 
+## Run 5 connectivity and risk ordering
+
+Run 5 is gated to 15:25 EST or later on November 21, 2026. It collects the system side at four workers and joins the saved fair Hydrogen receipts, including existing naming judgments. The launch manifest records a pipeline source SHA-256 separately from the fingerprint that also covers the collector, dataset, twin and model settings.
+
+Collection started at 15:25:14 EST with pipeline source SHA-256 `a12a09a4a5276acdd7205cc25c819c54a887cc3f988fc4585da44f23f168048f`. The collector recorded the hash in the Run 5 manifest.
+
+```sh
+test "$(date +%H%M)" -ge 1525 && PW_REASONING_THINKING=low npm run eval -- --label run-5 --only system --concurrency 4 --collect-only
+npx tsx eval/snapshot.ts --label run-5 --baseline run-3-baseline
+```
+
+Scoring continues to use Scout’s published profile and the final assessment shown in the results panel. The delta table keeps all matching capture receipts and a common cohort answered by both system versions and Hydrogen. Scout p50 and p95 use the stage latency in each `perception.done` event, including validation and connectivity enrichment. Matched timings use captures with both stage measurements. Run 4 used six workers. The execution conditions differ from Run 5. [Scout gap diagnosis](perception-gap.md)
+
+The collector now cancels and drains its active workers before restoring the HTTP meter on an infrastructure error. That preserves the measurement boundary on interrupted runs. Run 4’s incomplete HTTP counters stay unavailable for cost deltas. The comparison uses request traces as a separate measure.
+
+Run 5 finished at 15:32:44 EST with 69 assessments, two rejections and zero execution errors. The common three-way answered cohort contains 66 captures. Radio recall rose from 4/12 to 12/12, cloud flag accuracy from 6/26 to 23/26, and naming agreement from 33/54 to 42/54. Category accuracy fell from 44/54 to 43/54. Capacity or size match fell from 2/5 to 1/5 across all attempts. Completed-assessment p95 rose by 598 ms across all attempts and request traces rose by 0.14 per capture. Scout p50 and p95 across all published profiles were 5,927 ms and 8,128 ms, versus 6,775 ms and 10,834 ms in Run 4. [Run 5 report](../../eval/report/run-5/REPORT.md) · [Six-line summary](../../eval/report/run-5/SUMMARY.md)
+
+The pipeline and collection fingerprints matched launch. All 71 baseline verdicts and saved naming judgments matched Run 4. The independent report check reproduced all six exact McNemar probabilities and verified 43 delta rows. Typecheck and all 20 eval tests passed, and the validator confirmed the 71 inputs. Chromium rendered `/proof` at both desktop sizes and opened the full delta table with all 43 rows.
+
 ## Deterministic pipeline evidence and Run 4 preparation
 
 The proof strip measures the as-dropped and final recommendations from the same saved captures. Run 3 recorded 37 distinct displayed rules-engine paths across 71 captures (0.52 per capture, in four captures with paths). It recorded 147 completed rule checks across 69 checked captures (2.07 checks per attempted capture, 2 ms median per check, 6 ms median summed per checked capture). Fourteen distinct rule IDs triggered. The receipts do not count every rule invocation. The strip states that these results come from one development set used for iteration and that a held-out set remains unevaluated.

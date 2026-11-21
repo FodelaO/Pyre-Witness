@@ -7,26 +7,34 @@ import type { JudgeArtifact, RunArtifact, Side } from "./types";
 export const RUNS_ROOT = path.join(process.cwd(), "eval", "runs");
 export const REPORT_ROOT = path.join(process.cwd(), "eval", "report");
 
-const SOURCE_DIRS = ["src/gemini", "src/pipeline/server", "src/rules", "src/link"];
-const SOURCE_FILES = [
+const PIPELINE_DIRS = ["src/gemini", "src/pipeline/server", "src/rules", "src/link", "src/twin/seed"];
+const COLLECTOR_FILES = [
   "eval/baseline.ts", "eval/baselineContract.ts", "eval/baselineReuse.ts", "eval/judge.ts", "eval/system.ts", "eval/systemScoring.ts", "eval/prediction.ts", "eval/types.ts",
   "eval/csv.ts", "eval/dataset.ts", "eval/image.ts", "eval/modality.ts", "eval/providerTelemetry.ts", "eval/run.ts",
+  "package-lock.json",
+];
+const PIPELINE_FILES = [
   "src/pipeline/assetFromProfile.ts", "src/pipeline/types.ts", "src/twin/dropPoint.ts", "src/twin/geometry.ts", "src/twin/types.ts",
-  "src/twin/effects.ts", "src/equipment/types.ts", "src/data/attack-ics.ts", "package-lock.json",
+  "src/twin/effects.ts", "src/twin/seed.ts", "src/equipment/types.ts", "src/data/attack-ics.ts", "src/data/compliance.ts",
 ];
 
 export function digest(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-export async function sourceFingerprint(): Promise<string> {
-  const files = [...SOURCE_FILES];
-  for (const folder of SOURCE_DIRS) {
+async function readSources(files: readonly string[]) {
+  return Promise.all([...files].sort().map(async (file) => [file, await readFile(file, "utf8")] as const));
+}
+
+export async function sourceFingerprints() {
+  const files = [...PIPELINE_FILES];
+  for (const folder of PIPELINE_DIRS) {
     const entries = await readdir(folder, { recursive: true, withFileTypes: true });
     files.push(...entries.filter((entry) => entry.isFile() && /(?<!\.test)\.ts$/.test(entry.name))
       .map((entry) => path.join(entry.parentPath, entry.name)));
   }
-  return digest(await Promise.all(files.sort().map(async (file) => [file, await readFile(file, "utf8")])));
+  const [pipeline, collector] = await Promise.all([readSources(files), readSources(COLLECTOR_FILES)]);
+  return { pipeline: digest(pipeline), combined: digest({ pipeline, collector }) };
 }
 
 export async function writeAtomic(file: string, content: string) {
@@ -54,6 +62,7 @@ export async function readJson<T>(file: string): Promise<T | null> {
 export interface Manifest {
   version: 1;
   fingerprint: string;
+  pipelineFingerprint?: string;
   itemIds: string[];
   sides: readonly Side[];
   startedAt: string;
@@ -79,7 +88,7 @@ export interface Cached<T> {
 
 export async function openRun(
   fingerprint: string, itemIds: string[], sides: readonly Side[], resume: boolean,
-  metadata: Pick<Manifest, "label" | "concurrency" | "models" | "thinking" | "baselineContract" | "datasetFingerprint" | "baselineFrom" | "objectAssessment" | "modalityAblation">,
+  metadata: Pick<Manifest, "label" | "concurrency" | "models" | "thinking" | "pipelineFingerprint" | "baselineContract" | "datasetFingerprint" | "baselineFrom" | "objectAssessment" | "modalityAblation">,
 ) {
   await mkdir(RUNS_ROOT, { recursive: true });
   const previous: string[] = [];

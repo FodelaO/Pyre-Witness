@@ -14,6 +14,7 @@ import { readRunSnapshot } from "./runSnapshot";
 import { auditScoring } from "./scoringAudit";
 import { rescoreSystem, SYSTEM_SCORING_METHODS } from "./systemScoring";
 import { SIDES } from "./types";
+import { compareSystemVersions } from "./versionDelta";
 
 export async function refreshEvaluation(reference: string, lastReceipts?: number, baselineReference?: string) {
   const { items, warnings, errors } = await loadDataset();
@@ -28,16 +29,21 @@ export async function refreshEvaluation(reference: string, lastReceipts?: number
   if (lastReceipts === receipts) return { receipts, report: null };
   const run3 = manifest.label === "run-3" ? snapshot : freshBaseline ? await readRunSnapshot("run-3", items) : null;
   const recorded = freshBaseline ? joinBaseline(snapshot, freshBaseline) : snapshot.completed;
-  const completed = manifest.label === "run-4" ? rescoreSystem(recorded) : recorded;
+  const isRun5 = manifest.label === "run-5";
+  const completed = manifest.label === "run-4" || isRun5 ? rescoreSystem(recorded) : recorded;
   const fairComparison = freshBaseline ? compareBaseline(freshBaseline, run3 ?? snapshot, completed) : undefined;
   const priorRows = manifest.label === "run-4" && run3 && freshBaseline ? joinBaseline(run3, freshBaseline) : null;
+  const run4 = isRun5 && freshBaseline ? await readRunSnapshot("run-4", items) : null;
+  if (isRun5 && freshBaseline && !run4) throw new Error("Run 5's delta requires the saved Run 4 system receipts.");
+  const versionDelta = run4 && freshBaseline ? compareSystemVersions(rescoreSystem(joinBaseline(run4, freshBaseline)), completed) : undefined;
+  const archiveLabels = isRun5 ? ["run-1", "run-2", "run-3", "run-4"] : ["run-1", "run-2", "run-3"];
+  const archives = await Promise.all(archiveLabels.filter((label) => label !== manifest.label)
+    .map((label) => readJson<EvaluationReport>(path.join(REPORT_ROOT, label, "latest.json"))));
   const scoringAudit = priorRows && run3
     ? auditScoring(run3.manifest.fingerprint, priorRows, rescoreSystem(priorRows), completed, SYSTEM_SCORING_METHODS) : undefined;
 
   const [run1, run2] = await Promise.all(["run-1", "run-2"].map((label) =>
     label === manifest.label ? snapshot : readRunSnapshot(label, items)));
-  const archives = await Promise.all(["run-1", "run-2", "run-3"].filter((label) => label !== manifest.label)
-    .map((label) => readJson<EvaluationReport>(path.join(REPORT_ROOT, label, "latest.json"))));
   const history = archives.flatMap((entry) => entry ? [summarizeRun(entry)] : []);
   const modalityRun = manifest.modalityAblation ? snapshot : run3 ?? snapshot;
   const eligible = new Set(modalityRun.manifest.itemIds);
@@ -51,14 +57,16 @@ export async function refreshEvaluation(reference: string, lastReceipts?: number
   const report = buildReport(completed, {
     runId: id, label: manifest.label, startedAt: manifest.startedAt,
     date: new Date(lastArtifactMs).toISOString(),
-    fingerprint: manifest.fingerprint, concurrency: manifest.concurrency, models, thinking: manifest.thinking,
+    fingerprint: manifest.fingerprint, pipelineFingerprint: manifest.pipelineFingerprint, concurrency: manifest.concurrency, models, thinking: manifest.thinking,
     baselineContract: manifest.baselineContract ?? "original-output-v1",
     baselineFrom: fairComparison ? undefined : manifest.baselineFrom, objectAssessment: manifest.objectAssessment,
     sides: fairComparison ? SIDES : manifest.sides, dataset: { available: items.length, selected: manifest.itemIds.length, warnings,
       attempted: { ...attempts, baseline: freshBaseline?.attempts.baseline ?? attempts.baseline } },
     reused, judgeCalls: [...judgeCalls, ...(freshBaseline?.judgeCalls ?? [])], items, history, modality,
     modalityFrom: modalityRun.id === id || !modality.enabled ? undefined : modalityRun.manifest.label ?? modalityRun.id,
-    comparison: compareRuns(run1, run2), fairComparison, scoringAudit, pipelineEvidence: summarizePipelineEvidence(snapshot.completed),
+    comparison: compareRuns(run1, run2), fairComparison, versionDelta,
+    scoringAudit: scoringAudit ?? archives.find((entry) => entry?.label === "run-4")?.scoringAudit,
+    pipelineEvidence: summarizePipelineEvidence(snapshot.completed),
   });
   if (freshBaseline && completed.length < snapshot.completed.length) {
     const archivedRun = await readJson<EvaluationReport>(path.join(REPORT_ROOT, manifest.label ?? id, "latest.json"));

@@ -7,7 +7,7 @@ import type { CaptureInput } from "@/pipeline/types";
 import { SEED_TWIN } from "@/twin/seed";
 import { BASELINE_CONTRACT, runBaseline } from "./baseline";
 import { openBaselineSource } from "./baselineReuse";
-import { digest, openRun, sourceFingerprint } from "./cache";
+import { digest, openRun, sourceFingerprints } from "./cache";
 import { DATASET_ROOT, loadDataset, selectItems } from "./dataset";
 import { readDatasetImage } from "./image";
 import { judgeTypes } from "./judge";
@@ -33,6 +33,15 @@ function positiveInteger(value: string | undefined, name: string, max = Number.M
     throw new Error(`--${name} must be a positive integer${max === Number.MAX_SAFE_INTEGER ? "" : ` up to ${max}`}.`);
   }
   return number;
+}
+
+async function settleWork(work: Promise<void>[], interrupted: AbortController) {
+  const settled = await Promise.allSettled(work.map((pending) => pending.catch((error: unknown) => {
+    interrupted.abort(error);
+    throw error;
+  })));
+  const failure = settled.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
 }
 
 async function main() {
@@ -83,11 +92,12 @@ async function main() {
       if (donor.receipts.get(item.id)?.fingerprint !== fingerprint) throw new Error(`Saved baseline input differs for ${item.id}.`);
     }
   }
-  const fingerprint = digest({ sources: await sourceFingerprint(), twin: SEED_TWIN, thinking: THINKING, dataset: items, baselineFrom, modalityAblation });
+  const sources = await sourceFingerprints();
+  const fingerprint = digest({ sources: sources.combined, twin: SEED_TWIN, thinking: THINKING, dataset: items, baselineFrom, modalityAblation });
   const run = await openRun(fingerprint, selected.map(({ id }) => id), sides, options.resume === true, {
     label: options.label, concurrency, thinking: { ...THINKING }, baselineContract: donor?.contract ?? BASELINE_CONTRACT, baselineFrom,
     objectAssessment: true, modalityAblation,
-    datasetFingerprint: digest(items),
+    datasetFingerprint: digest(items), pipelineFingerprint: sources.pipeline,
     models: { baseline: MODEL_IDS.perception, system: [MODEL_IDS.decisions, MODEL_IDS.perception, MODEL_IDS.reasoning, MODEL_IDS.chief], judge: MODEL_IDS.decisions },
   });
   const restoreFetch = installProviderTelemetry();
@@ -112,6 +122,7 @@ async function main() {
   let next = 0;
   console.log(`Evaluating ${selected.length} items with ${sides.join(" and ")} at concurrency ${concurrency} (${options.label ?? run.id}).`);
   console.log(`Artifacts: eval/runs/${run.id}`);
+  console.log(`Pipeline source SHA-256: ${sources.pipeline}`);
   if (donor) console.log(`Reusing ${donor.receipts.size} ${baselineFrom} baseline receipts with identical capture fingerprints.`);
   if (modalityAblation) console.log(`Text-only ablation on ${selected.filter(modalityInput).length} labeled device photos.`);
 
@@ -138,7 +149,7 @@ async function main() {
     }
     const inputFingerprint = digest(input ?? item.input);
 
-    await Promise.all(order.map(async (side) => {
+    await settleWork(order.map(async (side) => {
       if (stop.aborted) return;
       const cached = await run.reuse(item.id, side, inputFingerprint)
         ?? (side === "baseline" ? donor?.receipts.get(item.id) : undefined);
@@ -149,7 +160,7 @@ async function main() {
       evaluated.observations[side] = artifact;
       const calls = artifact.providerCalls;
       console.log(`${item.id} ${side} ${artifact.status}${cached ? " (cached)" : ""}${calls ? ` · ${calls.attempts} calls${calls.rateLimited ? ` (${calls.rateLimited} HTTP 429)` : ""}` : ""}${artifact.error ? ` · ${artifact.error.stage} · ${artifact.error.message}` : ""}`);
-    }));
+    }), interrupted);
 
     const expected = item.expected.deviceType;
     const predictions = order.flatMap((side): [Side, string][] => {
@@ -176,12 +187,12 @@ async function main() {
   }
 
   try {
-    await Promise.all(Array.from({ length: Math.min(selected.length, concurrency) }, async () => {
+    await settleWork(Array.from({ length: Math.min(selected.length, concurrency) }, async () => {
       while (!stop.aborted && next < selected.length) {
         const index = next++;
         await evaluate(selected[index], index);
       }
-    }));
+    }), interrupted);
   } finally {
     clearInterval(refreshTimer);
     await refreshInFlight;
