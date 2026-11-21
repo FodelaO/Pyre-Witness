@@ -33,7 +33,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          try {
+            document.documentElement.dataset.theme = localStorage.getItem("pw-theme") === "light" ? "light" : "dark";
+          } catch {
+            document.documentElement.dataset.theme = "dark";
+          }
+        ` }} />
+      </head>
       <body className="h-full">{children}</body>
     </html>
   );

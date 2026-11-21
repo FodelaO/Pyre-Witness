@@ -1,0 +1,236 @@
+/** Coordinates the standalone handset controls with the local call relay. */
+import { callCommand, listenToCall, randomHex } from "./connection.mjs";
+import { PhoneAudio } from "./phoneAudio.mjs";
+import { maskedNumber, parseContact, readContact, saveContact } from "./roster.mjs";
+
+const page = document.querySelector(".pw-call");
+if (page?.dataset.code) attachPhone(page);
+
+function attachPhone(page) {
+  const code = page.dataset.code;
+  const keyName = `pw:escalation-pair:${code}`;
+  let key = randomHex(16);
+  try {
+    key = sessionStorage.getItem(keyName) ?? key;
+    sessionStorage.setItem(keyName, key);
+  } catch { /* The open tab can use its in-memory key. */ }
+
+  /** @type {import("./connection.mjs").CallConnection} */
+  const connection = { code, key, role: "phone" };
+  const audio = new PhoneAudio();
+  const element = (id) => document.getElementById(id);
+  const show = (id, visible) => { element(id).hidden = !visible; };
+  const text = (id, value) => { element(id).textContent = value || ""; };
+  let snapshot;
+  let contact = readContact();
+  let enabled = false;
+  let connectionError = "";
+  let operationError = "";
+  let voice = "idle";
+  let duration;
+  let pending = "";
+
+  function callStatus(call) {
+    if (call?.approvedAt) return "Action approved";
+    if (call?.acknowledgedAt) return "Acknowledged";
+    if (call?.resolvedAt) return "Alert cleared";
+    if (call?.answeredAt) return "Chief briefing";
+    if (call) return "Incoming call";
+    if (snapshot) return "Ready for calls";
+    return connectionError ? "Call link unavailable" : "Connecting phone";
+  }
+
+  function render() {
+    const call = snapshot?.call;
+    const alert = call?.alert;
+    const answered = !!call?.answeredAt;
+    const terminalAt = call?.approvedAt ?? call?.acknowledgedAt ?? call?.resolvedAt;
+    const ringing = !!call && !answered && !terminalAt;
+    const waiting = !!(call?.approvalRequestedAt && !call.approvalUnavailableAt && !terminalAt);
+    const approvable = !!(alert?.canApprove && !call.approvalUnavailableAt);
+    const loss = alert?.lossText ?? (alert?.loss == null ? "" : `$${alert.loss.toLocaleString("en-US")}`);
+
+    page.dataset.ringing = String(ringing);
+    page.dataset.terminal = String(!!terminalAt);
+    const icon = terminalAt ? "check" : ringing ? "phone" : answered ? "headphones" : "bell";
+    for (const symbol of element("signal").querySelectorAll("[data-icon]")) {
+      symbol.toggleAttribute("hidden", symbol.dataset.icon !== icon);
+    }
+    text("caller", alert?.kind === "simulation" ? "SIMULATION · CHIEF" : "CHIEF · LINE 3");
+    text("headline", callStatus(call));
+    show("where", !!alert);
+    text("tag", alert?.tag ?? "Plant twin");
+    text("room", alert?.room);
+    show("room", !!alert?.room);
+    show("severity", !!alert);
+    show("loss-wrap", !!loss);
+    text("loss", loss);
+    text("finding", alert?.title);
+    show("assumed", !!loss);
+    show("keep-open", !!snapshot && !call);
+    show("call-time", !!terminalAt);
+    if (terminalAt) {
+      const when = new Date(terminalAt);
+      element("call-time").dateTime = when.toISOString();
+      text("call-time", when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    }
+    show("connection-error", !!connectionError);
+    text("connection-error", connectionError);
+    show("operation-error", !!operationError);
+    text("operation-error", operationError);
+
+    show("enable", !!snapshot && !call);
+    element("enable").disabled = enabled;
+    element("enable").querySelector("span").textContent = enabled ? "Ringer enabled" : "Enable ringer";
+    show("incoming", ringing);
+    show("enable-incoming", !enabled);
+    element("answer").disabled = pending === "answer";
+    if (enabled && ringing && !pending) audio.ring();
+    else audio.stopRing();
+
+    show("briefing", answered);
+    text("script", alert?.script);
+    show("response", !terminalAt);
+    show("approve", approvable);
+    show("action", approvable);
+    text("action", alert && `Twin update · ${alert.action}`);
+    show("approval-error", !!call?.approvalUnavailableAt);
+    element("approve").disabled = element("acknowledge").disabled = waiting || !!pending;
+    element("approve").querySelector("span").textContent = waiting ? "Waiting for desktop…" : "Approve action";
+
+    show("generating", voice === "loading");
+    show("audio-error", voice === "error");
+    show("play", voice !== "loading");
+    const durationText = duration === undefined ? "" : ` · ${Math.round(duration)} s`;
+    const playLabel = voice === "playing" ? `Stop${durationText}`
+      : voice === "finished" ? `Replay${durationText}` : voice === "error" ? "Retry audio" : "Play audio";
+    text("play", playLabel);
+
+    show("cellular", !!contact);
+    if (contact) {
+      const mask = maskedNumber(contact.number);
+      element("dial").href = `tel:${contact.number}`;
+      text("dial-name", `Call ${contact.name}`);
+      text("dial-mask", mask);
+      text("contact-mask", mask);
+      element("contact-number").placeholder = mask;
+    }
+  }
+
+  async function send(type, id) {
+    try {
+      await callCommand(connection, { type, id });
+      return true;
+    } catch {
+      operationError = "Could not update the call. Check the phone link.";
+      render();
+      return false;
+    }
+  }
+
+  async function enableRinger() {
+    try {
+      await audio.enable();
+      enabled = true;
+      operationError = "";
+    } catch { operationError = "Ringer unavailable. Keep this screen open."; }
+    render();
+  }
+
+  async function play(alert) {
+    voice = "loading";
+    render();
+    try {
+      await audio.speak(alert.id, alert.script, (seconds) => {
+        duration = seconds;
+        void send("audio-generated", alert.id);
+      }, () => { voice = "finished"; render(); });
+      voice = "playing";
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      voice = "error";
+    }
+    render();
+  }
+
+  async function answer() {
+    const alert = snapshot?.call?.alert;
+    if (!alert || pending) return;
+    const unlock = audio.enable().catch(() => undefined);
+    pending = "answer";
+    operationError = "";
+    render();
+    const answered = await send("answer", alert.id);
+    pending = "";
+    render();
+    if (answered) {
+      await unlock;
+      void play(alert);
+    }
+  }
+
+  async function respond(type) {
+    const alert = snapshot?.call?.alert;
+    if (!alert || pending) return;
+    pending = type;
+    operationError = "";
+    render();
+    await send(type, alert.id);
+    pending = "";
+    render();
+  }
+
+  element("contact-name").value = contact?.name ?? "";
+  element("contact-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const number = element("contact-number");
+    const next = parseContact(element("contact-name").value, number.value || contact?.number || "");
+    show("contact-error", !next);
+    if (!next) { text("contact-error", "Enter a name and a valid phone number."); return; }
+    contact = next;
+    saveContact(next);
+    number.value = "";
+    element("contact").open = false;
+    render();
+  });
+  element("enable").addEventListener("click", enableRinger);
+  element("enable-incoming").addEventListener("click", enableRinger);
+  element("answer").addEventListener("click", answer);
+  element("approve").addEventListener("click", () => void respond("approve"));
+  element("acknowledge").addEventListener("click", () => void respond("acknowledge"));
+  element("dial").addEventListener("click", () => {
+    const alert = snapshot?.call?.alert;
+    if (alert) void send("dial", alert.id);
+  });
+  element("play").addEventListener("click", () => {
+    const alert = snapshot?.call?.alert;
+    if (!alert) return;
+    if (voice === "playing") {
+      audio.stopSpeech();
+      voice = "finished";
+      render();
+    } else void play(alert);
+  });
+
+  render();
+  const stop = listenToCall(connection, (frame) => {
+    if (frame.call?.alert.id !== snapshot?.call?.alert.id) {
+      audio.stopSpeech();
+      voice = "idle";
+      duration = undefined;
+      operationError = "";
+      pending = "";
+    }
+    connectionError = "";
+    snapshot = frame;
+    render();
+  }, (message) => {
+    connectionError = message;
+    render();
+  });
+  window.addEventListener("pagehide", (event) => {
+    if (!event.persisted) { stop(); audio.close(); }
+    else audio.stopRing();
+  });
+  window.addEventListener("pageshow", (event) => { if (event.persisted) render(); });
+}
