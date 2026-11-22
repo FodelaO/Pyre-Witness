@@ -1,5 +1,5 @@
 /** Finds and operates existing app controls without creating alternate action paths. */
-import { pause, type TourContext, type TourTarget } from "./tourMachine";
+import type { TourContext, TourTarget } from "./tourMachine";
 
 export function shown(element: Element): boolean {
   return element.getClientRects().length > 0 && !element.closest("[hidden], [inert]")
@@ -27,7 +27,13 @@ export function activate(element: HTMLButtonElement, signal: AbortSignal) {
   if (!shown(element) || element.disabled || element.getAttribute("aria-disabled") === "true") {
     throw new Error("The control is no longer available.");
   }
+  // The guide presses controls for the presenter but never takes their keyboard focus.
+  const focused = document.activeElement;
   element.click();
+  const moved = document.activeElement;
+  if (moved === focused || !(moved instanceof HTMLElement)) return;
+  if (focused instanceof HTMLElement && focused !== document.body && focused.isConnected) focused.focus({ preventScroll: true });
+  else moved.blur();
 }
 
 export function waitFor<T>(
@@ -78,15 +84,9 @@ export function waitForUi<T>(
   });
 }
 
-export async function pointAt(
-  context: TourContext, find: TourTarget, text: string, readMs = 1200, scroll: ScrollLogicalPosition | false = "nearest",
-): Promise<void> {
+export function pointAt(context: TourContext, find: TourTarget, text: string) {
   context.signal.throwIfAborted();
-  const element = find();
-  if (scroll && element) element.scrollIntoView({ block: scroll, inline: "nearest" });
-  context.show({ text, target: find });
-  // Reading time follows evidence and never substitutes for completion of an action.
-  if (readMs) await pause(readMs, context.signal);
+  return context.show({ text, target: find });
 }
 
 const drawer = button('button.pw-top-risk-mobile');
@@ -99,11 +99,10 @@ export function openResults(signal: AbortSignal) {
   if (toggle?.getAttribute("aria-expanded") === "false") activate(toggle, signal);
 }
 
-export async function openReview(tab: "watch" | "todo", context: TourContext, text: string) {
+export async function openReview(tab: "watch" | "todo", context: TourContext) {
   const { signal } = context;
   openResults(signal);
   const risk = await waitForUi(ready(dial), signal, "The plant risk dial is unavailable.");
-  await pointAt(context, dial, text, 650, false);
   if (risk.getAttribute("aria-expanded") !== "true") activate(risk, signal);
   const findTab = button(`#pw-risk-tab-${tab}`);
   const control = await waitForUi(ready(findTab), signal, "The risk review tab is unavailable.");

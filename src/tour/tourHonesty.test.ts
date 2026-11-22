@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import heldout from "../../eval/heldout/results.json";
 import { TourLock } from "./tourLock";
 import { runTour, type TourCue, type TourFrame, type TourStep } from "./tourMachine";
+import { TourAdvance } from "./tourAdvance";
 
 const here = import.meta.dirname;
 const sources = readdirSync(here)
@@ -42,7 +43,7 @@ describe("no invented numbers or timer-driven steps", () => {
     }
   });
 
-  it("limits timers to read pauses, the per-step skip timeout, and UI polling", () => {
+  it("limits timers to live-caption dwell, the per-step skip timeout, and UI polling", () => {
     const count = (pattern: RegExp) => Object.fromEntries(sources
       .map(({ name, text }) => [name, text.match(pattern)?.length ?? 0] as const).filter(([, n]) => n > 0));
     // tourMachine: pause() and the step timeout. tourDom: a poll that only re-reads real UI state.
@@ -54,19 +55,22 @@ describe("no invented numbers or timer-driven steps", () => {
     vi.useFakeTimers();
     const frames: TourFrame[] = [];
     const next = vi.fn(async () => {});
+    const advance = new TourAdvance();
     const job = runTour([
       { title: "Silent", initial: { text: "Waiting" }, timeoutMs: 10_000, timeoutReason: "No event arrived.", run: () => new Promise(() => {}) },
       { title: "Next", initial: { text: "Next" }, timeoutMs: 100, timeoutReason: "x", run: next },
     ], { title: "Proof", initial: { text: "Proof" }, timeoutMs: 100, timeoutReason: "x", run: async () => {} },
-    new AbortController().signal, (frame) => frames.push(frame), 500);
+    new AbortController().signal, (frame) => frames.push(frame), advance);
     await vi.advanceTimersByTimeAsync(9_999);
     expect(frames.map(({ title, status }) => `${title}:${status}`)).toEqual(["Silent:running"]);
     expect(next).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(frames.at(-1)).toMatchObject({ title: "Silent", status: "skipped", text: "Skipped · No event arrived." });
-    await vi.advanceTimersByTimeAsync(499);
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(next).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
+    expect(advance.press()).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(advance.press()).toBe(true);
     await job;
     expect(next).toHaveBeenCalledTimes(1);
     expect(frames.at(-1)).toMatchObject({ title: "Proof", status: "done" });
@@ -80,7 +84,12 @@ describe("held-out proof caption", () => {
     stubDom({ [proofLink]: [fakeElement()] });
     const { proofStep } = await import("./proofStep");
     const cues: TourCue[] = [];
-    await proofStep.run({ signal: new AbortController().signal, show: (cue) => cues.push(cue) });
+    await proofStep.run({
+      signal: new AbortController().signal,
+      show: (cue) => { cues.push(cue); },
+      showLive: () => {},
+      next: async () => {},
+    });
     return cues.at(-1)?.text;
   }
 
@@ -112,7 +121,7 @@ describe("test escalation cleanup", () => {
     ["Stop or Escape", () => new DOMException("Stopped", "AbortError")],
     ["step timeout", () => new Error("The test escalation did not finish in time.")],
   ])("clears the drill it started on %s", async (_, reason) => {
-    const [{ runTestAlert, TEST_ASSET_ID }, { useTwinStore }, { useEscalationStore }, { operationsSteps }] = await Promise.all([
+    const [{ runTestAlert, TEST_ASSET_ID }, { useTwinStore }, { useEscalationStore }, { createOperations }] = await Promise.all([
       import("@/escalation/testScenario"), import("@/twin/store"), import("@/escalation/store"), import("./operationsSteps"),
     ]);
     stubDom({
@@ -123,9 +132,19 @@ describe("test escalation cleanup", () => {
     expect(hasTest()).toBe(false);
 
     const controller = new AbortController();
-    const step = operationsSteps.find(({ title }) => title === "Review a test escalation")!;
-    const run = step.run({ signal: controller.signal, show: () => {} });
-    await vi.waitFor(() => expect(hasTest()).toBe(true), { timeout: 3000, interval: 20 });
+    const step = createOperations().steps.find(({ title }) => title === "Review a test escalation")!;
+    vi.useFakeTimers();
+    const advance = new TourAdvance();
+    const run = step.run({ signal: controller.signal, show: () => {}, showLive: () => {},
+      next: () => advance.wait(controller.signal, () => {}) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(hasTest()).toBe(false);
+    expect(advance.press()).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(hasTest()).toBe(false);
+    expect(advance.press()).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(hasTest()).toBe(true);
     controller.abort(reason());
     await expect(run).rejects.toBeDefined();
     expect(hasTest()).toBe(false);
@@ -156,8 +175,10 @@ describe("single live tour", () => {
 
   it("launches every run through the shared lock", () => {
     const launcher = sources.find(({ name }) => name === "PlayDemo.tsx")!.text;
-    expect(launcher).toMatch(/const controller = tourLock\.acquire\(\);\s*if \(!controller\) return;/);
-    expect(launcher).toMatch(/useEffect\(\(\) => \(\) => tourLock\.stop\(\), \[\]\)/);
+    const controller = sources.find(({ name }) => name === "controller.ts")!.text;
+    expect(launcher).toContain("tourController.start");
+    expect(launcher).toContain("tourController.stop");
+    expect(controller).toContain("tourLock.acquire()");
     expect(launcher).not.toMatch(/new AbortController\(/);
   });
 });

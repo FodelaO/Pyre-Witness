@@ -5,17 +5,18 @@ import { cancelRun } from "@/pipeline/client";
 import { pipelineBus } from "@/pipeline/bus";
 import { useRunStore } from "@/pipeline/runStore";
 import { useTwinStore } from "@/twin/store";
+import { OPTION_CONTROL, type TourEvidence } from "./tourEvidence";
 import {
   activate, button, closeDrawer, crew, openResults, pointAt, ready, shown, target, waitFor, waitForUi,
 } from "./tourDom";
-import { pause, type TourStep } from "./tourMachine";
+import type { TourStep } from "./tourMachine";
 
 const add = button('button[aria-label="Add a device"]');
 const upload = button('.pw-capture-toolbar button[aria-label="Upload"]');
 const sample = button('button[aria-label="Run S7-300 PLC sample photo"]');
 const collapse = button('button[aria-label="Collapse capture"]');
 const sampleError = target('[aria-label="Sample photos"] [role="alert"]');
-const optionsUse = button('section:is([aria-label="Better option"], [aria-label="Better options"]) button[aria-label^="Use "]');
+const optionsUse = button(OPTION_CONTROL);
 
 const pipelineLines = {
   "perception.started": "Scout reads the photo.",
@@ -25,61 +26,62 @@ const pipelineLines = {
   "summary.started": "Chief prepares the briefing.",
 } as const;
 
-function resultSection(label: string) {
+function resultHeading(label: string) {
   return () => Array.from(document.querySelectorAll("#pw-results .pw-panel-heading"))
     .find((heading) => shown(heading) && heading.querySelector("h2")?.textContent?.trim().startsWith(label))
-    ?.closest(".pw-panel-section") ?? null;
+    ?? null;
 }
 
-export function captureSteps(): TourStep[] {
-  let completedAsset: string | null = null;
+export function captureSteps(evidence: TourEvidence): TourStep[] {
   const placed = () => {
+    const completedAsset = evidence.capture()?.id;
     if (!completedAsset || useRunStore.getState().placedAssetId !== completedAsset) return null;
     const id = CSS.escape(completedAsset);
     const label = target('.pw3d-label[data-placed="true"]')();
     return label ?? target(`[data-floor-asset="${id}"] .pw-floor-symbol, .pw-purdue [data-asset="${id}"]`)();
   };
-  const risks = resultSection("Risks");
-  const placement = resultSection("Where it goes");
+  const risks = resultHeading("Risks");
+  const placement = resultHeading("Where it goes");
 
   return [
     {
       title: "Add new equipment",
       initial: { text: "Open capture for the S7-300 PLC photo.", target: add },
-      timeoutMs: 130_000,
+      timeoutMs: 142_000,
       timeoutReason: "The photo analysis or briefing did not finish in time.",
       async run(context) {
-        const { signal, show } = context;
-        const close = closeDrawer();
-        if (close) activate(close, signal);
-        const addButton = await waitForUi(ready(add), signal, "Capture is busy or unavailable.");
-        await pointAt(context, add, "Open capture for the S7-300 PLC photo.", 900);
-        if (addButton.getAttribute("aria-expanded") !== "true") activate(addButton, signal);
-        const uploadButton = await waitForUi(ready(upload), signal, "The Upload control is unavailable.");
-        await pointAt(context, upload, "Choose Upload.", 700);
-        activate(uploadButton, signal);
+        const { signal, show, showLive } = context;
+        await context.next();
+        if (!ready(sample)()) {
+          const close = closeDrawer();
+          if (close) activate(close, signal);
+          const addButton = await waitForUi(ready(add), signal, "Capture is busy or unavailable.");
+          if (addButton.getAttribute("aria-expanded") !== "true") activate(addButton, signal);
+          // Opening Upload is one action from the presenter's perspective. The fan closes on outside clicks.
+          const uploadButton = await waitForUi(ready(upload), signal, "The Upload control is unavailable.");
+          activate(uploadButton, signal);
+        }
 
         const photo = await waitForUi(ready(sample), signal, "The S7-300 sample photo is unavailable.");
-        await pointAt(context, sample, "Submit the S7-300 PLC sample.", 950);
+        await pointAt(context, sample, "Submit the S7-300 PLC sample.");
+        await context.next();
         const previousSampleError = sampleError();
         const previousRun = useRunStore.getState().runId;
+        if (useRunStore.getState().status === "running") {
+          throw new Error("A capture is already running.");
+        }
         let runId: string | null = null;
+        let completedAsset: string | null = null;
         let clicked = false;
         let failure: string | null = null;
         let finished = false;
         let briefingModel: string | undefined;
-        let captions = Promise.resolve();
         const presented = new Set<string>();
 
         function present(text: string) {
           if (presented.has(text)) return;
           presented.add(text);
-          // Preserve brief stages that can arrive in the same network chunk.
-          captions = captions.then(async () => {
-            signal.throwIfAborted();
-            show({ target: crew, text });
-            await pause(950, signal);
-          }).catch(() => {});
+          showLive({ target: crew, text });
         }
 
         try {
@@ -120,14 +122,14 @@ export function captureSteps(): TourStep[] {
               observer.disconnect();
             };
           }, () => {
+            show({ target: crew, text: "Waiting for the photo analysis." });
             activate(photo, signal);
             clicked = true;
-            show({ target: crew, text: "Waiting for the photo analysis." });
           });
           if ("error" in result) throw new Error(result.error);
           if (!result.asset) throw new Error(useRunStore.getState().gate?.reason ?? "The capture did not place a device.");
-          await captions;
           if (briefingModel !== MODEL_IDS.chief) throw new Error("Gemini briefing unavailable. Placement is ready.");
+          await show({ target: crew, text: "Photo analysis and Gemini briefing complete." });
         } finally {
           if (signal.aborted && clicked) {
             const state = useRunStore.getState();
@@ -141,9 +143,11 @@ export function captureSteps(): TourStep[] {
     {
       title: "See the placement risks",
       initial: { text: "Find the captured device in the twin.", target: placed },
-      timeoutMs: 16_000,
+      timeoutMs: 22_000,
       timeoutReason: "The placement or risk panel did not appear.",
       async run(context) {
+        await context.next();
+        const completedAsset = evidence.capture()?.id;
         if (!completedAsset) throw new Error("No completed photo placement.");
         const { signal } = context;
         const state = useTwinStore.getState();
@@ -153,39 +157,46 @@ export function captureSteps(): TourStep[] {
         const close = closeDrawer();
         if (close) activate(close, signal);
         await waitForUi(placed, signal, "The asset is outside the current view.", 3500);
-        await pointAt(context, placed, `${asset.id} is in the simulated plant.`, 1600, false);
+        await pointAt(context, placed, `${asset.id} is in the simulated plant.`);
+        await context.next("Open the placement result.");
 
         openResults(signal);
         const answer = await waitForUi(placement, signal, "The placement result is unavailable.");
-        await pointAt(context, placement, answer.querySelector("[data-held]")
-          ? "The report puts placement on hold." : "Review the recommended location.", 1600, "start");
+        await pointAt(context, placement, answer.closest(".pw-panel-section")?.querySelector("[data-held]")
+          ? "The report puts placement on hold." : "Review the recommended location.");
+        await context.next("Read the assessed risks.");
         await waitForUi(risks, signal, "The capture risk results are unavailable.");
         const count = useRunStore.getState().assessment?.risks.length;
         await pointAt(context, risks, count === undefined ? "Review the assessed risks."
-          : `${count} ${count === 1 ? "risk" : "risks"} reported for the device.`, 1600, "start");
+          : `${count} ${count === 1 ? "risk" : "risks"} reported for the device.`);
+        evidence.reviewPlacement(asset.id);
       },
     },
     {
       title: "Try a better option",
       initial: { text: "Check for a lower-risk option.", target: risks },
-      timeoutMs: 13_000,
+      timeoutMs: 18_000,
       timeoutReason: "A qualifying option did not appear.",
       async run(context) {
-        if (!completedAsset || useTwinStore.getState().selectedId !== completedAsset) {
-          throw new Error("No captured device is selected.");
-        }
+        await context.next();
+        const completedAsset = evidence.capture()?.id;
+        if (!completedAsset) throw new Error("No captured device is available.");
+        const store = useTwinStore.getState();
+        if (store.selectedId !== completedAsset) store.select(completedAsset);
         openResults(context.signal);
         const use = await waitForUi(ready(optionsUse), context.signal, "No better option appeared for this device.", 7500);
-        const row = () => optionsUse()?.closest("article") ?? null;
-        await pointAt(context, row, "Apply the option shown on the simulated twin.", 1500, "center");
+        await pointAt(context, optionsUse, "Apply the option shown on the simulated twin.");
+        await context.next();
         const current = ready(optionsUse)();
         if (current !== use || useTwinStore.getState().selectedId !== completedAsset) {
           throw new Error("The option changed before it could be applied.");
         }
-        const before = useTwinStore.getState().twin;
+        const before = evidence.capture();
         activate(use, context.signal);
-        if (useTwinStore.getState().twin === before) throw new Error("The option could not be applied.");
-        await pointAt(context, placed, "The twin updated.", 850, false);
+        const after = evidence.capture();
+        if (!after || after.id !== completedAsset || after === before) throw new Error("The option could not be applied.");
+        evidence.applyOption(after.id);
+        await pointAt(context, placed, "The twin updated.");
       },
     },
   ];

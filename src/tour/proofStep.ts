@@ -1,5 +1,5 @@
 /** Reads the closing comparison from the same held-out artifact used by Proof. */
-import { pointAt, target, waitForUi } from "./tourDom";
+import { pointAt, target } from "./tourDom";
 import type { TourStep } from "./tourMachine";
 
 const proof = target('a[href="/proof"][aria-label="Proof"]');
@@ -20,7 +20,6 @@ export const proofStep: TourStep = {
       return `${percent.format(metric.system.value)} vs ${percent.format(metric.baseline.value)}`;
     };
 
-    await waitForUi(proof, context.signal, "The Proof icon is unavailable.");
-    await pointAt(context, proof, `Key-risk recall ${compare("riskRecall")} · Device naming ${compare("deviceTypeMatch")}.`, 0, false);
+    await pointAt(context, proof, `Key-risk recall ${compare("riskRecall")} · Device naming ${compare("deviceTypeMatch")}.`);
   },
 };

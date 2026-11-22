@@ -4,6 +4,7 @@ import { atRecommendedPlacement } from "@/pipeline/assetFromProfile";
 import { moveToRecommended } from "@/pipeline/client";
 import { useRunStore } from "@/pipeline/runStore";
 import { evaluatePlacement } from "@/rules/engine";
+import { tourController } from "@/tour/controller";
 import { assetById } from "@/twin/geometry";
 import { useTwinStore } from "@/twin/store";
 import type { VoiceSnapshot } from "./context";
@@ -41,6 +42,13 @@ export function actForChief(call: VoiceToolCall, spokenRunId: string | null): Re
   const { response, command } = dispatchVoiceTool(call, snapshot, spokenRunId);
   const store = useTwinStore.getState();
   switch (command?.type) {
+    case "demo": {
+      if (command.action === "status") return { output: tourController.status() };
+      const accepted = command.action === "goTo"
+        ? tourController.goTo(command.stepId)
+        : tourController[command.action]();
+      return { output: { accepted, ...tourController.status() } };
+    }
     case "select":
       useChiefPath.setState({ pathId: null });
       store.select(command.assetId);

@@ -1,68 +1,67 @@
-/** Mounts the live demo control and owns its start, stop, and replay lifecycle. */
+/** Mounts the demo card and controls for the shared tour controller. */
 "use client";
 
-import { Play, Square } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowRight, Play, Square } from "lucide-react";
+import { useEffect, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
+import { tourController, useTourStore } from "./controller";
 import { TourSpotlight } from "./TourSpotlight";
-import { tourLock } from "./tourLock";
-import type { TourFrame } from "./tourMachine";
+import { handleTourArrow, isEditing } from "./tourAdvance";
 import "./tour.css";
 
 export default function PlayDemo() {
-  const [running, setRunning] = useState(false);
-  const [frame, setFrame] = useState<TourFrame | null>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const visible = running || frame !== null;
+  const { frame, completed } = useTourStore();
+  const visible = frame !== null;
+  const running = visible && frame.status !== "done";
+  const canAdvance = frame?.status === "ready" || frame?.status === "skipped";
 
-  function stop() {
-    tourLock.stop();
-    setRunning(false);
-    setFrame(null);
-    trigger.current?.focus({ preventScroll: true });
+  // A pointer press on Next always counts; only the ArrowRight shortcut defers to an open editor.
+  function next() {
+    tourController.next();
   }
 
-  async function start() {
-    const controller = tourLock.acquire();
-    if (!controller) return;
-    setFrame(null);
-    setRunning(true);
-    try {
-      const [{ runTour }, { captureSteps }, { operationsSteps }, { proofStep }] = await Promise.all([
-        import("./tourMachine"), import("./captureSteps"), import("./operationsSteps"), import("./proofStep"),
-      ]);
-      await runTour([...captureSteps(), ...operationsSteps], proofStep, controller.signal, setFrame);
-    } catch {
-      if (!controller.signal.aborted) {
-        setFrame({ index: 6, total: 6, status: "done", title: "Live demo unavailable", text: "Skipped · The demo could not load." });
-      }
-    } finally {
-      if (tourLock.release(controller)) setRunning(false);
-    }
+  function preserveEditor(event: MouseEvent<HTMLButtonElement>) {
+    if (isEditing(document.activeElement)) event.preventDefault();
   }
 
-  useEffect(() => () => tourLock.stop(), []);
+  useEffect(() => () => { tourController.stop(); }, []);
   useEffect(() => {
     if (!visible) return;
     function escape(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      stop();
+      // Bubble phase: an Escape that closes a chat, popover, or capture card is not a demo stop.
+      if (event.key === "Escape" && !event.defaultPrevented) tourController.stop();
     }
-    window.addEventListener("keydown", escape, true);
-    return () => window.removeEventListener("keydown", escape, true);
+    function arrow(event: KeyboardEvent) {
+      handleTourArrow(event, document.activeElement, tourController.next);
+    }
+    window.addEventListener("keydown", escape);
+    window.addEventListener("keydown", arrow);
+    return () => {
+      window.removeEventListener("keydown", escape);
+      window.removeEventListener("keydown", arrow);
+    };
   }, [visible]);
 
   return (
-    <>
-      <button type="button" ref={trigger} className="pw-tour-launch" data-running={running}
-        aria-label={running ? "Stop demo" : "Play demo"}
-        aria-keyshortcuts={running ? "Escape" : undefined}
-        title={running ? "Stop the live demo (Esc)" : "Play the live demo"}
-        onClick={running ? stop : start}>
-        {running ? <Square size={14} fill="currentColor" aria-hidden /> : <Play size={15} fill="currentColor" aria-hidden />}
+    <div className="pw-tour-controls">
+      <button type="button" className="pw-tour-launch" data-running={running}
+        aria-label={running ? "Next demo step" : "Play demo"}
+        aria-keyshortcuts={running ? "ArrowRight" : undefined}
+        title={running ? "Next demo step (→)" : "Play the live demo"}
+        aria-disabled={running && !canAdvance}
+        onMouseDown={preserveEditor}
+        onClick={running ? next : tourController.start}>
+        {running ? <ArrowRight size={15} aria-hidden /> : <Play size={15} fill="currentColor" aria-hidden />}
       </button>
-      {frame && createPortal(<TourSpotlight frame={frame} replay={start} dismiss={stop} />, document.body)}
-    </>
+      {visible && <button type="button" className="pw-tour-launch" aria-label="Stop demo"
+        aria-keyshortcuts="Escape" title="Stop the live demo (Esc)"
+        onMouseDown={preserveEditor} onClick={tourController.stop}>
+        <Square size={12} fill="currentColor" aria-hidden />
+      </button>}
+      {frame && createPortal(
+        <TourSpotlight frame={frame} completed={completed} next={next} preserveEditor={preserveEditor} />,
+        document.body,
+      )}
+    </div>
   );
 }

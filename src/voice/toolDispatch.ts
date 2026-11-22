@@ -1,6 +1,7 @@
 /** Validates model tool requests and returns only authorized local twin commands. */
 import { capturedAssetId } from "@/pipeline/assetFromProfile";
 import { explainRule } from "@/rules/engine";
+import { isTourStepId, type TourStepId } from "@/tour/stepIds";
 import type { AttackPath, RuleFinding, ViewMode } from "@/twin/types";
 import { summarizeFinding, type VoiceSnapshot } from "./context";
 
@@ -14,7 +15,17 @@ export type VoiceCommand =
   | { type: "select"; assetId: string }
   | { type: "view"; view: ViewMode }
   | { type: "highlight"; pathId: string; assetId: string | null }
-  | { type: "move"; assetId: string };
+  | { type: "move"; assetId: string }
+  | { type: "demo"; action: "start" | "next" | "previous" | "stop" | "status" }
+  | { type: "demo"; action: "goTo"; stepId: TourStepId };
+
+const demoActions = {
+  start_demo: "start",
+  next_demo_step: "next",
+  previous_demo_step: "previous",
+  stop_demo: "stop",
+  demo_status: "status",
+} as const;
 
 export type ToolDecision = { response: Record<string, unknown>; command?: VoiceCommand };
 
@@ -35,6 +46,18 @@ export function voicePath(id: string, current: readonly AttackPath[], check: rea
 export function dispatchVoiceTool({ name, args }: VoiceToolCall, { twin, risk, run, selectedId }: VoiceSnapshot,
   spokenRunId: string | null): ToolDecision {
   switch (name) {
+    case "start_demo":
+    case "next_demo_step":
+    case "previous_demo_step":
+    case "stop_demo":
+    case "demo_status":
+      if (args && Object.keys(args).length) return reject("This demo action takes no arguments.");
+      return { response: {}, command: { type: "demo", action: demoActions[name] } };
+    case "go_to_demo_step": {
+      const stepId = stringArg(args, "stepId");
+      if (!isTourStepId(stepId)) return reject("Choose a valid demo step ID.");
+      return { response: {}, command: { type: "demo", action: "goTo", stepId } };
+    }
     case "select_asset": {
       const id = stringArg(args, "id");
       const asset = twin.assets.find((item) => item.id === id);

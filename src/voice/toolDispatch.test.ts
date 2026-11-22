@@ -4,6 +4,9 @@ import { capturedAssetId } from "@/pipeline/assetFromProfile";
 import { useRunStore } from "@/pipeline/runStore";
 import type { Assessment, DeviceProfile } from "@/pipeline/types";
 import { evaluateTwin } from "@/rules/engine";
+import { tourController } from "@/tour/controller";
+import { TOUR_STEP_IDS } from "@/tour/stepIds";
+import { chiefSetup } from "@/app/api/voice/session/setup";
 import { areaCenter } from "@/twin/geometry";
 import { SEED_TWIN } from "@/twin/seed";
 import { useTwinStore } from "@/twin/store";
@@ -46,12 +49,35 @@ const snapshot: VoiceSnapshot = {
 const move: VoiceToolCall = { name: "move_device_to_recommended" };
 
 afterEach(() => {
+  tourController.stop();
   useRunStore.getState().reset();
   useTwinStore.getState().reset();
   useChiefPath.setState({ pathId: null });
 });
 
 describe("Chief tool dispatch", () => {
+  it("uses the same controller for all six demo tools and rejects invalid jumps", async () => {
+    const declarations = chiefSetup.tools[0].functionDeclarations;
+    expect(declarations.find(({ name }) => name === "go_to_demo_step")?.parameters?.properties.stepId.enum)
+      .toEqual(TOUR_STEP_IDS);
+    const tool = (name: string, args?: VoiceToolCall["args"]) => actForChief({ name, args }, null);
+    expect(tool("demo_status")).toMatchObject({ output: { status: "inactive", stepId: null, done: false } });
+    expect(tool("start_demo")).toMatchObject({ output: { accepted: true, stepId: "capture" } });
+    expect(tool("start_demo")).toMatchObject({ output: { accepted: false, stepId: "capture" } });
+    expect(tool("go_to_demo_step", { stepId: "not-a-step" })).toHaveProperty("error");
+    expect(tool("go_to_demo_step", { stepId: "proof", extra: 1 })).toHaveProperty("error");
+    expect(tool("go_to_demo_step", { stepId: "proof" })).toMatchObject({ output: { accepted: true, stepId: "proof" } });
+    expect(tool("previous_demo_step")).toMatchObject({ output: { accepted: true, stepId: "clear-test" } });
+    expect(tool("go_to_demo_step", { stepId: "proof" })).toHaveProperty("output.accepted", true);
+    await Promise.resolve();
+    expect(tool("demo_status")).toMatchObject({ output: {
+      status: "ready", stepId: "proof", title: "Held-out proof vs one call", done: false,
+      suggestedNextAction: "Read the held-out comparison.",
+    } });
+    expect(tool("next_demo_step")).toMatchObject({ output: { accepted: true, stepId: "proof", status: "running" } });
+    expect(tool("stop_demo")).toMatchObject({ output: { accepted: true, status: "inactive" } });
+    expect(tourController.status().stepId).toBeNull();
+  });
   it("selects known assets and only accepts the three existing views", () => {
     expect(dispatchVoiceTool({ name: "select_asset", args: { id: assetId } }, snapshot, runId).command)
       .toEqual({ type: "select", assetId });

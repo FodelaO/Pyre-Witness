@@ -389,6 +389,7 @@
 .pw-top-proof-icon { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; opacity: .72; }
 .pw-top-proof-icon:hover, .pw-top-proof-icon:focus-visible { opacity: 1; }
 
+.pw-tour-controls { display: inline-flex; align-items: center; gap: 3px; }
 .pw-tour-launch {
   display: inline-grid;
   width: 28px;
@@ -403,4 +404,9 @@
   border-color: var(--pw-line-strong);
   background: var(--pw-panel-2);
   color: var(--pw-text);
+}
+
+.pw-tour-launch[aria-disabled="true"] { opacity: .48; cursor: default; }
+@media (width < 560px) {
+  .pw-tour-controls .pw-tour-launch { width: 24px; }
 }
