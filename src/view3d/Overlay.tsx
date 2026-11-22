@@ -53,7 +53,7 @@ const NEAR_TAG_DISTANCE = 62;
 const CREW_STEM = { resting: 8, active: 16 };
 const CREW_GAP = 5;
 /** A lifted plate drops to a lower free slot only after that slot stays free this long (anti-blink). */
-const CREW_DROP_HOLD_MS = 300;
+const CREW_DROP_HOLD_MS = 1200;
 type PlateSize = Pick<LabelBox, "width" | "height">;
 type CrewBox = LabelBox & { stemShift?: number };
 
@@ -130,7 +130,7 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
   const elements = useRef(new Map<string, HTMLDivElement>());
   const plateSizes = useRef(new Map<CrewId, PlateSize>());
   // Last applied plate lift per crew member, so stacking is sticky between frames.
-  const lifts = useRef(new Map<CrewId, { lift: number; lowerSince?: number }>());
+  const lifts = useRef(new Map<CrewId, { lift: number; lower?: { lift: number; since: number } }>());
   const work = useRef<CrewWorkLabelsHandle>(null);
   const motion = useRef<CrewWorkMotionHandle>(null);
   const labelled = useMemo(() => scene.nodes.filter((node) => node.label), [scene]);
@@ -172,10 +172,7 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
       // lower slot has stayed free for CREW_DROP_HOLD_MS (a single step, no sweep over the tags).
       const crewBoxes: CrewBox[] = [...reserved];
       const walkers: CrewBox[] = [];
-      // Resting plates claim their slot first, so a walker passing by lifts over them, not the reverse.
-      const walking = (id: CrewId) => Number(!!elements.current.get("crew:" + id)?.dataset.walking);
-      const crewOrder = [...CREW_ORDER].sort((a, b) => walking(a) - walking(b));
-      for (const id of crewOrder) {
+      for (const id of CREW_ORDER) {
         const key = "crew:" + id;
         const element = elements.current.get(key);
         const size = plateSizes.current.get(id);
@@ -204,14 +201,16 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
         const lowest = freeFrom(stem);
         const held = previous ? freeFrom(Math.max(stem, previous.lift)) : lowest;
         let lift = held;
-        let lowerSince: number | undefined;
+        let lower: { lift: number; since: number } | undefined;
         if (lowest < held) {
-          lowerSince = previous?.lowerSince ?? now;
-          if (now - lowerSince >= CREW_DROP_HOLD_MS) { lift = lowest; lowerSince = undefined; }
+          // The same lower slot (within a few px) must stay free for the whole hold, not just any gap.
+          const pending = previous?.lower;
+          lower = pending && Math.abs(pending.lift - lowest) <= 4 ? pending : { lift: lowest, since: now };
+          if (now - lower.since >= CREW_DROP_HOLD_MS) { lift = lowest; lower = undefined; }
           else invalidate(); // keep frames coming so the pending drop lands even on a still scene
         }
         if (screen.y - lift - size.height < 4) continue;
-        lifts.current.set(id, { lift, lowerSince });
+        lifts.current.set(id, { lift, lower });
         const box: CrewBox = { id: key, x, y: screen.y, lift, ...size, priority: 9e5, forced: true, stemShift: screen.x - x };
         crewBoxes.push(box);
         // A walking plate floats over the plant tags instead of evicting them frame by frame (the tag blink);
