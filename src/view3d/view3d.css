@@ -60,7 +60,8 @@
   letter-spacing: 0.02em;
   white-space: nowrap;
   opacity: 0;
-  transition: opacity 140ms ease-out;
+  /* visibility rides along so a hidden tag fades out instead of popping (anti-blink). */
+  transition: opacity 140ms ease-out, visibility 140ms;
   will-change: transform, opacity;
 }
 
@@ -126,7 +127,8 @@
   display: grid;
   justify-items: center;
   opacity: 0;
-  transition: opacity 140ms ease-out;
+  /* visibility rides along so a hidden tag fades out instead of popping (anti-blink). */
+  transition: opacity 140ms ease-out, visibility 140ms;
   will-change: transform, opacity;
 }
 .pw3d-crew-plate {

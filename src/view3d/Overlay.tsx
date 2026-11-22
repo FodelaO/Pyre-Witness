@@ -52,6 +52,8 @@ const ALWAYS_TAG_PRIORITY = 120;
 const NEAR_TAG_DISTANCE = 62;
 const CREW_STEM = { resting: 8, active: 16 };
 const CREW_GAP = 5;
+/** A lifted plate drops to a lower free slot only after that slot stays free this long (anti-blink). */
+const CREW_DROP_HOLD_MS = 300;
 type PlateSize = Pick<LabelBox, "width" | "height">;
 type CrewBox = LabelBox & { stemShift?: number };
 
@@ -127,6 +129,8 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
   const flags = useFlagStore((state) => state.flags);
   const elements = useRef(new Map<string, HTMLDivElement>());
   const plateSizes = useRef(new Map<CrewId, PlateSize>());
+  // Last applied plate lift per crew member, so stacking is sticky between frames.
+  const lifts = useRef(new Map<CrewId, { lift: number; lowerSince?: number }>());
   const work = useRef<CrewWorkLabelsHandle>(null);
   const motion = useRef<CrewWorkMotionHandle>(null);
   const labelled = useMemo(() => scene.nodes.filter((node) => node.label), [scene]);
@@ -163,38 +167,57 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
       motion.current?.update(frame);
 
       // Crew stand on their real floor position; plates that would overlap are lifted on longer stems.
+      // Stable stacking order and sticky lifts: a plate never flips between stack slots when a neighbour
+      // moves a pixel or an active flag flips. It rises at once when it must, and drops only after the
+      // lower slot has stayed free for CREW_DROP_HOLD_MS (a single step, no sweep over the tags).
       const crewBoxes: CrewBox[] = [...reserved];
-      const crewPriority = (id: CrewId) => {
-        const data = elements.current.get("crew:" + id)?.dataset;
-        return 2 * Number(!!data?.emphasized) + Number(!!data?.active);
-      };
-      const crewOrder = [...CREW_ORDER].sort((a, b) => crewPriority(b) - crewPriority(a));
+      const walkers: CrewBox[] = [];
+      // Resting plates claim their slot first, so a walker passing by lifts over them, not the reverse.
+      const walking = (id: CrewId) => Number(!!elements.current.get("crew:" + id)?.dataset.walking);
+      const crewOrder = [...CREW_ORDER].sort((a, b) => walking(a) - walking(b));
       for (const id of crewOrder) {
         const key = "crew:" + id;
         const element = elements.current.get(key);
         const size = plateSizes.current.get(id);
+        const previous = lifts.current.get(id);
+        lifts.current.delete(id);
         if (!element || !size) continue;
         const point = crewPosition(id, now);
         const screen = projectToScreen(viewProjection, toWorld(point.x, point.y, 0.1), width, height);
         if (!screen.visible || screen.x < 0 || screen.x > width || size.width + 8 > width) continue;
         const x = Math.max(size.width / 2 + 4, Math.min(width - size.width / 2 - 4, screen.x));
         const stem = element.dataset.compact ? CREW_STEM.resting : CREW_STEM.active;
-        let lift = stem;
-        for (;;) {
-          const bottom = screen.y - lift;
-          const clash = crewBoxes.find((other) => {
-            const otherBottom = other.y - (other.lift ?? 0);
-            return Math.abs(other.x - x) < (other.width + size.width) / 2 + CREW_GAP
-              && bottom > otherBottom - other.height - CREW_GAP && bottom - size.height < otherBottom + CREW_GAP;
-          });
-          if (!clash) break;
-          // Round up past the clearance to keep repeated projections stable at subpixel anchors.
-          lift = Math.floor(screen.y - clash.y + (clash.lift ?? 0) + clash.height + CREW_GAP) + 1;
+        const freeFrom = (start: number) => {
+          let lift = start;
+          for (;;) {
+            const bottom = screen.y - lift;
+            const clash = crewBoxes.find((other) => {
+              const otherBottom = other.y - (other.lift ?? 0);
+              return Math.abs(other.x - x) < (other.width + size.width) / 2 + CREW_GAP
+                && bottom > otherBottom - other.height - CREW_GAP && bottom - size.height < otherBottom + CREW_GAP;
+            });
+            if (!clash) return lift;
+            // Round up past the clearance to keep repeated projections stable at subpixel anchors.
+            lift = Math.floor(screen.y - clash.y + (clash.lift ?? 0) + clash.height + CREW_GAP) + 1;
+          }
+        };
+        const lowest = freeFrom(stem);
+        const held = previous ? freeFrom(Math.max(stem, previous.lift)) : lowest;
+        let lift = held;
+        let lowerSince: number | undefined;
+        if (lowest < held) {
+          lowerSince = previous?.lowerSince ?? now;
+          if (now - lowerSince >= CREW_DROP_HOLD_MS) { lift = lowest; lowerSince = undefined; }
+          else invalidate(); // keep frames coming so the pending drop lands even on a still scene
         }
         if (screen.y - lift - size.height < 4) continue;
+        lifts.current.set(id, { lift, lowerSince });
         const box: CrewBox = { id: key, x, y: screen.y, lift, ...size, priority: 9e5, forced: true, stemShift: screen.x - x };
         crewBoxes.push(box);
-        boxes.push(box);
+        // A walking plate floats over the plant tags instead of evicting them frame by frame (the tag blink);
+        // a resting plate still clears its spot through declutter.
+        if (element.dataset.walking) walkers.push(box);
+        else boxes.push(box);
       }
 
       for (const node of nodes.current) {
@@ -233,6 +256,7 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
         });
       }
       const shown = declutter(boxes);
+      for (const box of walkers) shown.set(box.id, { x: box.x, y: box.y });
       work.current?.place(shown);
       for (const box of crewBoxes) {
         if (box.lift === undefined) continue;
@@ -255,7 +279,7 @@ export default function Overlay({ ref, scene, selectedId, hoveredId, highlighted
         if (element.style.transform !== transform) element.style.transform = transform;
       }
     },
-  }), [tools, briefing, flagged]);
+  }), [tools, briefing, flagged, invalidate]);
 
   return (
     <div className="pw3d-overlay" aria-hidden="true">

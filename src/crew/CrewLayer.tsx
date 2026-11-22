@@ -115,18 +115,19 @@ export default function CrewLayer() {
           {protectedLabels.map(({ x, y, w, h }, index) => <rect key={index} x={x} y={y} width={w} height={h} fill="black" />)}
         </mask>
       </defs>
-      {/* Walks may cross a room threshold. Keep the floor labels readable during the crossing. */}
+      {/* Floor overlays keep the labels readable; the crew avatars themselves are drawn unmasked below. */}
       <g mask={`url(#${clearanceMask})`}>
         <CrewOffice room={office} building={plant.building} away={deskAway} scale={seatedScale} idPrefix={idPrefix} />
         {proposal && <ArchitectureOverlay effect={proposal} twin={twin} marker={`${idPrefix}-recommendation`} label={proposalLabel} scale={scale} />}
         {visuals.inspector && <InspectionOverlay key={visuals.inspector.at} displayed={visuals.inspector} scale={scale} label={checkLabel} />}
         {handoffs.map((handoff) => <HandoffPulse key={handoff.id} handoff={handoff} />)}
-        {crew.map(({ id, avatar, size, desk }) => (
-          <Avatar key={id} member={CREW[id]} avatar={avatar} idPrefix={idPrefix} scale={size} desk={desk}
-            emphasized={id === emphasized}
-            preview={id === "scout" && picture ? <CapturePreview thumbnail={picture} /> : undefined} />
-        ))}
       </g>
+      {/* Avatars stay outside the mask: a walking badge crossing a label used to vanish and reappear (blink). */}
+      {crew.map(({ id, avatar, size, desk }) => (
+        <Avatar key={id} member={CREW[id]} avatar={avatar} idPrefix={idPrefix} scale={size} desk={desk}
+          emphasized={id === emphasized}
+          preview={id === "scout" && picture ? <CapturePreview thumbnail={picture} /> : undefined} />
+      ))}
       {evidence && evidenceBox && <g style={palette("scout")}><EvidenceCard key={visuals.scout?.at} effect={evidence} box={evidenceBox} scale={scale} /></g>}
       {BUBBLE_ORDER.map((id) => {
         const { avatar, end, size } = crew.find((member) => member.id === id)!;
